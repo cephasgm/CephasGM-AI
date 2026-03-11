@@ -1,12 +1,17 @@
 {
-"name":"cephasgm-ai",
-"engines":{
-"node":"18"
-},
-"dependencies":{
-"firebase-functions":"^4.0.0",
-"firebase-admin":"^11.0.0",
-"node-fetch":"^2.6.7",
-"pdf-parse":"^1.1.1"
-}
+  "name": "cephasgm-ai",
+  "version": "2.0.0",
+  "description": "CephasGM AI Backend Functions",
+  "engines": {
+    "node": "18"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "firebase-functions": "^4.0.0",
+    "firebase-admin": "^11.0.0",
+    "node-fetch": "^2.6.7",
+    "pdf-parse": "^1.1.1",
+    "cors": "^2.8.5"
+  },
+  "private": true
 }
