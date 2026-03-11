@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Login - CephasGM AI</title>
-<link rel="icon" href="icon-192.png">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🤖</text></svg>">
 <style>
 body{
 margin:0;
@@ -21,27 +21,32 @@ display:flex;
 flex-direction:column;
 align-items:center;
 justify-content:center;
-text-align:center;
 padding:20px;
 }
 .auth-box{
 background:rgba(0,0,0,0.5);
+backdrop-filter:blur(10px);
 padding:40px;
-border-radius:15px;
+border-radius:20px;
 width:90%;
 max-width:400px;
-backdrop-filter:blur(10px);
+text-align:center;
+border:1px solid rgba(255,179,0,0.3);
 }
 h2{
-font-size:2.5rem;
-margin-bottom:20px;
 color:#ffb300;
+font-size:2.5rem;
+margin-bottom:10px;
+}
+h3{
+margin-bottom:30px;
+font-weight:normal;
 }
 input{
 width:100%;
 padding:15px;
 margin:10px 0;
-border-radius:8px;
+border-radius:30px;
 border:none;
 font-size:16px;
 box-sizing:border-box;
@@ -50,10 +55,10 @@ input:focus{
 outline:2px solid #ffb300;
 }
 button{
-padding:15px 25px;
+padding:12px 30px;
 font-size:16px;
 border:none;
-border-radius:8px;
+border-radius:30px;
 cursor:pointer;
 background:#ffb300;
 color:black;
@@ -62,7 +67,7 @@ font-weight:bold;
 min-width:120px;
 }
 button:hover{
-opacity:0.9;
+background:#ffa000;
 }
 .back-link{
 margin-top:20px;
@@ -71,9 +76,25 @@ margin-top:20px;
 color:#ffb300;
 text-decoration:none;
 }
-.message{
+.back-link a:hover{
+text-decoration:underline;
+}
+#message{
 margin-top:15px;
-color:#ffb300;
+padding:10px;
+border-radius:5px;
+display:none;
+}
+#message.show{
+display:block;
+}
+#message.error{
+background:rgba(220,53,69,0.3);
+border-left:3px solid #dc3545;
+}
+#message.success{
+background:rgba(40,167,69,0.3);
+border-left:3px solid #28a745;
 }
 </style>
 </head>
@@ -81,88 +102,94 @@ color:#ffb300;
 <div class="overlay">
 <div class="auth-box">
 <h2>CephasGM AI</h2>
-<h3>Login / Signup</h3>
+<h3>Welcome Back</h3>
 <input id="email" type="email" placeholder="Email" required>
 <input id="password" type="password" placeholder="Password" required>
 <div>
-<button onclick="signup()">Sign Up</button>
-<button onclick="login()">Log In</button>
+<button onclick="handleSignup()">Sign Up</button>
+<button onclick="handleLogin()">Log In</button>
 </div>
 <div class="back-link">
 <a href="index.html">← Back to Home</a>
 </div>
-<div id="message" class="message"></div>
+<div id="message"></div>
 </div>
 </div>
 
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 
 <script>
 const firebaseConfig = {
-apiKey: "AIzaSyAukJQx3pEqXoyFR9tyfeLckJaBIgYtGFA",
-authDomain: "cephasgm-ai.firebaseapp.com",
-projectId: "cephasgm-ai",
-storageBucket: "cephasgm-ai.firebasestorage.app",
-messagingSenderId: "304163647028",
-appId: "1:304163647028:web:2920b2cfb9be4049806461"
+  apiKey: "AIzaSyAukJQx3pEqXoyFR9tyfeLckJaBIgYtGFA",
+  authDomain: "cephasgm-ai.firebaseapp.com",
+  projectId: "cephasgm-ai",
+  storageBucket: "cephasgm-ai.firebasestorage.app",
+  messagingSenderId: "304163647028",
+  appId: "1:304163647028:web:2920b2cfb9be4049806461"
 };
 
-firebase.initializeApp(firebaseConfig);
+// Initialize Firebase only once
+if (!firebase.apps.length) {
+  firebase.initializeApp(firebaseConfig);
+}
 const auth = firebase.auth();
 
-function showMessage(msg) {
-document.getElementById("message").textContent = msg;
+function showMessage(text, type) {
+  const msgDiv = document.getElementById('message');
+  msgDiv.textContent = text;
+  msgDiv.className = type + ' show';
 }
 
-// Check if already logged in
+function handleSignup() {
+  const email = document.getElementById('email').value.trim();
+  const password = document.getElementById('password').value;
+
+  if (!email || !password) {
+    showMessage('Please fill in all fields', 'error');
+    return;
+  }
+
+  if (password.length < 6) {
+    showMessage('Password must be at least 6 characters', 'error');
+    return;
+  }
+
+  auth.createUserWithEmailAndPassword(email, password)
+    .then(() => {
+      showMessage('Signup successful! Redirecting...', 'success');
+      setTimeout(() => window.location.href = 'index.html', 1500);
+    })
+    .catch(error => {
+      showMessage(error.message, 'error');
+    });
+}
+
+function handleLogin() {
+  const email = document.getElementById('email').value.trim();
+  const password = document.getElementById('password').value;
+
+  if (!email || !password) {
+    showMessage('Please fill in all fields', 'error');
+    return;
+  }
+
+  auth.signInWithEmailAndPassword(email, password)
+    .then(() => {
+      showMessage('Login successful! Redirecting...', 'success');
+      setTimeout(() => window.location.href = 'index.html', 1500);
+    })
+    .catch(error => {
+      showMessage(error.message, 'error');
+    });
+}
+
+// Auto redirect if already logged in
 auth.onAuthStateChanged(user => {
-if (user) {
-  // Already logged in, redirect back
-  window.location.href = "index.html";
-}
+  if (user) {
+    window.location.href = 'index.html';
+  }
 });
-
-window.signup = function() {
-const email = document.getElementById("email").value.trim();
-const password = document.getElementById("password").value;
-
-if (!email || !password) {
-  showMessage("Please fill in all fields");
-  return;
-}
-
-if (password.length < 6) {
-  showMessage("Password must be at least 6 characters");
-  return;
-}
-
-auth.createUserWithEmailAndPassword(email, password)
-  .then(() => {
-    window.location.href = "index.html";
-  })
-  .catch(error => {
-    showMessage(error.message);
-  });
-};
-
-window.login = function() {
-const email = document.getElementById("email").value.trim();
-const password = document.getElementById("password").value;
-
-if (!email || !password) {
-  showMessage("Please fill in all fields");
-  return;
-}
-
-auth.signInWithEmailAndPassword(email, password)
-  .then(() => {
-    window.location.href = "index.html";
-  })
-  .catch(error => {
-    showMessage(error.message);
-  });
-};
 </script>
 </body>
 </html>
