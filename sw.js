@@ -25,3 +25,4 @@ caches.match(event.request)
 )
 
 })
+
