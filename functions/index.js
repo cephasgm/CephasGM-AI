@@ -1,9 +1,13 @@
-const chat = require("./ai-chat")
-const image = require("./image-gen")
+const functions = require("firebase-functions")
+const aiChat = require("./ai-chat")
+const imageGen = require("./image-gen")
 const documentAI = require("./document-ai")
+const vectorMemory = require("./vector-memory")
 const agents = require("./agents")
 
-exports.chat = chat.chat
-exports.image = image.image
+// Export all functions
+exports.chat = aiChat.chat
+exports.image = imageGen.image
 exports.documentAI = documentAI.documentAI
+exports.vectorMemory = vectorMemory
 exports.agent = agents.agent
