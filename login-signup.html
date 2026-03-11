@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Login - CephasGM AI</title>
+<link rel="manifest" href="manifest.json">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🤖</text></svg>">
 <style>
 body{
@@ -36,10 +37,10 @@ border:1px solid rgba(255,179,0,0.3);
 h2{
 color:#ffb300;
 font-size:2.5rem;
-margin-bottom:10px;
+margin:0 0 10px 0;
 }
 h3{
-margin-bottom:30px;
+margin:0 0 30px 0;
 font-weight:normal;
 }
 input{
@@ -54,19 +55,27 @@ box-sizing:border-box;
 input:focus{
 outline:2px solid #ffb300;
 }
+.button-group{
+display:flex;
+gap:10px;
+justify-content:center;
+margin-top:20px;
+}
 button{
-padding:12px 30px;
+flex:1;
+padding:12px 20px;
 font-size:16px;
 border:none;
 border-radius:30px;
 cursor:pointer;
 background:#ffb300;
 color:black;
-margin:10px 5px;
 font-weight:bold;
-min-width:120px;
+max-width:150px;
+transition:all 0.3s;
 }
 button:hover{
+transform:scale(1.05);
 background:#ffa000;
 }
 .back-link{
@@ -79,22 +88,22 @@ text-decoration:none;
 .back-link a:hover{
 text-decoration:underline;
 }
-#message{
+.message{
 margin-top:15px;
 padding:10px;
 border-radius:5px;
 display:none;
 }
-#message.show{
+.message.show{
 display:block;
 }
-#message.error{
+.message.error{
 background:rgba(220,53,69,0.3);
-border-left:3px solid #dc3545;
+color:#ffb3b3;
 }
-#message.success{
+.message.success{
 background:rgba(40,167,69,0.3);
-border-left:3px solid #28a745;
+color:#b3ffb3;
 }
 </style>
 </head>
@@ -102,17 +111,17 @@ border-left:3px solid #28a745;
 <div class="overlay">
 <div class="auth-box">
 <h2>CephasGM AI</h2>
-<h3>Welcome Back</h3>
-<input id="email" type="email" placeholder="Email" required>
-<input id="password" type="password" placeholder="Password" required>
-<div>
+<h3>Login / Signup</h3>
+<input type="email" id="email" placeholder="Email" required>
+<input type="password" id="password" placeholder="Password" required>
+<div class="button-group">
 <button onclick="handleSignup()">Sign Up</button>
 <button onclick="handleLogin()">Log In</button>
 </div>
 <div class="back-link">
 <a href="index.html">← Back to Home</a>
 </div>
-<div id="message"></div>
+<div id="message" class="message"></div>
 </div>
 </div>
 
@@ -120,6 +129,7 @@ border-left:3px solid #28a745;
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 
 <script>
+// Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyAukJQx3pEqXoyFR9tyfeLckJaBIgYtGFA",
   authDomain: "cephasgm-ai.firebaseapp.com",
@@ -129,19 +139,19 @@ const firebaseConfig = {
   appId: "1:304163647028:web:2920b2cfb9be4049806461"
 };
 
-// Initialize Firebase only once
-if (!firebase.apps.length) {
-  firebase.initializeApp(firebaseConfig);
-}
+// Initialize Firebase
+const app = firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 
+// Show message function
 function showMessage(text, type) {
   const msgDiv = document.getElementById('message');
   msgDiv.textContent = text;
-  msgDiv.className = type + ' show';
+  msgDiv.className = 'message ' + type + ' show';
 }
 
-function handleSignup() {
+// Sign up function
+window.handleSignup = function() {
   const email = document.getElementById('email').value.trim();
   const password = document.getElementById('password').value;
 
@@ -158,14 +168,17 @@ function handleSignup() {
   auth.createUserWithEmailAndPassword(email, password)
     .then(() => {
       showMessage('Signup successful! Redirecting...', 'success');
-      setTimeout(() => window.location.href = 'index.html', 1500);
+      setTimeout(() => {
+        window.location.href = 'index.html';
+      }, 1500);
     })
-    .catch(error => {
+    .catch((error) => {
       showMessage(error.message, 'error');
     });
-}
+};
 
-function handleLogin() {
+// Login function
+window.handleLogin = function() {
   const email = document.getElementById('email').value.trim();
   const password = document.getElementById('password').value;
 
@@ -177,15 +190,17 @@ function handleLogin() {
   auth.signInWithEmailAndPassword(email, password)
     .then(() => {
       showMessage('Login successful! Redirecting...', 'success');
-      setTimeout(() => window.location.href = 'index.html', 1500);
+      setTimeout(() => {
+        window.location.href = 'index.html';
+      }, 1500);
     })
-    .catch(error => {
+    .catch((error) => {
       showMessage(error.message, 'error');
     });
-}
+};
 
-// Auto redirect if already logged in
-auth.onAuthStateChanged(user => {
+// Check if already logged in
+auth.onAuthStateChanged((user) => {
   if (user) {
     window.location.href = 'index.html';
   }
