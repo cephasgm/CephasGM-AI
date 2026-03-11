@@ -3,25 +3,19 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
 <title>CephasGM AI</title>
-
 <link rel="manifest" href="manifest.json">
-
-<link rel="icon" href="icon-192.png">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🤖</text></svg>">
 
 <style>
-
 body{
 margin:0;
 font-family:Arial, Helvetica, sans-serif;
-
 background-image:url("https://images.unsplash.com/photo-1508672019048-805c876b67e2");
 background-size:cover;
 background-position:center;
 color:white;
 }
-
 .overlay{
 background:rgba(0,0,0,0.6);
 min-height:100vh;
@@ -32,11 +26,10 @@ justify-content:center;
 text-align:center;
 padding:20px;
 }
-
 h1{
 font-size:3rem;
+margin-bottom:10px;
 }
-
 button{
 padding:12px 25px;
 font-size:16px;
@@ -46,169 +39,175 @@ cursor:pointer;
 background:#ffb300;
 color:black;
 margin:10px;
+transition:all 0.3s;
 }
-
+button:hover{
+transform:scale(1.05);
+background:#ffa000;
+}
 .chat-box{
 width:90%;
 max-width:700px;
 margin-top:20px;
 }
-
 input{
 width:100%;
-padding:12px;
-border-radius:6px;
+padding:15px;
+border-radius:30px;
 border:none;
 margin:10px 0;
+font-size:16px;
+box-sizing:border-box;
 }
-
-.user-info {
-position: absolute;
-top: 20px;
-right: 20px;
-display: flex;
-align-items: center;
-gap: 10px;
-background: rgba(0,0,0,0.5);
-padding: 10px 20px;
-border-radius: 30px;
+input:focus{
+outline:2px solid #ffb300;
 }
-
-.user-email {
-color: #ffb300;
-font-size: 14px;
+.user-info{
+position:absolute;
+top:20px;
+right:20px;
+background:rgba(0,0,0,0.7);
+padding:10px 20px;
+border-radius:30px;
+display:flex;
+align-items:center;
+gap:10px;
+border:1px solid #ffb300;
 }
-
-.logout-btn {
-padding: 5px 15px;
-font-size: 14px;
-margin: 0;
-background: #dc3545;
-color: white;
+.user-email{
+color:#ffb300;
+font-size:14px;
 }
-
+.logout-btn{
+padding:5px 15px;
+font-size:12px;
+margin:0;
+background:#dc3545;
+color:white;
+}
+.logout-btn:hover{
+background:#c82333;
+}
+.message{
+margin-top:20px;
+padding:10px;
+border-radius:5px;
+}
+.message.error{
+background:rgba(220,53,69,0.3);
+border-left:3px solid #dc3545;
+}
+.message.success{
+background:rgba(40,167,69,0.3);
+border-left:3px solid #28a745;
+}
 </style>
-
 </head>
-
 <body>
-
 <div id="root"></div>
 
-<!-- Firebase SDK -->
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js"></script>
-
-<!-- React -->
+<!-- Load scripts in correct order -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
 
 <script type="text/babel">
-
-// Firebase configuration
+// Initialize Firebase only once
 const firebaseConfig = {
-apiKey: "AIzaSyAukJQx3pEqXoyFR9tyfeLckJaBIgYtGFA",
-authDomain: "cephasgm-ai.firebaseapp.com",
-projectId: "cephasgm-ai",
-storageBucket: "cephasgm-ai.firebasestorage.app",
-messagingSenderId: "304163647028",
-appId: "1:304163647028:web:2920b2cfb9be4049806461",
-measurementId: "G-LYGWP38ZTR"
+  apiKey: "AIzaSyAukJQx3pEqXoyFR9tyfeLckJaBIgYtGFA",
+  authDomain: "cephasgm-ai.firebaseapp.com",
+  projectId: "cephasgm-ai",
+  storageBucket: "cephasgm-ai.firebasestorage.app",
+  messagingSenderId: "304163647028",
+  appId: "1:304163647028:web:2920b2cfb9be4049806461"
 };
 
-// Initialize Firebase
-firebase.initializeApp(firebaseConfig);
+// Check if Firebase is already initialized
+if (!firebase.apps.length) {
+  firebase.initializeApp(firebaseConfig);
+}
 const auth = firebase.auth();
 
-function App(){
+function App() {
+  const [message, setMessage] = React.useState("");
+  const [chat, setChat] = React.useState([]);
+  const [user, setUser] = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
 
-const [message,setMessage] = React.useState("")
-const [chat,setChat] = React.useState([])
-const [user, setUser] = React.useState(null)
+  React.useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged(user => {
+      setUser(user);
+      setLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
 
-// Check auth state on component mount
-React.useEffect(() => {
-  const unsubscribe = auth.onAuthStateChanged((user) => {
-    setUser(user);
-  });
-  return () => unsubscribe();
-}, [])
+  function send() {
+    if (!message.trim()) return;
+    setChat([...chat, { user: message, ai: "I'm CephasGM AI. How can I help you today? 🤖" }]);
+    setMessage("");
+  }
 
-function send(){
-  if(!message) return
-  setChat([...chat,{user:message,ai:"AI response placeholder"}])
-  setMessage("")
+  function logout() {
+    auth.signOut().catch(error => console.error("Logout error:", error));
+  }
+
+  if (loading) {
+    return <div className="overlay"><h2>Loading...</h2></div>;
+  }
+
+  return (
+    <div className="overlay">
+      {user && (
+        <div className="user-info">
+          <span className="user-email">{user.email}</span>
+          <button className="logout-btn" onClick={logout}>Logout</button>
+        </div>
+      )}
+      
+      <h1>CephasGM AI</h1>
+      <p>African Inspired Artificial Intelligence</p>
+      
+      <a href={user ? "#" : "login-signup.html"}>
+        <button onClick={(e) => user && e.preventDefault()}>
+          {user ? `Welcome, ${user.email.split('@')[0]}!` : "Login / Signup"}
+        </button>
+      </a>
+      
+      <div className="chat-box">
+        {chat.map((c, i) => (
+          <div key={i} style={{textAlign: 'left', background: 'rgba(0,0,0,0.3)', padding: '10px', borderRadius: '10px', marginBottom: '10px'}}>
+            <p><b>You:</b> {c.user}</p>
+            <p><b>AI:</b> {c.ai}</p>
+          </div>
+        ))}
+        
+        <input
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+          placeholder="Ask CephasGM AI anything..."
+          onKeyPress={(e) => e.key === 'Enter' && send()}
+        />
+        
+        <button onClick={send}>Send Message</button>
+      </div>
+    </div>
+  );
 }
 
-function logout() {
-  auth.signOut().then(() => {
-    setUser(null);
-  });
-}
-
-return(
-
-<div className="overlay">
-
-{user && (
-  <div className="user-info">
-    <span className="user-email">{user.email}</span>
-    <button className="logout-btn" onClick={logout}>Logout</button>
-  </div>
-)}
-
-<h1>CephasGM AI</h1>
-
-<p>African Inspired Artificial Intelligence</p>
-
-<a href={user ? "#" : "login-signup.html"}>
-  <button onClick={(e) => user && e.preventDefault()}>
-    {user ? `Logged in as ${user.email}` : "Login / Signup"}
-  </button>
-</a>
-
-<div className="chat-box">
-
-{chat.map((c,i)=>(
-<div key={i}>
-<p><b>You:</b> {c.user}</p>
-<p><b>AI:</b> {c.ai}</p>
-</div>
-))}
-
-<input
-value={message}
-onChange={(e)=>setMessage(e.target.value)}
-placeholder="Ask CephasGM AI anything..."
-/>
-
-<button onClick={send}>Send</button>
-
-</div>
-
-</div>
-
-)
-
-}
-
-ReactDOM.createRoot(document.getElementById("root")).render(<App/>)
-
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
 </script>
 
 <script>
-if('serviceWorker' in navigator){
+// Simple service worker registration
+if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js')
-      .then(reg => console.log("Service Worker Registered", reg))
-      .catch(err => console.log("Service Worker Registration Failed", err));
+    navigator.serviceWorker.register('sw.js').catch(error => {
+      console.log('ServiceWorker registration failed:', error);
+    });
   });
-}
-
-// Check if app is being opened from home screen
-if (window.matchMedia('(display-mode: standalone)').matches) {
-  console.log("Running in PWA mode");
 }
 </script>
 
