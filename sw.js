@@ -2,33 +2,41 @@ const CACHE_NAME = "cephasgm-ai-v1";
 const urlsToCache = [
   "/",
   "/index.html",
+  "/login-signup.html",
   "/manifest.json",
-  "/login-signup.html"
+  "https://unpkg.com/react@18/umd/react.production.min.js",
+  "https://unpkg.com/react-dom@18/umd/react-dom.production.min.js",
+  "https://unpkg.com/babel-standalone@6/babel.min.js",
+  "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js",
+  "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js"
 ];
 
-// Install event
+// Install service worker and cache resources
 self.addEventListener("install", event => {
   self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
-        console.log("Cache opened");
+        console.log("Caching files");
         return cache.addAll(urlsToCache).catch(error => {
-          console.error("Failed to cache:", error);
+          console.log("Cache failed for some files, but continuing");
         });
       })
   );
 });
 
-// Fetch event - network first, then cache
+// Fetch with network first, fallback to cache
 self.addEventListener("fetch", event => {
   event.respondWith(
     fetch(event.request)
       .then(response => {
-        // Clone the response
-        const responseClone = response.clone();
+        // Don't cache non-successful responses
+        if (!response || response.status !== 200) {
+          return response;
+        }
         
-        // Open cache and store the new response
+        // Clone the response for caching
+        const responseClone = response.clone();
         caches.open(CACHE_NAME).then(cache => {
           cache.put(event.request, responseClone);
         });
@@ -41,22 +49,25 @@ self.addEventListener("fetch", event => {
           if (cachedResponse) {
             return cachedResponse;
           }
-          // If not in cache, return offline page or fallback
-          return new Response("Offline - Content not available");
+          // For HTML navigation requests, return index.html as fallback
+          if (event.request.mode === 'navigate') {
+            return caches.match('/index.html');
+          }
+          return new Response('Offline', { status: 503 });
         });
       })
   );
 });
 
-// Activate event - clean up old caches
+// Clean up old caches
 self.addEventListener("activate", event => {
   event.waitUntil(
     caches.keys().then(cacheNames => {
       return Promise.all(
-        cacheNames.map(cacheName => {
-          if (cacheName !== CACHE_NAME) {
-            return caches.delete(cacheName);
-          }
+        cacheNames.filter(cacheName => {
+          return cacheName !== CACHE_NAME;
+        }).map(cacheName => {
+          return caches.delete(cacheName);
         })
       );
     }).then(() => {
