@@ -9,7 +9,7 @@ addMessage("You",prompt)
 
 input.value=""
 
-const response = await fetch("/api/chat",{
+const response = await fetch("https://us-central1-cephasgm-ai.cloudfunctions.net/chat",{
 method:"POST",
 headers:{
 "Content-Type":"application/json"
@@ -32,3 +32,6 @@ div.innerHTML = "<b>"+user+":</b> "+text
 chatBox.appendChild(div)
 
 }
+
+// Make function globally available
+window.sendMessage = sendMessage
