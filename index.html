@@ -153,8 +153,6 @@ function App() {
       )}
       
       <h1>CephasGM AI</h1>
-      <p>African Inspired Artificial Intelligence</p>
-      
       <a href={user ? "#" : "login-signup.html"}>
         <button onClick={(e) => user && e.preventDefault()}>
           {user ? `Welcome, ${user.email.split('@')[0]}!` : "Login / Signup"}
@@ -176,7 +174,7 @@ function App() {
           onKeyPress={(e) => e.key === 'Enter' && send()}
         />
         
-        <button onClick={send}>Send Message</button>
+        <button onClick={send}>Ask</button>
       </div>
     </div>
   );
