@@ -1,59 +1,31 @@
 /**
  * Knowledge Graph - Store and query relationships between entities
  */
-const fs = require("fs").promises;
-const path = require("path");
+const EventEmitter = require('events');
+const fs = require('fs').promises;
+const path = require('path');
 
-class KnowledgeGraph {
+class KnowledgeGraph extends EventEmitter {
   constructor() {
+    super();
+    
     this.graph = {
       nodes: new Map(),
       edges: []
     };
     
-    this.storagePath = path.join(__dirname, '../../knowledge-graph.json');
-    this.loadGraph();
-  }
-
-  /**
-   * Load graph from storage
-   */
-  async loadGraph() {
-    try {
-      const data = await fs.readFile(this.storagePath, 'utf8');
-      const parsed = JSON.parse(data);
-      
-      // Convert nodes back to Map
-      this.graph.nodes = new Map(parsed.nodes);
-      this.graph.edges = parsed.edges;
-      
-      console.log(`📚 Knowledge graph loaded: ${this.graph.nodes.size} nodes, ${this.graph.edges.length} edges`);
-    } catch (error) {
-      console.log('No existing knowledge graph found, starting fresh');
-    }
-  }
-
-  /**
-   * Save graph to storage
-   */
-  async saveGraph() {
-    try {
-      const data = {
-        nodes: Array.from(this.graph.nodes.entries()),
-        edges: this.graph.edges
-      };
-      
-      await fs.writeFile(this.storagePath, JSON.stringify(data, null, 2));
-    } catch (error) {
-      console.error('Failed to save knowledge graph:', error);
-    }
+    this.storagePath = path.join(__dirname, '../knowledge-graph.json');
+    
+    this.load();
+    
+    console.log('📚 Knowledge graph initialized');
   }
 
   /**
    * Create a link between entities
    */
-  link(a, rel, b, properties = {}) {
-    if (!a || !rel || !b) {
+  link(a, relation, b, properties = {}) {
+    if (!a || !relation || !b) {
       throw new Error('Entity A, relation, and entity B are required');
     }
 
@@ -70,13 +42,15 @@ class KnowledgeGraph {
       id: this.generateId(),
       source: a,
       target: b,
-      relation: rel,
+      relation,
       properties,
       createdAt: new Date().toISOString()
     };
 
     this.graph.edges.push(edge);
-    this.saveGraph();
+    
+    this.emit('linkCreated', edge);
+    this.save();
 
     return {
       success: true,
@@ -93,25 +67,28 @@ class KnowledgeGraph {
       createdAt: properties.createdAt || new Date().toISOString()
     });
     
+    this.emit('nodeAdded', { entity });
+    
     return entity;
   }
 
   /**
    * Get all relations for an entity
    */
-  get(a) {
-    if (!this.graph.nodes.has(a)) {
+  get(entity) {
+    if (!this.graph.nodes.has(entity)) {
       return [];
     }
 
     const relations = this.graph.edges
-      .filter(e => e.source === a || e.target === a)
+      .filter(e => e.source === entity || e.target === entity)
       .map(e => ({
         relation: e.relation,
-        entity: e.source === a ? e.target : e.source,
-        direction: e.source === a ? 'outgoing' : 'incoming',
+        entity: e.source === entity ? e.target : e.source,
+        direction: e.source === entity ? 'outgoing' : 'incoming',
         properties: e.properties,
-        id: e.id
+        id: e.id,
+        createdAt: e.createdAt
       }));
 
     return relations;
@@ -163,7 +140,8 @@ class KnowledgeGraph {
         to: neighbor,
         relation: edge.relation,
         depth: currentDepth + 1,
-        properties: edge.properties
+        properties: edge.properties,
+        id: edge.id
       });
       
       if (currentDepth + 1 < depth) {
@@ -250,7 +228,7 @@ class KnowledgeGraph {
     // Remove the entity
     this.graph.nodes.delete(entity);
     
-    this.saveGraph();
+    this.save();
 
     return {
       success: true,
@@ -265,7 +243,7 @@ class KnowledgeGraph {
     const initialLength = this.graph.edges.length;
     this.graph.edges = this.graph.edges.filter(e => e.id !== edgeId);
     
-    this.saveGraph();
+    this.save();
 
     return {
       success: true,
@@ -274,7 +252,7 @@ class KnowledgeGraph {
   }
 
   /**
-   * Search for entities by name or property
+   * Search for entities
    */
   search(query) {
     const results = [];
@@ -283,8 +261,6 @@ class KnowledgeGraph {
     for (const [entity, properties] of this.graph.nodes) {
       if (entity.toLowerCase().includes(queryLower)) {
         results.push({ entity, properties, match: 'name' });
-      } else if (properties.type && properties.type.toLowerCase().includes(queryLower)) {
-        results.push({ entity, properties, match: 'type' });
       }
     }
     
@@ -298,9 +274,7 @@ class KnowledgeGraph {
     return {
       nodes: this.graph.nodes.size,
       edges: this.graph.edges.length,
-      density: this.calculateDensity(),
-      nodeTypes: this.getNodeTypes(),
-      relationTypes: this.getRelationTypes()
+      density: this.calculateDensity()
     };
   }
 
@@ -316,34 +290,7 @@ class KnowledgeGraph {
   }
 
   /**
-   * Get distribution of node types
-   */
-  getNodeTypes() {
-    const types = {};
-    
-    for (const [_, props] of this.graph.nodes) {
-      const type = props.type || 'unknown';
-      types[type] = (types[type] || 0) + 1;
-    }
-    
-    return types;
-  }
-
-  /**
-   * Get distribution of relation types
-   */
-  getRelationTypes() {
-    const types = {};
-    
-    for (const edge of this.graph.edges) {
-      types[edge.relation] = (types[edge.relation] || 0) + 1;
-    }
-    
-    return types;
-  }
-
-  /**
-   * Export graph as JSON
+   * Export graph
    */
   export() {
     return {
@@ -356,7 +303,7 @@ class KnowledgeGraph {
   }
 
   /**
-   * Import graph from JSON
+   * Import graph
    */
   import(data) {
     if (data.nodes) {
@@ -370,7 +317,7 @@ class KnowledgeGraph {
       this.graph.edges.push(...data.edges);
     }
     
-    this.saveGraph();
+    this.save();
     
     return {
       success: true,
@@ -382,14 +329,42 @@ class KnowledgeGraph {
   }
 
   /**
-   * Generate unique ID
+   * Save to disk
    */
-  generateId() {
-    return `edge_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  async save() {
+    try {
+      const data = {
+        nodes: Array.from(this.graph.nodes.entries()),
+        edges: this.graph.edges
+      };
+      
+      await fs.writeFile(this.storagePath, JSON.stringify(data, null, 2));
+      
+    } catch (error) {
+      console.error('Failed to save knowledge graph:', error);
+    }
   }
 
   /**
-   * Clear entire graph
+   * Load from disk
+   */
+  async load() {
+    try {
+      const data = await fs.readFile(this.storagePath, 'utf8');
+      const parsed = JSON.parse(data);
+      
+      this.graph.nodes = new Map(parsed.nodes);
+      this.graph.edges = parsed.edges;
+      
+      console.log(`📚 Loaded knowledge graph: ${this.graph.nodes.size} nodes, ${this.graph.edges.length} edges`);
+      
+    } catch {
+      console.log('No existing knowledge graph found, starting fresh');
+    }
+  }
+
+  /**
+   * Clear graph
    */
   clear() {
     this.graph = {
@@ -397,9 +372,16 @@ class KnowledgeGraph {
       edges: []
     };
     
-    this.saveGraph();
+    this.save();
     
-    return { success: true, message: 'Knowledge graph cleared' };
+    return { success: true };
+  }
+
+  /**
+   * Generate unique ID
+   */
+  generateId() {
+    return `edge_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
 }
 
