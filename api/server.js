@@ -1,110 +1,91 @@
 /**
- * API Server - CephasGM AI Platform API
- * Complete version with Audio Engine integration
+ * API Server - CephasGM AI Phase 5
+ * Enterprise-grade REST API for AI infrastructure platform
  */
 const express = require("express");
 const cors = require("cors");
-const path = require("path");
-const fs = require("fs").promises;
-const os = require("../core/os");
-const feedbackLoop = require("../learning/feedback-loop");
-const loadBalancer = require("../cluster/load-balancer");
-const audioEngine = require("../multimodal/audio-engine");
+const helmet = require("helmet");
+const compression = require("compression");
+const rateLimit = require("express-rate-limit");
 
-// Import agents
-const planner = require("../agents/planner-agent");
-const research = require("../agents/research-agent");
-const coding = require("../agents/coding-agent");
-const automation = require("../agents/automation-agent");
-
-// Register agents with OS
-os.registerAgents([planner, research, coding, automation]);
+const employees = require("../agents/employee-manager");
+const gateway = require("../cloud/ai-gateway");
+const orchestrator = require("../platform/orchestrator");
+const knowledgeBase = require("../memory/knowledge-base");
+const vectorMemory = require("../memory/vector-memory");
+const scheduler = require("../cluster/scheduler");
 
 const app = express();
-const PORT = process.env.PORT || 4000;
+const PORT = process.env.PORT || 5000;
 
-// Middleware
-app.use(cors());
+// Security middleware
+app.use(helmet());
+app.use(cors({
+  origin: process.env.CORS_ORIGIN || '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key']
+}));
+
+// Performance middleware
+app.use(compression());
 app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// Rate limiting
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
+  message: { error: 'Too many requests, please try again later.' }
+});
+app.use('/api/', limiter);
 
 // Request logging
 app.use((req, res, next) => {
-  console.log(`\n📡 ${req.method} ${req.path}`);
+  console.log(`\n📡 [${new Date().toISOString()}] ${req.method} ${req.path}`);
   next();
 });
 
-// ============================================
-// SYSTEM ENDPOINTS
-// ============================================
-
-// Health check
+// Health check endpoint
 app.get("/health", (req, res) => {
   res.json({
     status: "healthy",
     service: "CephasGM AI Platform",
-    version: "4.1.0",
+    version: "5.0.0",
     timestamp: new Date().toISOString(),
-    os: os.getStatus(),
-    cluster: loadBalancer.getStatus(),
-    audio: audioEngine.getStats()
-  });
-});
-
-// System status
-app.get("/status", (req, res) => {
-  res.json({
-    os: os.getStatus(),
-    cluster: loadBalancer.getStatus(),
-    learning: {
-      interactions: feedbackLoop.interactions.length,
-      feedback: feedbackLoop.feedback.length,
-      metrics: feedbackLoop.metrics
-    },
-    audio: audioEngine.getStats()
+    uptime: process.uptime(),
+    memory: process.memoryUsage()
   });
 });
 
 // ============================================
-// TASK EXECUTION ENDPOINTS
+// AI Employee Endpoints
 // ============================================
 
-// Execute task
-app.post("/task", async (req, res) => {
+/**
+ * Execute an AI employee task
+ * POST /api/employee
+ */
+app.post("/api/employee", async (req, res) => {
   try {
-    const { task, options = {} } = req.body;
+    const { type, payload, options } = req.body;
     
-    if (!task || typeof task !== 'string') {
-      return res.status(400).json({ error: "Task must be a non-empty string" });
+    if (!type || !payload) {
+      return res.status(400).json({ 
+        error: "Missing required fields: type and payload" 
+      });
     }
 
-    console.log(`📋 Processing task: "${task.substring(0, 100)}..."`);
-
-    // Record interaction for learning
-    const interactionId = await feedbackLoop.record(task, null, { 
-      type: 'task',
-      options 
-    });
-
-    // Execute through OS
-    const result = await os.execute(task, options);
+    console.log(`👤 Employee request: ${type}`);
     
-    // Update interaction with response
-    if (interactionId) {
-      const interaction = feedbackLoop.interactions.find(i => i.id === interactionId);
-      if (interaction) {
-        interaction.response = result;
-      }
-    }
-
+    const result = await employees.runEmployee({ type, payload, options });
+    
     res.json({
       success: true,
-      interactionId,
       ...result
     });
 
   } catch (error) {
-    console.error("Task execution failed:", error);
+    console.error("Employee endpoint error:", error);
     res.status(500).json({ 
       success: false, 
       error: error.message 
@@ -112,16 +93,322 @@ app.post("/task", async (req, res) => {
   }
 });
 
-// Execute parallel tasks
-app.post("/tasks/parallel", async (req, res) => {
+/**
+ * Assign task to team
+ * POST /api/employee/team/:teamName
+ */
+app.post("/api/employee/team/:teamName", async (req, res) => {
   try {
-    const { tasks, options = {} } = req.body;
+    const { teamName } = req.params;
+    const task = req.body;
     
-    if (!Array.isArray(tasks)) {
-      return res.status(400).json({ error: "Tasks must be an array" });
+    const result = await employees.assignToTeam(teamName, task);
+    
+    res.json({
+      success: true,
+      ...result
+    });
+
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * List all employees
+ * GET /api/employees
+ */
+app.get("/api/employees", (req, res) => {
+  try {
+    const employeeList = employees.listEmployees();
+    res.json({
+      success: true,
+      count: employeeList.length,
+      employees: employeeList
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * List all teams
+ * GET /api/teams
+ */
+app.get("/api/teams", (req, res) => {
+  try {
+    const teams = employees.listTeams();
+    res.json({
+      success: true,
+      count: teams.length,
+      teams
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================
+// AI Gateway Endpoints
+// ============================================
+
+/**
+ * AI inference request
+ * POST /api/ai
+ */
+app.post("/api/ai", async (req, res) => {
+  try {
+    const { prompt, options = {} } = req.body;
+    
+    if (!prompt) {
+      return res.status(400).json({ error: "Prompt is required" });
     }
 
-    const results = await os.executeParallel(tasks, options);
+    console.log(`🤖 AI request: "${prompt.substring(0, 50)}..."`);
+    
+    const result = await gateway.request(prompt, options);
+    
+    res.json({
+      success: true,
+      ...result
+    });
+
+  } catch (error) {
+    console.error("AI endpoint error:", error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+/**
+ * Streaming AI response
+ * GET /api/ai/stream?prompt=...
+ */
+app.get("/api/ai/stream", async (req, res) => {
+  try {
+    const { prompt } = req.query;
+    
+    if (!prompt) {
+      return res.status(400).json({ error: "Prompt is required" });
+    }
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    const stream = gateway.stream(prompt);
+    
+    for await (const chunk of stream) {
+      res.write(`data: ${chunk}\n\n`);
+    }
+    
+    res.write('data: [DONE]\n\n');
+    res.end();
+
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * List available models
+ * GET /api/models
+ */
+app.get("/api/models", (req, res) => {
+  try {
+    const models = gateway.listModels?.() || ['llama3', 'mistral', 'codellama'];
+    res.json({
+      success: true,
+      count: models.length,
+      models
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================
+// Orchestrator Endpoints
+// ============================================
+
+/**
+ * Submit a task to orchestrator
+ * POST /api/task
+ */
+app.post("/api/task", async (req, res) => {
+  try {
+    const task = req.body;
+    
+    if (!task || !task.type) {
+      return res.status(400).json({ error: "Task with type is required" });
+    }
+
+    const result = await orchestrator.submit(task);
+    
+    res.json({
+      success: true,
+      ...result
+    });
+
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Submit a workflow
+ * POST /api/workflow
+ */
+app.post("/api/workflow", async (req, res) => {
+  try {
+    const workflow = req.body;
+    
+    if (!workflow || !workflow.tasks) {
+      return res.status(400).json({ error: "Workflow with tasks is required" });
+    }
+
+    const result = await orchestrator.submitWorkflow(workflow);
+    
+    res.json({
+      success: true,
+      ...result
+    });
+
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Get task status
+ * GET /api/task/:taskId
+ */
+app.get("/api/task/:taskId", (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const status = orchestrator.getStatus(taskId);
+    
+    res.json({
+      success: true,
+      taskId,
+      status: status || { status: 'not_found' }
+    });
+
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Get workflow status
+ * GET /api/workflow/:workflowId
+ */
+app.get("/api/workflow/:workflowId", (req, res) => {
+  try {
+    const { workflowId } = req.params;
+    const workflow = orchestrator.getWorkflowStatus(workflowId);
+    
+    res.json({
+      success: true,
+      workflowId,
+      workflow: workflow || { status: 'not_found' }
+    });
+
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================
+// Knowledge Base Endpoints
+// ============================================
+
+/**
+ * Store knowledge
+ * POST /api/knowledge
+ */
+app.post("/api/knowledge", (req, res) => {
+  try {
+    const { key, value } = req.body;
+    
+    if (!key || !value) {
+      return res.status(400).json({ error: "Key and value are required" });
+    }
+
+    knowledgeBase.add(key, value);
+    
+    res.json({
+      success: true,
+      key,
+      stored: true
+    });
+
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Retrieve knowledge
+ * GET /api/knowledge/:key
+ */
+app.get("/api/knowledge/:key", (req, res) => {
+  try {
+    const { key } = req.params;
+    const value = knowledgeBase.get(key);
+    
+    res.json({
+      success: true,
+      key,
+      found: value !== undefined,
+      value
+    });
+
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================
+// Vector Memory Endpoints
+// ============================================
+
+/**
+ * Add vector to memory
+ * POST /api/vector
+ */
+app.post("/api/vector", (req, res) => {
+  try {
+    const { vector, metadata } = req.body;
+    
+    if (!vector) {
+      return res.status(400).json({ error: "Vector is required" });
+    }
+
+    vectorMemory.add(vector, metadata);
+    
+    res.json({
+      success: true,
+      stored: true,
+      memorySize: vectorMemory.size()
+    });
+
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Search vectors
+ * POST /api/vector/search
+ */
+app.post("/api/vector/search", (req, res) => {
+  try {
+    const { query, limit = 10 } = req.body;
+    
+    const results = vectorMemory.search(query, limit);
     
     res.json({
       success: true,
@@ -134,21 +421,25 @@ app.post("/tasks/parallel", async (req, res) => {
   }
 });
 
-// Execute sequence of tasks
-app.post("/tasks/sequence", async (req, res) => {
-  try {
-    const { tasks, options = {} } = req.body;
-    
-    if (!Array.isArray(tasks)) {
-      return res.status(400).json({ error: "Tasks must be an array" });
-    }
+// ============================================
+// Cluster Management Endpoints
+// ============================================
 
-    const results = await os.executeSequence(tasks, options);
+/**
+ * Get cluster status
+ * GET /api/cluster
+ */
+app.get("/api/cluster", (req, res) => {
+  try {
+    const workers = scheduler.getWorkers?.() || ['node1', 'node2', 'node3'];
+    const currentWorker = scheduler.nextWorker();
     
     res.json({
       success: true,
-      count: results.length,
-      results
+      workers,
+      currentWorker,
+      totalWorkers: workers.length,
+      timestamp: new Date().toISOString()
     });
 
   } catch (error) {
@@ -157,23 +448,33 @@ app.post("/tasks/sequence", async (req, res) => {
 });
 
 // ============================================
-// FEEDBACK & LEARNING ENDPOINTS
+// Metrics and Monitoring
 // ============================================
 
-// Submit feedback
-app.post("/feedback", async (req, res) => {
+/**
+ * Get system metrics
+ * GET /api/metrics
+ */
+app.get("/api/metrics", (req, res) => {
   try {
-    const { interactionId, feedback, rating } = req.body;
-    
-    if (!interactionId || !feedback) {
-      return res.status(400).json({ error: "Interaction ID and feedback are required" });
-    }
-
-    const result = await feedbackLoop.submitFeedback(interactionId, feedback, rating);
+    const metrics = {
+      orchestrator: orchestrator.getMetrics?.(),
+      employees: employees.getMetrics?.(),
+      gateway: gateway.getMetrics?.(),
+      memory: {
+        vectorSize: vectorMemory.size?.(),
+        knowledgeBaseSize: knowledgeBase.size?.()
+      },
+      system: {
+        uptime: process.uptime(),
+        memory: process.memoryUsage(),
+        cpu: process.cpuUsage()
+      }
+    };
     
     res.json({
       success: true,
-      ...result
+      ...metrics
     });
 
   } catch (error) {
@@ -181,337 +482,74 @@ app.post("/feedback", async (req, res) => {
   }
 });
 
-// Get learning insights
-app.get("/insights", (req, res) => {
-  try {
-    const insights = feedbackLoop.getInsights();
-    res.json(insights);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
+/**
+ * Health check for Kubernetes
+ * GET /ready
+ */
+app.get("/ready", (req, res) => {
+  res.status(200).json({ status: "ready" });
+});
+
+/**
+ * Liveness probe
+ * GET /live
+ */
+app.get("/live", (req, res) => {
+  res.status(200).json({ status: "alive" });
 });
 
 // ============================================
-// AGENT MANAGEMENT ENDPOINTS
-// ============================================
-
-// List agents
-app.get("/agents", (req, res) => {
-  try {
-    const agents = os.listAgents();
-    res.json({
-      count: agents.length,
-      agents
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Get agent details
-app.get("/agents/:name", (req, res) => {
-  try {
-    const agent = os.getAgent(req.params.name);
-    
-    if (!agent) {
-      return res.status(404).json({ error: "Agent not found" });
-    }
-
-    res.json({
-      name: agent.name,
-      capabilities: agent.getCapabilities ? agent.getCapabilities() : [],
-      metrics: agent.getMetrics ? agent.getMetrics() : {},
-      status: 'active'
-    });
-
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ============================================
-// CLUSTER & GPU ENDPOINTS
-// ============================================
-
-// Cluster status
-app.get("/cluster", (req, res) => {
-  try {
-    const status = loadBalancer.getStatus();
-    res.json(status);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Execute on GPU cluster
-app.post("/cluster/execute", async (req, res) => {
-  try {
-    const { task, model = 'llama3', options = {} } = req.body;
-    
-    if (!task) {
-      return res.status(400).json({ error: "Task is required" });
-    }
-
-    const result = await loadBalancer.execute(task, model, options);
-    
-    res.json({
-      success: true,
-      ...result
-    });
-
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Execute on all nodes
-app.post("/cluster/execute-all", async (req, res) => {
-  try {
-    const { task, model = 'llama3', options = {} } = req.body;
-    
-    if (!task) {
-      return res.status(400).json({ error: "Task is required" });
-    }
-
-    const result = await loadBalancer.executeParallel(task, model, options);
-    
-    res.json({
-      success: true,
-      ...result
-    });
-
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Set load balancing strategy
-app.post("/cluster/strategy", (req, res) => {
-  try {
-    const { strategy } = req.body;
-    
-    if (!strategy) {
-      return res.status(400).json({ error: "Strategy is required" });
-    }
-
-    const result = loadBalancer.setStrategy(strategy);
-    
-    res.json({
-      success: true,
-      strategy: result
-    });
-
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ============================================
-// AUDIO PROCESSING ENDPOINTS
+// API Documentation
 // ============================================
 
 /**
- * Speech-to-Text endpoint
- * POST /audio/speech-to-text
- * Body: { filePath: "/path/to/audio.mp3", options?: {} }
+ * API documentation
+ * GET /
  */
-app.post("/audio/speech-to-text", async (req, res) => {
-  try {
-    const { filePath, options } = req.body;
-    
-    if (!filePath) {
-      return res.status(400).json({ error: "File path is required" });
-    }
-
-    const result = await audioEngine.speechToText(filePath, options);
-    
-    if (result.success) {
-      res.json(result);
-    } else {
-      res.status(500).json(result);
-    }
-
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * Text-to-Speech endpoint
- * POST /audio/text-to-speech
- * Body: { text: "Hello world", options?: {} }
- */
-app.post("/audio/text-to-speech", async (req, res) => {
-  try {
-    const { text, options } = req.body;
-    
-    if (!text) {
-      return res.status(400).json({ error: "Text is required" });
-    }
-
-    const result = await audioEngine.textToSpeech(text, options);
-    
-    if (result.success) {
-      res.json(result);
-    } else {
-      res.status(500).json(result);
-    }
-
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * Stream audio file
- * GET /audio/stream/:filename
- */
-app.get("/audio/stream/:filename", async (req, res) => {
-  try {
-    const { filename } = req.params;
-    const filePath = path.join(audioEngine.audioFolder, filename);
-    
-    // Check if file exists
-    try {
-      await fs.access(filePath);
-    } catch {
-      return res.status(404).json({ error: "Audio file not found" });
-    }
-
-    // Set appropriate headers
-    const ext = path.extname(filename).toLowerCase();
-    const contentType = {
-      '.mp3': 'audio/mpeg',
-      '.wav': 'audio/wav',
-      '.ogg': 'audio/ogg',
-      '.m4a': 'audio/mp4',
-      '.flac': 'audio/flac'
-    }[ext] || 'application/octet-stream';
-
-    res.setHeader('Content-Type', contentType);
-    res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
-
-    // Stream the file
-    await audioEngine.streamAudio(filePath, res);
-
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * List audio files
- * GET /audio/files
- */
-app.get("/audio/files", async (req, res) => {
-  try {
-    const { limit } = req.query;
-    const files = await audioEngine.listFiles(parseInt(limit) || 20);
-    res.json({ files, count: files.length });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * Get audio file metadata
- * GET /audio/metadata/:filename
- */
-app.get("/audio/metadata/:filename", async (req, res) => {
-  try {
-    const { filename } = req.params;
-    const filePath = path.join(audioEngine.audioFolder, filename);
-    
-    const metadata = await audioEngine.getMetadata(filePath);
-    res.json(metadata);
-
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * Get audio engine stats
- * GET /audio/stats
- */
-app.get("/audio/stats", (req, res) => {
-  try {
-    const stats = audioEngine.getStats();
-    res.json(stats);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * Delete audio file
- * DELETE /audio/file/:filename
- */
-app.delete("/audio/file/:filename", async (req, res) => {
-  try {
-    const { filename } = req.params;
-    const filePath = path.join(audioEngine.audioFolder, filename);
-    
-    const result = await audioEngine.deleteFile(filePath);
-    
-    if (result.success) {
-      res.json({ success: true, message: "File deleted" });
-    } else {
-      res.status(500).json(result);
-    }
-
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * Clean up temp files
- * POST /audio/cleanup
- */
-app.post("/audio/cleanup", async (req, res) => {
-  try {
-    const { olderThan } = req.body;
-    const result = await audioEngine.cleanup(olderThan);
-    res.json(result);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * Convert audio format
- * POST /audio/convert
- * Body: { filePath: "/path/to/file", format: "mp3" }
- */
-app.post("/audio/convert", async (req, res) => {
-  try {
-    const { filePath, format } = req.body;
-    
-    if (!filePath || !format) {
-      return res.status(400).json({ error: "File path and format are required" });
-    }
-
-    const result = await audioEngine.convertAudio(filePath, format);
-    
-    if (result.success) {
-      res.json(result);
-    } else {
-      res.status(500).json(result);
-    }
-
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ============================================
-// ERROR HANDLING
-// ============================================
-
-// 404 handler
-app.use((req, res) => {
-  res.status(404).json({ error: "Endpoint not found" });
+app.get("/", (req, res) => {
+  res.json({
+    name: "CephasGM AI Platform API",
+    version: "5.0.0",
+    description: "Enterprise AI Infrastructure Platform",
+    endpoints: {
+      health: {
+        get: "/health - System health check"
+      },
+      employees: {
+        "POST /api/employee": "Execute AI employee task",
+        "POST /api/employee/team/:teamName": "Assign task to team",
+        "GET /api/employees": "List all employees",
+        "GET /api/teams": "List all teams"
+      },
+      ai: {
+        "POST /api/ai": "AI inference request",
+        "GET /api/ai/stream": "Streaming AI response",
+        "GET /api/models": "List available models"
+      },
+      tasks: {
+        "POST /api/task": "Submit task to orchestrator",
+        "POST /api/workflow": "Submit workflow",
+        "GET /api/task/:taskId": "Get task status",
+        "GET /api/workflow/:workflowId": "Get workflow status"
+      },
+      knowledge: {
+        "POST /api/knowledge": "Store knowledge",
+        "GET /api/knowledge/:key": "Retrieve knowledge"
+      },
+      vector: {
+        "POST /api/vector": "Add vector to memory",
+        "POST /api/vector/search": "Search vectors"
+      },
+      cluster: {
+        "GET /api/cluster": "Get cluster status"
+      },
+      metrics: {
+        "GET /api/metrics": "Get system metrics"
+      }
+    },
+    documentation: "https://docs.cephasgm.ai",
+    support: "support@cephasgm.ai"
+  });
 });
 
 // Error handling middleware
@@ -519,32 +557,58 @@ app.use((err, req, res, next) => {
   console.error('Unhandled error:', err);
   res.status(500).json({ 
     error: 'Internal server error',
-    message: err.message 
+    message: process.env.NODE_ENV === 'production' ? 'An error occurred' : err.message
   });
 });
 
-// ============================================
-// START SERVER
-// ============================================
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({ 
+    error: 'Endpoint not found',
+    path: req.path
+  });
+});
 
-app.listen(PORT, () => {
+// Start server
+const server = app.listen(PORT, () => {
   console.log(`
-╔══════════════════════════════════════════════════════════════╗
-║                                                              ║
-║   🚀 CephasGM AI Platform v4.1                              ║
+╔════════════════════════════════════════════════════════════════╗
+║                                                                ║
+║   🚀 CephasGM AI Platform v5.0                                ║
 ║   📍 API Server running on port ${PORT}                        ║
-║   🤖 Agents: ${os.listAgents().length} registered                       ║
-║   🖥️  Cluster: ${loadBalancer.nodes.length} GPU nodes                      ║
-║   🧠 Learning: ${feedbackLoop.interactions.length} interactions logged     ║
-║   🎵 Audio: STT + TTS ready                                 ║
-║                                                              ║
-║   📝 POST /task          - Execute AI task                  ║
-║   🎤 POST /audio/text-to-speech - Generate speech           ║
-║   🎧 POST /audio/speech-to-text - Transcribe audio          ║
-║   📊 GET  /status        - System status                    ║
-║                                                              ║
-╚══════════════════════════════════════════════════════════════╝
+║   🌍 Environment: ${process.env.NODE_ENV || 'development'}                    ║
+║   🤖 Features:                                                 ║
+║      • Autonomous AI Employees                                 ║
+║      • Research Pipeline                                       ║
+║      • AI Coding Studio                                        ║
+║      • Private AI Cloud                                        ║
+║      • Distributed Workers                                     ║
+║      • Knowledge Base + Vector Memory                          ║
+║                                                                ║
+║   📝 API Documentation: http://localhost:${PORT}                ║
+║   💡 Try: curl -X POST http://localhost:${PORT}/api/ai \\       ║
+║          -H "Content-Type: application/json" \\                ║
+║          -d '{"prompt":"Hello"}'                               ║
+║                                                                ║
+╚════════════════════════════════════════════════════════════════╝
   `);
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received, shutting down gracefully...');
+  server.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
+});
+
+process.on('SIGINT', () => {
+  console.log('SIGINT received, shutting down gracefully...');
+  server.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
 });
 
 module.exports = app;
