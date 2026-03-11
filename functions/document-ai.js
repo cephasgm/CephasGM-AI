@@ -1,74 +1,139 @@
-const functions = require("firebase-functions")
-const pdfParse = require("pdf-parse")
-const Busboy = require("busboy")
+const functions = require("firebase-functions");
+const pdfParse = require("pdf-parse");
+const Busboy = require("busboy");
 
-exports.documentAI = functions.https.onRequest(async(req,res)=>{
+/**
+ * Document AI - Analyze PDFs and documents
+ * Endpoint: https://us-central1-cephasgm-ai.cloudfunctions.net/documentAI
+ */
+exports.documentAI = functions.https.onRequest(async (req, res) => {
+  // Enable CORS
+  res.set("Access-Control-Allow-Origin", "*");
+  res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.set("Access-Control-Allow-Headers", "Content-Type");
 
-// Enable CORS
-res.set('Access-Control-Allow-Origin', '*')
-res.set('Access-Control-Allow-Methods', 'POST')
-res.set('Access-Control-Allow-Headers', 'Content-Type')
+  // Handle preflight
+  if (req.method === "OPTIONS") {
+    res.status(204).send("");
+    return;
+  }
 
-if (req.method === 'OPTIONS') {
-  res.status(204).send('')
-  return
-}
+  // Only allow POST
+  if (req.method !== "POST") {
+    res.status(405).json({ error: "Method not allowed. Use POST with multipart/form-data." });
+    return;
+  }
 
-// Only allow POST requests
-if (req.method !== 'POST') {
-  res.status(405).json({error: "Method not allowed"})
-  return
-}
+  // Check content type
+  const contentType = req.headers['content-type'] || '';
+  if (!contentType.includes('multipart/form-data')) {
+    res.status(400).json({ error: "Content-Type must be multipart/form-data" });
+    return;
+  }
 
-try {
-  // Parse multipart form data
-  const busboy = Busboy({ headers: req.headers })
-  let fileBuffer = null
-  let fileName = ""
-  
-  busboy.on('file', (fieldname, file, filename, encoding, mimetype) => {
-    fileName = filename
-    const chunks = []
-    file.on('data', (data) => chunks.push(data))
-    file.on('end', () => {
-      fileBuffer = Buffer.concat(chunks)
-    })
-  })
+  try {
+    // Parse multipart form data
+    const busboy = Busboy({ headers: req.headers });
+    
+    let fileBuffer = null;
+    let fileName = "";
+    let fileMimeType = "";
+    let fields = {};
 
-  busboy.on('finish', async () => {
-    if (!fileBuffer) {
-      res.status(400).json({error: "No file uploaded"})
-      return
-    }
-
-    try {
-      // Parse PDF
-      const pdfData = await pdfParse(fileBuffer)
+    // Handle file upload
+    busboy.on('file', (fieldname, file, { filename, encoding, mimeType }) => {
+      fileName = filename;
+      fileMimeType = mimeType;
       
-      // Get first 1000 characters as summary
-      const summary = pdfData.text.substring(0, 1000) + (pdfData.text.length > 1000 ? "..." : "")
-      
-      res.json({
-        fileName: fileName,
-        pageCount: pdfData.numpages,
-        info: pdfData.info,
-        metadata: pdfData.metadata,
-        summary: summary,
-        fullLength: pdfData.text.length,
-        message: "Document processed successfully"
-      })
+      const chunks = [];
+      file.on('data', (data) => chunks.push(data));
+      file.on('end', () => {
+        fileBuffer = Buffer.concat(chunks);
+      });
+    });
 
-    } catch(parseError) {
-      console.error("PDF parse error:", parseError)
-      res.status(400).json({error: "Invalid or corrupted PDF file"})
-    }
-  })
+    // Handle form fields
+    busboy.on('field', (fieldname, value) => {
+      fields[fieldname] = value;
+    });
 
-  req.pipe(busboy)
+    // Process when done
+    busboy.on('finish', async () => {
+      if (!fileBuffer) {
+        res.status(400).json({ error: "No file uploaded" });
+        return;
+      }
 
-} catch(error) {
-  console.error("Document AI error:", error)
-  res.status(500).json({error: error.message})
-}
+      try {
+        let result = {};
 
-})
+        // Process based on file type
+        if (fileMimeType === 'application/pdf' || fileName.endsWith('.pdf')) {
+          // Parse PDF
+          const pdfData = await pdfParse(fileBuffer);
+          
+          result = {
+            type: "pdf",
+            fileName: fileName,
+            pageCount: pdfData.numpages,
+            info: pdfData.info,
+            metadata: pdfData.metadata,
+            text: pdfData.text.substring(0, 2000) + (pdfData.text.length > 2000 ? "..." : ""),
+            wordCount: pdfData.text.split(/\s+/).length,
+            characterCount: pdfData.text.length
+          };
+        } else if (fileMimeType.startsWith('text/') || fileName.endsWith('.txt')) {
+          // Text file
+          const text = fileBuffer.toString('utf-8');
+          result = {
+            type: "text",
+            fileName: fileName,
+            text: text.substring(0, 2000) + (text.length > 2000 ? "..." : ""),
+            wordCount: text.split(/\s+/).length,
+            characterCount: text.length,
+            lineCount: text.split('\n').length
+          };
+        } else {
+          // Unsupported file type
+          result = {
+            type: "unsupported",
+            fileName: fileName,
+            mimeType: fileMimeType,
+            size: fileBuffer.length,
+            message: "File type not supported for detailed analysis. Supported: PDF, TXT"
+          };
+        }
+
+        // Generate summary if requested
+        let summary = "";
+        if (fields.summary === "true" && result.text) {
+          summary = result.text.substring(0, 500) + "...";
+        }
+
+        res.json({
+          success: true,
+          ...result,
+          summary: summary || "No summary generated",
+          analysis: fields.analysis || "basic",
+          timestamp: Date.now()
+        });
+
+      } catch (parseError) {
+        console.error("Document parse error:", parseError);
+        res.status(400).json({ 
+          error: "Failed to parse document", 
+          details: parseError.message 
+        });
+      }
+    });
+
+    req.pipe(busboy);
+
+  } catch (error) {
+    console.error("Document AI error:", error);
+    res.status(500).json({ 
+      error: "Document processing failed", 
+      details: error.message 
+    });
+  }
+});
