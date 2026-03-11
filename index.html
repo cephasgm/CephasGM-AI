@@ -1,837 +1,381 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CephasGM AI - Phase 2</title>
-<link rel="manifest" href="manifest.json">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🤖</text></svg>">
-
-<style>
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
-body {
-  margin: 0;
-  font-family: Arial, Helvetica, sans-serif;
-  background-image: url("https://images.unsplash.com/photo-1508672019048-805c876b67e2");
-  background-size: cover;
-  background-position: center;
-  color: white;
-  min-height: 100vh;
-}
-
-.overlay {
-  background: rgba(0,0,0,0.7);
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 20px;
-}
-
-.container {
-  width: 100%;
-  max-width: 1200px;
-}
-
-h1 {
-  font-size: 3rem;
-  margin-bottom: 10px;
-  text-align: center;
-  color: #ffb300;
-  text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
-}
-
-.subtitle {
-  text-align: center;
-  margin-bottom: 30px;
-  font-size: 1.2rem;
-  opacity: 0.9;
-}
-
-/* User Info */
-.user-info {
-  position: absolute;
-  top: 20px;
-  right: 20px;
-  background: rgba(0,0,0,0.7);
-  padding: 10px 20px;
-  border-radius: 30px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  border: 1px solid #ffb300;
-  z-index: 100;
-}
-
-.user-email {
-  color: #ffb300;
-  font-size: 14px;
-}
-
-.logout-btn {
-  padding: 5px 15px;
-  font-size: 12px;
-  margin: 0;
-  background: #dc3545;
-  color: white;
-  border: none;
-  border-radius: 20px;
-  cursor: pointer;
-}
-
-.logout-btn:hover {
-  background: #c82333;
-}
-
-/* Tab Navigation */
-.tab-nav {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 10px;
-  margin: 20px 0;
-  background: rgba(0,0,0,0.5);
-  padding: 15px;
-  border-radius: 50px;
-  backdrop-filter: blur(10px);
-}
-
-.tab-btn {
-  padding: 12px 25px;
-  font-size: 16px;
-  border: none;
-  border-radius: 30px;
-  cursor: pointer;
-  background: transparent;
-  color: white;
-  transition: all 0.3s;
-  font-weight: bold;
-}
-
-.tab-btn:hover {
-  background: rgba(255,179,0,0.2);
-}
-
-.tab-btn.active {
-  background: #ffb300;
-  color: black;
-}
-
-/* Tab Content */
-.tab-content {
-  display: none;
-  background: rgba(0,0,0,0.5);
-  backdrop-filter: blur(10px);
-  padding: 30px;
-  border-radius: 20px;
-  margin-top: 20px;
-  border: 1px solid rgba(255,179,0,0.3);
-  width: 100%;
-}
-
-.tab-content.active {
-  display: block;
-}
-
-/* Chat Tab */
-.chat-box {
-  height: 400px;
-  overflow-y: auto;
-  padding: 20px;
-  background: rgba(0,0,0,0.3);
-  border-radius: 10px;
-  margin-bottom: 20px;
-}
-
-.message {
-  margin-bottom: 15px;
-  padding: 10px;
-  border-radius: 10px;
-  animation: fadeIn 0.3s;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.user-message {
-  background: rgba(255,179,0,0.2);
-  margin-left: 20%;
-}
-
-.ai-message {
-  background: rgba(255,255,255,0.1);
-  margin-right: 20%;
-}
-
-.message-header {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 5px;
-  font-size: 0.9rem;
-  opacity: 0.8;
-}
-
-.timestamp {
-  font-size: 0.8rem;
-}
-
-.message-content {
-  line-height: 1.5;
-  white-space: pre-wrap;
-}
-
-.input-area {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-
-.input-area input {
-  flex: 1;
-  padding: 15px;
-  border-radius: 30px;
-  border: none;
-  font-size: 16px;
-  background: rgba(255,255,255,0.9);
-}
-
-.input-area input:focus {
-  outline: 2px solid #ffb300;
-}
-
-.input-area button {
-  padding: 15px 30px;
-  border: none;
-  border-radius: 30px;
-  background: #ffb300;
-  color: black;
-  font-weight: bold;
-  cursor: pointer;
-  transition: all 0.3s;
-  min-width: 100px;
-}
-
-.input-area button:hover {
-  transform: scale(1.05);
-  background: #ffa000;
-}
-
-.voice-btn {
-  background: #28a745 !important;
-  color: white !important;
-}
-
-.voice-btn.listening {
-  background: #dc3545 !important;
-  animation: pulse 1s infinite;
-}
-
-@keyframes pulse {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.05); }
-  100% { transform: scale(1); }
-}
-
-/* Image Generation Tab */
-.image-input-area {
-  display: flex;
-  gap: 10px;
-  margin: 20px 0;
-}
-
-.image-input-area input {
-  flex: 1;
-  padding: 15px;
-  border-radius: 30px;
-  border: none;
-  font-size: 16px;
-}
-
-.image-result {
-  margin-top: 20px;
-  text-align: center;
-  min-height: 300px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 20px;
-}
-
-.image-result img {
-  max-width: 100%;
-  max-height: 400px;
-  border-radius: 10px;
-  box-shadow: 0 0 20px rgba(255,179,0,0.3);
-}
-
-.image-actions {
-  display: flex;
-  gap: 10px;
-  justify-content: center;
-  margin-top: 10px;
-}
-
-.image-actions button {
-  padding: 10px 20px;
-  border: none;
-  border-radius: 30px;
-  cursor: pointer;
-  background: #ffb300;
-  color: black;
-  font-weight: bold;
-}
-
-.image-actions button:hover {
-  opacity: 0.9;
-}
-
-.status {
-  margin-top: 10px;
-  padding: 10px;
-  border-radius: 5px;
-}
-
-.status.info {
-  background: rgba(23, 162, 184, 0.3);
-  color: #a0d0ff;
-}
-
-.status.success {
-  background: rgba(40, 167, 69, 0.3);
-  color: #b3ffb3;
-}
-
-.status.error {
-  background: rgba(220, 53, 69, 0.3);
-  color: #ffb3b3;
-}
-
-/* Upload Tab */
-.upload-area {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.file-input {
-  padding: 20px;
-  background: rgba(255,255,255,0.1);
-  border: 2px dashed #ffb300;
-  border-radius: 10px;
-  text-align: center;
-  cursor: pointer;
-}
-
-.file-input:hover {
-  background: rgba(255,179,0,0.1);
-}
-
-.file-input input {
-  display: none;
-}
-
-.file-label {
-  cursor: pointer;
-  font-size: 1.1rem;
-}
-
-.upload-btn {
-  padding: 15px;
-  border: none;
-  border-radius: 30px;
-  background: #ffb300;
-  color: black;
-  font-weight: bold;
-  cursor: pointer;
-  font-size: 1.1rem;
-}
-
-.upload-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.progress-bar {
-  width: 100%;
-  height: 10px;
-  background: rgba(255,255,255,0.1);
-  border-radius: 5px;
-  overflow: hidden;
-  display: none;
-}
-
-.progress-bar-fill {
-  height: 100%;
-  background: #ffb300;
-  width: 0%;
-  transition: width 0.3s;
-}
-
-.file-info {
-  margin-top: 20px;
-  padding: 15px;
-  background: rgba(0,0,0,0.3);
-  border-radius: 10px;
-}
-
-/* Voice Tab */
-.voice-demo {
-  text-align: center;
-  padding: 20px;
-}
-
-.voice-demo button {
-  padding: 20px 40px;
-  font-size: 1.2rem;
-  border: none;
-  border-radius: 50px;
-  background: #ffb300;
-  color: black;
-  cursor: pointer;
-  margin: 20px;
-}
-
-.voice-status {
-  margin: 20px 0;
-  font-size: 1.1rem;
-  min-height: 30px;
-}
-
-.voice-output {
-  width: 100%;
-  padding: 15px;
-  border-radius: 10px;
-  border: none;
-  margin-top: 20px;
-  font-size: 1rem;
-}
-
-/* Agents Tab */
-.agents-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 20px;
-  margin-top: 20px;
-}
-
-.agent-card {
-  background: rgba(255,255,255,0.1);
-  padding: 20px;
-  border-radius: 10px;
-  text-align: center;
-  cursor: pointer;
-  transition: all 0.3s;
-  border: 1px solid transparent;
-}
-
-.agent-card:hover {
-  transform: translateY(-5px);
-  border-color: #ffb300;
-  background: rgba(255,179,0,0.1);
-}
-
-.agent-icon {
-  font-size: 2.5rem;
-  margin-bottom: 10px;
-}
-
-.agent-name {
-  font-size: 1.2rem;
-  font-weight: bold;
-  margin-bottom: 5px;
-  color: #ffb300;
-}
-
-.agent-desc {
-  font-size: 0.9rem;
-  opacity: 0.8;
-}
-
-.agent-result {
-  margin-top: 20px;
-  padding: 20px;
-  background: rgba(0,0,0,0.3);
-  border-radius: 10px;
-  white-space: pre-wrap;
-}
-
-/* Memory Tab */
-.memory-list {
-  max-height: 400px;
-  overflow-y: auto;
-  margin: 20px 0;
-  padding: 10px;
-  background: rgba(0,0,0,0.3);
-  border-radius: 10px;
-}
-
-.memory-item {
-  padding: 10px;
-  border-bottom: 1px solid rgba(255,255,255,0.1);
-  cursor: pointer;
-}
-
-.memory-item:hover {
-  background: rgba(255,179,0,0.1);
-}
-
-.memory-item:last-child {
-  border-bottom: none;
-}
-
-.memory-prompt {
-  font-weight: bold;
-  color: #ffb300;
-}
-
-.memory-response {
-  margin-top: 5px;
-  opacity: 0.8;
-  font-size: 0.9rem;
-}
-
-.memory-time {
-  font-size: 0.8rem;
-  opacity: 0.6;
-  margin-top: 5px;
-}
-
-.search-memory {
-  display: flex;
-  gap: 10px;
-  margin: 20px 0;
-}
-
-.search-memory input {
-  flex: 1;
-  padding: 15px;
-  border-radius: 30px;
-  border: none;
-}
-
-/* Responsive */
-@media (max-width: 768px) {
-  h1 { font-size: 2rem; }
-  .tab-nav { flex-direction: column; border-radius: 20px; }
-  .input-area { flex-direction: column; }
-  .input-area button { width: 100%; }
-  .user-info { position: fixed; top: 10px; right: 10px; }
-}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CephasGM AI - Complete AI Ecosystem</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" href="icon-192.png">
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            font-family: 'Inter', sans-serif;
+        }
+        .glass-morphism {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .agent-card {
+            transition: all 0.3s ease;
+        }
+        .agent-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+        }
+    </style>
 </head>
-<body>
-<div class="overlay">
-  <div class="container">
-    <!-- User Info -->
-    <div class="user-info" id="userInfo" style="display: none;">
-      <span class="user-email" id="userEmail"></span>
-      <button class="logout-btn" id="logoutBtn">Logout</button>
-    </div>
-    
-    <h1>CephasGM AI</h1>
-    <div class="subtitle" id="authMessage">
-      <a href="login-signup.html" style="color: #ffb300; text-decoration: none;">Login / Signup</a> to access all features
-    </div>
-    
-    <!-- Tab Navigation -->
-    <div class="tab-nav" id="tabNav" style="display: none;">
-      <button class="tab-btn active" onclick="switchTab('chat')">💬 Chat</button>
-      <button class="tab-btn" onclick="switchTab('image')">🎨 Image Gen</button>
-      <button class="tab-btn" onclick="switchTab('upload')">📁 Upload</button>
-      <button class="tab-btn" onclick="switchTab('voice')">🎤 Voice</button>
-      <button class="tab-btn" onclick="switchTab('agents')">🤖 Agents</button>
-      <button class="tab-btn" onclick="switchTab('memory')">🧠 Memory</button>
-    </div>
-    
-    <!-- Chat Tab -->
-    <div id="chatTab" class="tab-content active">
-      <div class="chat-box" id="chatBox"></div>
-      <div class="input-area">
-        <input type="text" id="prompt" placeholder="Ask CephasGM AI anything..." autocomplete="off">
-        <button class="voice-btn" id="voiceBtn" onclick="toggleVoice()">🎤</button>
-        <button onclick="sendMessage()" id="sendBtn">Send</button>
-      </div>
-    </div>
-    
-    <!-- Image Generation Tab -->
-    <div id="imageTab" class="tab-content">
-      <h2>🎨 Generate Images</h2>
-      <p>Describe the image you want to create</p>
-      <div class="image-input-area">
-        <input type="text" id="imagePrompt" placeholder="A beautiful African sunset over savanna...">
-        <button onclick="generateImage()" id="generateImageBtn">Generate</button>
-      </div>
-      <div class="image-result" id="imageResult"></div>
-      <div class="status" id="imageStatus"></div>
-    </div>
-    
-    <!-- Upload Tab -->
-    <div id="uploadTab" class="tab-content">
-      <h2>📁 Upload Documents</h2>
-      <p>Upload PDF or text files for analysis</p>
-      <div class="upload-area">
-        <div class="file-input" onclick="document.getElementById('file').click()">
-          <input type="file" id="file" accept=".pdf,.txt,.doc,.docx,.jpg,.png">
-          <div class="file-label">📄 Click to select a file or drag and drop</div>
+<body class="text-white">
+    <div id="app" class="container mx-auto px-4 py-8">
+        <!-- Header -->
+        <header class="flex justify-between items-center mb-8">
+            <div>
+                <h1 class="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-yellow-400 to-pink-500">
+                    🚀 CephasGM AI
+                </h1>
+                <p class="text-gray-300 mt-2">Complete AI Ecosystem - Phase 6</p>
+            </div>
+            <div id="user-info" class="hidden glass-morphism rounded-lg px-4 py-2">
+                <span id="user-email" class="mr-4"></span>
+                <button id="logout-btn" class="bg-red-500 hover:bg-red-600 px-4 py-1 rounded-lg text-sm">
+                    Logout
+                </button>
+            </div>
+            <div id="auth-buttons">
+                <a href="login-signup.html" class="bg-yellow-500 hover:bg-yellow-600 text-black px-6 py-2 rounded-lg font-semibold">
+                    Login / Signup
+                </a>
+            </div>
+        </header>
+
+        <!-- Dashboard -->
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            <!-- Sidebar -->
+            <div class="lg:col-span-1">
+                <div class="glass-morphism rounded-xl p-6">
+                    <h2 class="text-xl font-semibold mb-4">🧠 AI OS</h2>
+                    <div id="system-status" class="space-y-2 text-sm">
+                        <div class="flex justify-between">
+                            <span>Status:</span>
+                            <span class="text-green-400" id="os-status">Initializing...</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>Agents:</span>
+                            <span id="agent-count">0</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>Tasks:</span>
+                            <span id="task-count">0</span>
+                        </div>
+                    </div>
+
+                    <div class="mt-6">
+                        <h3 class="font-semibold mb-2">📊 Quick Actions</h3>
+                        <div class="space-y-2">
+                            <button onclick="showTab('chat')" class="w-full text-left px-3 py-2 rounded-lg hover:bg-white/10">
+                                💬 AI Chat
+                            </button>
+                            <button onclick="showTab('research')" class="w-full text-left px-3 py-2 rounded-lg hover:bg-white/10">
+                                🔬 Research Lab
+                            </button>
+                            <button onclick="showTab('code')" class="w-full text-left px-3 py-2 rounded-lg hover:bg-white/10">
+                                💻 Software Factory
+                            </button>
+                            <button onclick="showTab('multimodal')" class="w-full text-left px-3 py-2 rounded-lg hover:bg-white/10">
+                                🎨 Multimodal Studio
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Content -->
+            <div class="lg:col-span-3">
+                <!-- Chat Tab -->
+                <div id="chat-tab" class="tab-content glass-morphism rounded-xl p-6">
+                    <h2 class="text-2xl font-bold mb-4">💬 AI Chat</h2>
+                    <div id="chat-messages" class="h-96 overflow-y-auto mb-4 space-y-4 p-4 bg-black/20 rounded-lg"></div>
+                    <div class="flex gap-2">
+                        <input type="text" id="chat-input" placeholder="Ask anything..." 
+                               class="flex-1 bg-white/10 border border-white/20 rounded-lg px-4 py-3 focus:outline-none focus:border-yellow-500">
+                        <button onclick="sendChatMessage()" 
+                                class="bg-yellow-500 hover:bg-yellow-600 text-black px-6 py-3 rounded-lg font-semibold">
+                            Send
+                        </button>
+                        <button onclick="startVoiceInput()" 
+                                class="bg-purple-500 hover:bg-purple-600 px-4 py-3 rounded-lg">
+                            🎤
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Research Tab -->
+                <div id="research-tab" class="tab-content hidden glass-morphism rounded-xl p-6">
+                    <h2 class="text-2xl font-bold mb-4">🔬 Research Lab</h2>
+                    <div class="mb-4">
+                        <input type="text" id="research-topic" placeholder="Enter research topic..." 
+                               class="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 mb-2">
+                        <button onclick="conductResearch()" 
+                                class="bg-green-500 hover:bg-green-600 px-6 py-2 rounded-lg">
+                            Conduct Research
+                        </button>
+                    </div>
+                    <div id="research-results" class="mt-4 p-4 bg-black/20 rounded-lg"></div>
+                </div>
+
+                <!-- Code Tab -->
+                <div id="code-tab" class="tab-content hidden glass-morphism rounded-xl p-6">
+                    <h2 class="text-2xl font-bold mb-4">💻 Software Factory</h2>
+                    <div class="mb-4">
+                        <select id="code-language" class="bg-white/10 border border-white/20 rounded-lg px-4 py-2 mb-2">
+                            <option value="javascript">JavaScript</option>
+                            <option value="python">Python</option>
+                            <option value="html">HTML</option>
+                        </select>
+                        <textarea id="code-input" rows="10" 
+                                  class="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 font-mono text-sm"></textarea>
+                        <button onclick="runCode()" 
+                                class="bg-blue-500 hover:bg-blue-600 px-6 py-2 rounded-lg mt-2">
+                            Run Code
+                        </button>
+                    </div>
+                    <div id="code-output" class="p-4 bg-black/20 rounded-lg font-mono text-sm"></div>
+                </div>
+
+                <!-- Multimodal Tab -->
+                <div id="multimodal-tab" class="tab-content hidden glass-morphism rounded-xl p-6">
+                    <h2 class="text-2xl font-bold mb-4">🎨 Multimodal Studio</h2>
+                    
+                    <!-- Image Generation -->
+                    <div class="mb-6">
+                        <h3 class="text-xl mb-2">Image Generation</h3>
+                        <input type="text" id="image-prompt" placeholder="Describe the image..." 
+                               class="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-2 mb-2">
+                        <button onclick="generateImage()" 
+                                class="bg-pink-500 hover:bg-pink-600 px-6 py-2 rounded-lg">
+                            Generate
+                        </button>
+                        <div id="image-result" class="mt-4"></div>
+                    </div>
+
+                    <!-- Audio Generation -->
+                    <div class="mb-6">
+                        <h3 class="text-xl mb-2">Audio Generation</h3>
+                        <textarea id="audio-text" rows="3" 
+                                  class="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-2 mb-2"
+                                  placeholder="Enter text for speech synthesis..."></textarea>
+                        <button onclick="generateAudio()" 
+                                class="bg-purple-500 hover:bg-purple-600 px-6 py-2 rounded-lg">
+                            Generate Speech
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
-        <div class="progress-bar" id="uploadProgress">
-          <div class="progress-bar-fill" id="uploadProgressFill"></div>
-        </div>
-        <button class="upload-btn" onclick="uploadFile()" id="uploadBtn">Upload File</button>
-        <div class="status" id="uploadStatus"></div>
-        <div class="file-info" id="fileInfo"></div>
-      </div>
     </div>
-    
-    <!-- Voice Tab -->
-    <div id="voiceTab" class="tab-content">
-      <h2>🎤 Voice Commands</h2>
-      <p>Speak to CephasGM AI</p>
-      <div class="voice-demo">
-        <button onclick="startVoice()" id="voiceDemoBtn">🎤 Start Speaking</button>
-        <div class="voice-status" id="voiceStatus"></div>
-        <textarea class="voice-output" id="voiceOutput" rows="3" placeholder="Your speech will appear here..." readonly></textarea>
-        <button onclick="speak('Hello, I am CephasGM AI. How can I help you today?')" style="margin-top: 10px;">🔊 Test Speech</button>
-      </div>
-    </div>
-    
-    <!-- Agents Tab -->
-    <div id="agentsTab" class="tab-content">
-      <h2>🤖 AI Agents</h2>
-      <p>Specialized agents for different tasks</p>
-      <div class="agents-grid">
-        <div class="agent-card" onclick="runSearchAgent()">
-          <div class="agent-icon">🔍</div>
-          <div class="agent-name">Search Agent</div>
-          <div class="agent-desc">Search the web for information</div>
-        </div>
-        <div class="agent-card" onclick="runSummarizeAgent()">
-          <div class="agent-icon">📝</div>
-          <div class="agent-name">Summarize Agent</div>
-          <div class="agent-desc">Summarize long texts</div>
-        </div>
-        <div class="agent-card" onclick="runTranslateAgent()">
-          <div class="agent-icon">🌍</div>
-          <div class="agent-name">Translate Agent</div>
-          <div class="agent-desc">Translate between languages</div>
-        </div>
-        <div class="agent-card" onclick="runAnalyzeAgent()">
-          <div class="agent-icon">📊</div>
-          <div class="agent-name">Analyze Agent</div>
-          <div class="agent-desc">Analyze data and sentiment</div>
-        </div>
-      </div>
-      <div class="input-area" style="margin-top: 20px;">
-        <input type="text" id="agentTask" placeholder="Enter task for agent...">
-        <button onclick="runCustomAgent()">Run Agent</button>
-      </div>
-      <div class="agent-result" id="agentResult"></div>
-    </div>
-    
-    <!-- Memory Tab -->
-    <div id="memoryTab" class="tab-content">
-      <h2>🧠 Vector Memory</h2>
-      <p>Search through conversation history</p>
-      <div class="search-memory">
-        <input type="text" id="memorySearch" placeholder="Search memories...">
-        <button onclick="searchMemory()">Search</button>
-        <button onclick="loadMemories()">Refresh</button>
-      </div>
-      <div class="memory-list" id="memoryList"></div>
-    </div>
-  </div>
-</div>
 
-<!-- Load scripts -->
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+    <!-- Load Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 
-<!-- Load our Phase 2 modules -->
-<script src="ai.js"></script>
-<script src="app.js"></script>
-<script src="image.js"></script>
-<script src="upload.js"></script>
-<script src="voice.js"></script>
-<script src="agents.js"></script>
-<script src="memory.js" type="module"></script>
+    <!-- Load Phase 6 Modules -->
+    <script src="agents.js"></script>
+    <script src="ai.js"></script>
+    <script src="app.js"></script>
+    <script src="image.js"></script>
+    <script src="upload.js"></script>
+    <script src="voice.js"></script>
+    <script src="memory.js"></script>
 
-<script>
-// Global variables
-let currentUser = null;
+    <script>
+        // Firebase Config
+        const firebaseConfig = {
+            apiKey: "AIzaSyAukJQx3pEqXoyFR9tyfeLckJaBIgYtGFA",
+            authDomain: "cephasgm-ai.firebaseapp.com",
+            projectId: "cephasgm-ai",
+            storageBucket: "cephasgm-ai.firebasestorage.app",
+            messagingSenderId: "304163647028",
+            appId: "1:304163647028:web:2920b2cfb9be4049806461"
+        };
 
-// Firebase configuration
-const firebaseConfig = {
-  apiKey: "AIzaSyAukJQx3pEqXoyFR9tyfeLckJaBIgYtGFA",
-  authDomain: "cephasgm-ai.firebaseapp.com",
-  projectId: "cephasgm-ai",
-  storageBucket: "cephasgm-ai.firebasestorage.app",
-  messagingSenderId: "304163647028",
-  appId: "1:304163647028:web:2920b2cfb9be4049806461"
-};
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
 
-// Initialize Firebase
-firebase.initializeApp(firebaseConfig);
-const auth = firebase.auth();
+        // Auth State Observer
+        auth.onAuthStateChanged(user => {
+            const userInfo = document.getElementById('user-info');
+            const authButtons = document.getElementById('auth-buttons');
+            const userEmail = document.getElementById('user-email');
 
-// Check auth state
-auth.onAuthStateChanged(user => {
-  currentUser = user;
-  
-  const userInfo = document.getElementById('userInfo');
-  const userEmail = document.getElementById('userEmail');
-  const authMessage = document.getElementById('authMessage');
-  const tabNav = document.getElementById('tabNav');
-  
-  if (user) {
-    // User is logged in
-    userInfo.style.display = 'flex';
-    userEmail.textContent = user.email;
-    authMessage.style.display = 'none';
-    tabNav.style.display = 'flex';
-    
-    // Load initial data
-    loadMemories();
-  } else {
-    // User is logged out
-    userInfo.style.display = 'none';
-    authMessage.style.display = 'block';
-    tabNav.style.display = 'none';
-  }
-});
+            if (user) {
+                userInfo.classList.remove('hidden');
+                authButtons.classList.add('hidden');
+                userEmail.textContent = user.email;
+                initializeDashboard();
+            } else {
+                userInfo.classList.add('hidden');
+                authButtons.classList.remove('hidden');
+            }
+        });
 
-// Logout
-document.getElementById('logoutBtn').addEventListener('click', () => {
-  auth.signOut().then(() => {
-    window.location.href = 'index.html';
-  });
-});
+        // Logout
+        document.getElementById('logout-btn').addEventListener('click', () => {
+            auth.signOut();
+        });
 
-// Tab switching
-function switchTab(tabName) {
-  // Hide all tabs
-  document.querySelectorAll('.tab-content').forEach(tab => {
-    tab.classList.remove('active');
-  });
-  
-  // Show selected tab
-  document.getElementById(tabName + 'Tab').classList.add('active');
-  
-  // Update tab buttons
-  document.querySelectorAll('.tab-btn').forEach(btn => {
-    btn.classList.remove('active');
-  });
-  
-  // Find and activate the clicked button
-  event.target.classList.add('active');
-}
+        // Tab Management
+        function showTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.add('hidden');
+            });
+            document.getElementById(tabName + '-tab').classList.remove('hidden');
+        }
 
-// Agent functions
-async function runSearchAgent() {
-  const task = document.getElementById('agentTask').value || 'search for latest AI news';
-  const result = await runAgent(task, 'search');
-  document.getElementById('agentResult').textContent = JSON.stringify(result, null, 2);
-}
+        // Initialize Dashboard
+        async function initializeDashboard() {
+            try {
+                const response = await fetch('http://localhost:6000/status');
+                const data = await response.json();
+                
+                document.getElementById('os-status').textContent = data.os?.status || 'Ready';
+                document.getElementById('agent-count').textContent = data.os?.agents?.length || 0;
+                document.getElementById('task-count').textContent = data.os?.metrics?.tasksProcessed || 0;
+            } catch (error) {
+                console.log('Using local mode:', error);
+            }
+        }
 
-async function runSummarizeAgent() {
-  const task = document.getElementById('agentTask').value || 'summarize the benefits of AI in Africa';
-  const result = await runAgent(task, 'summarize');
-  document.getElementById('agentResult').textContent = JSON.stringify(result, null, 2);
-}
+        // Chat Functions
+        async function sendChatMessage() {
+            const input = document.getElementById('chat-input');
+            const message = input.value.trim();
+            if (!message) return;
 
-async function runTranslateAgent() {
-  const task = document.getElementById('agentTask').value || 'translate hello to Swahili';
-  const result = await runAgent(task, 'translate');
-  document.getElementById('agentResult').textContent = JSON.stringify(result, null, 2);
-}
+            addChatMessage('You', message);
+            input.value = '';
 
-async function runAnalyzeAgent() {
-  const task = document.getElementById('agentTask').value || 'analyze the sentiment of this text: I love CephasGM AI';
-  const result = await runAgent(task, 'analyze');
-  document.getElementById('agentResult').textContent = JSON.stringify(result, null, 2);
-}
+            try {
+                const response = await fetch('http://localhost:6000/task', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ task: message })
+                });
+                const data = await response.json();
+                addChatMessage('AI', data.result || 'No response');
+            } catch (error) {
+                addChatMessage('AI', 'Error: ' + error.message);
+            }
+        }
 
-async function runCustomAgent() {
-  const task = document.getElementById('agentTask').value;
-  if (!task) {
-    alert('Please enter a task');
-    return;
-  }
-  const result = await runAgent(task);
-  document.getElementById('agentResult').textContent = JSON.stringify(result, null, 2);
-}
+        function addChatMessage(sender, message) {
+            const container = document.getElementById('chat-messages');
+            const div = document.createElement('div');
+            div.className = sender === 'You' ? 'text-right' : 'text-left';
+            div.innerHTML = `<span class="inline-block glass-morphism rounded-lg px-4 py-2 max-w-2xl">
+                <strong>${sender}:</strong> ${message}
+            </span>`;
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+        }
 
-// Memory functions
-async function loadMemories() {
-  if (!currentUser) return;
-  
-  const memories = await getRecentMemories(10);
-  const memoryList = document.getElementById('memoryList');
-  
-  if (memories.length === 0) {
-    memoryList.innerHTML = '<div style="text-align: center; padding: 20px;">No memories yet. Start chatting!</div>';
-    return;
-  }
-  
-  memoryList.innerHTML = memories.map(m => `
-    <div class="memory-item" onclick="document.getElementById('prompt').value = '${m.prompt.replace(/'/g, "\\'")}'">
-      <div class="memory-prompt">Q: ${m.prompt}</div>
-      <div class="memory-response">A: ${m.response.substring(0, 100)}${m.response.length > 100 ? '...' : ''}</div>
-      <div class="memory-time">${new Date(m.timestamp).toLocaleString()}</div>
-    </div>
-  `).join('');
-}
+        // Research Functions
+        async function conductResearch() {
+            const topic = document.getElementById('research-topic').value.trim();
+            if (!topic) return;
 
-async function searchMemory() {
-  const query = document.getElementById('memorySearch').value;
-  if (!query) {
-    loadMemories();
-    return;
-  }
-  
-  const results = await searchMemories(query);
-  const memoryList = document.getElementById('memoryList');
-  
-  if (results.length === 0) {
-    memoryList.innerHTML = '<div style="text-align: center; padding: 20px;">No matching memories found.</div>';
-    return;
-  }
-  
-  memoryList.innerHTML = results.map(r => `
-    <div class="memory-item">
-      <div class="memory-prompt">Similarity: ${(r.similarity * 100).toFixed(1)}%</div>
-      <div class="memory-response">${r.metadata?.prompt || 'Memory'}</div>
-    </div>
-  `).join('');
-}
+            const results = document.getElementById('research-results');
+            results.innerHTML = '<p class="text-yellow-400">Researching...</p>';
 
-// Make functions globally available
-window.switchTab = switchTab;
-window.runSearchAgent = runSearchAgent;
-window.runSummarizeAgent = runSummarizeAgent;
-window.runTranslateAgent = runTranslateAgent;
-window.runAnalyzeAgent = runAnalyzeAgent;
-window.runCustomAgent = runCustomAgent;
-window.loadMemories = loadMemories;
-window.searchMemory = searchMemory;
-</script>
+            try {
+                const response = await fetch('http://localhost:6000/task', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ task: `research ${topic}` })
+                });
+                const data = await response.json();
+                results.innerHTML = `<pre class="whitespace-pre-wrap">${JSON.stringify(data, null, 2)}</pre>`;
+            } catch (error) {
+                results.innerHTML = `<p class="text-red-400">Error: ${error.message}</p>`;
+            }
+        }
 
-<!-- Service worker -->
-<script>
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').catch(error => {
-      console.log('ServiceWorker registration failed:', error);
-    });
-  });
-}
-</script>
+        // Code Functions
+        async function runCode() {
+            const code = document.getElementById('code-input').value;
+            const language = document.getElementById('code-language').value;
+
+            const output = document.getElementById('code-output');
+            output.innerHTML = '<p class="text-yellow-400">Executing...</p>';
+
+            try {
+                const response = await fetch('http://localhost:6000/task', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        task: `run code ${code}`,
+                        options: { language }
+                    })
+                });
+                const data = await response.json();
+                output.innerHTML = `<pre class="whitespace-pre-wrap">${JSON.stringify(data, null, 2)}</pre>`;
+            } catch (error) {
+                output.innerHTML = `<p class="text-red-400">Error: ${error.message}</p>`;
+            }
+        }
+
+        // Image Generation
+        async function generateImage() {
+            const prompt = document.getElementById('image-prompt').value.trim();
+            if (!prompt) return;
+
+            const result = document.getElementById('image-result');
+            result.innerHTML = '<p class="text-yellow-400">Generating...</p>';
+
+            try {
+                const response = await fetch('http://localhost:6000/generate/image', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt })
+                });
+                const data = await response.json();
+                if (data.url) {
+                    result.innerHTML = `<img src="${data.url}" alt="${prompt}" class="max-w-full rounded-lg shadow-lg">`;
+                } else {
+                    result.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+                }
+            } catch (error) {
+                result.innerHTML = `<p class="text-red-400">Error: ${error.message}</p>`;
+            }
+        }
+
+        // Audio Generation
+        async function generateAudio() {
+            const text = document.getElementById('audio-text').value.trim();
+            if (!text) return;
+
+            alert('Audio generation simulated. In production, this would return an audio file.');
+        }
+
+        // Voice Input
+        function startVoiceInput() {
+            if ('webkitSpeechRecognition' in window) {
+                const recognition = new webkitSpeechRecognition();
+                recognition.onresult = (event) => {
+                    document.getElementById('chat-input').value = event.results[0][0].transcript;
+                };
+                recognition.start();
+            } else {
+                alert('Voice input not supported in this browser');
+            }
+        }
+
+        // Service Worker
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js').catch(console.error);
+        }
+    </script>
 </body>
 </html>
