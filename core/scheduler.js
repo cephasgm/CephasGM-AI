@@ -7,7 +7,7 @@ class Scheduler {
     this.queue = [];
     this.running = false;
     this.priorityLevels = ['high', 'normal', 'low'];
-    this.agentStats = new Map();
+    this.agentStats = new Map(); // This must be a Map, not a regular object
   }
 
   /**
@@ -35,7 +35,8 @@ class Scheduler {
     let bestMatchScore = 0;
 
     for (const agent of agents) {
-      if (agent.canHandle && agent.canHandle(task)) {
+      // Check if agent exists and has canHandle method
+      if (agent && typeof agent.canHandle === 'function' && agent.canHandle(task)) {
         // Calculate match score (can be enhanced with ML later)
         const score = this.calculateMatchScore(agent, task);
         if (score > bestMatchScore) {
@@ -46,9 +47,9 @@ class Scheduler {
     }
 
     if (!selectedAgent) {
-      // Try to find any agent that might handle it
+      // Try to find any agent that has an execute method
       for (const agent of agents) {
-        if (agent.execute) {
+        if (agent && typeof agent.execute === 'function') {
           selectedAgent = agent;
           break;
         }
@@ -59,32 +60,36 @@ class Scheduler {
       throw new Error('No suitable agent found for task');
     }
 
-    // Update stats
-    this.updateAgentStats(selectedAgent.name);
+    // Update stats - FIX: Make sure agentStats is a Map
+    this.updateAgentStats(selectedAgent.name || 'unknown');
 
     // Execute with timeout
     const startTime = Date.now();
     
     try {
+      // Create a promise that rejects after timeout
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error(`Task timeout after ${timeout}ms`)), timeout)
+      );
+      
+      // Race between agent execution and timeout
       const result = await Promise.race([
-        selectedAgent.execute(task),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error(`Task timeout after ${timeout}ms`)), timeout)
-        )
+        Promise.resolve(selectedAgent.execute(task)),
+        timeoutPromise
       ]);
 
       const executionTime = Date.now() - startTime;
 
       return {
         success: true,
-        agent: selectedAgent.name,
+        agent: selectedAgent.name || 'unknown',
         result,
         executionTime,
         priority
       };
 
     } catch (error) {
-      console.error(`Agent ${selectedAgent.name} failed:`, error);
+      console.error(`Agent ${selectedAgent.name || 'unknown'} failed:`, error);
       
       // Retry logic
       if (retry > 0) {
@@ -105,29 +110,42 @@ class Scheduler {
     const taskLower = task.toLowerCase();
     
     // Check agent capabilities
-    if (agent.getCapabilities) {
-      const capabilities = agent.getCapabilities();
-      for (const cap of capabilities) {
-        if (taskLower.includes(cap.toLowerCase())) {
-          score += 0.2;
+    if (agent && typeof agent.getCapabilities === 'function') {
+      try {
+        const capabilities = agent.getCapabilities();
+        if (Array.isArray(capabilities)) {
+          for (const cap of capabilities) {
+            if (taskLower.includes(cap.toLowerCase())) {
+              score += 0.2;
+            }
+          }
         }
+      } catch (e) {
+        // Ignore capability errors
       }
     }
     
-    // Prefer agents with higher success rate
-    const stats = this.agentStats.get(agent.name);
-    if (stats && stats.successCount > 0) {
-      const successRate = stats.successCount / (stats.successCount + stats.failureCount);
-      score += successRate * 0.3;
+    // Prefer agents with higher success rate - FIX: Check if agentStats is Map
+    if (this.agentStats && this.agentStats instanceof Map) {
+      const stats = this.agentStats.get(agent.name);
+      if (stats && stats.successCount > 0) {
+        const successRate = stats.successCount / (stats.successCount + stats.failureCount);
+        score += successRate * 0.3;
+      }
     }
     
     return Math.min(score, 1.0);
   }
 
   /**
-   * Update agent statistics
+   * Update agent statistics - FIX: Ensure agentStats is a Map
    */
   updateAgentStats(agentName) {
+    // Initialize as Map if not already
+    if (!(this.agentStats instanceof Map)) {
+      this.agentStats = new Map();
+    }
+    
     if (!this.agentStats.has(agentName)) {
       this.agentStats.set(agentName, {
         tasksAssigned: 0,
@@ -138,6 +156,46 @@ class Scheduler {
     
     const stats = this.agentStats.get(agentName);
     stats.tasksAssigned++;
+  }
+
+  /**
+   * Record success for an agent
+   */
+  recordSuccess(agentName) {
+    if (!(this.agentStats instanceof Map)) {
+      this.agentStats = new Map();
+    }
+    
+    if (!this.agentStats.has(agentName)) {
+      this.agentStats.set(agentName, {
+        tasksAssigned: 0,
+        successCount: 0,
+        failureCount: 0
+      });
+    }
+    
+    const stats = this.agentStats.get(agentName);
+    stats.successCount++;
+  }
+
+  /**
+   * Record failure for an agent
+   */
+  recordFailure(agentName) {
+    if (!(this.agentStats instanceof Map)) {
+      this.agentStats = new Map();
+    }
+    
+    if (!this.agentStats.has(agentName)) {
+      this.agentStats.set(agentName, {
+        tasksAssigned: 0,
+        successCount: 0,
+        failureCount: 0
+      });
+    }
+    
+    const stats = this.agentStats.get(agentName);
+    stats.failureCount++;
   }
 
   /**
@@ -154,8 +212,10 @@ class Scheduler {
     
     this.queue.push(queueItem);
     
+    // Process queue if not already running
     if (!this.running) {
-      this.processQueue();
+      // Use setTimeout to avoid blocking
+      setTimeout(() => this.processQueue(), 0);
     }
     
     return queueItem.id;
@@ -176,6 +236,8 @@ class Scheduler {
       } catch (error) {
         console.error('Queue task failed:', error);
       }
+      // Small delay between queue items
+      await new Promise(resolve => setTimeout(resolve, 10));
     }
     
     this.running = false;
@@ -185,10 +247,18 @@ class Scheduler {
    * Get scheduler status
    */
   getStatus() {
+    // Safely convert Map to object
+    const statsObj = {};
+    if (this.agentStats instanceof Map) {
+      for (const [key, value] of this.agentStats.entries()) {
+        statsObj[key] = value;
+      }
+    }
+    
     return {
       queueLength: this.queue.length,
       running: this.running,
-      agentStats: Object.fromEntries(this.agentStats)
+      agentStats: statsObj
     };
   }
 
@@ -199,6 +269,15 @@ class Scheduler {
     this.queue = [];
     console.log('Task queue cleared');
   }
+
+  /**
+   * Reset statistics
+   */
+  resetStats() {
+    this.agentStats = new Map();
+    console.log('Agent statistics reset');
+  }
 }
 
+// Export as singleton
 module.exports = new Scheduler();
