@@ -1,8 +1,8 @@
 /**
  * Knowledge Graph - Store and query relationships between entities
  */
-const fs = require('fs').promises;
-const path = require('path');
+const fs = require("fs").promises;
+const path = require("path");
 
 class KnowledgeGraph {
   constructor() {
@@ -27,7 +27,7 @@ class KnowledgeGraph {
       this.graph.nodes = new Map(parsed.nodes);
       this.graph.edges = parsed.edges;
       
-      console.log(`Knowledge graph loaded with ${this.graph.nodes.size} nodes and ${this.graph.edges.length} edges`);
+      console.log(`📚 Knowledge graph loaded: ${this.graph.nodes.size} nodes, ${this.graph.edges.length} edges`);
     } catch (error) {
       console.log('No existing knowledge graph found, starting fresh');
     }
@@ -44,60 +44,34 @@ class KnowledgeGraph {
       };
       
       await fs.writeFile(this.storagePath, JSON.stringify(data, null, 2));
-      console.log('Knowledge graph saved');
     } catch (error) {
       console.error('Failed to save knowledge graph:', error);
     }
   }
 
   /**
-   * Add or update entity
+   * Create a link between entities
    */
-  addEntity(entity, properties = {}) {
-    if (!entity || typeof entity !== 'string') {
-      throw new Error('Entity must be a non-empty string');
+  link(a, rel, b, properties = {}) {
+    if (!a || !rel || !b) {
+      throw new Error('Entity A, relation, and entity B are required');
     }
 
-    const existing = this.graph.nodes.get(entity);
-    
-    this.graph.nodes.set(entity, {
-      ...properties,
-      createdAt: existing?.createdAt || new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    });
-
-    this.saveGraph();
-
-    return {
-      success: true,
-      entity,
-      action: existing ? 'updated' : 'created'
-    };
-  }
-
-  /**
-   * Add relationship between entities
-   */
-  addRelation(entity, relation, target, properties = {}) {
-    if (!entity || !relation || !target) {
-      throw new Error('Entity, relation, and target are required');
-    }
-
-    // Ensure both entities exist
-    if (!this.graph.nodes.has(entity)) {
-      this.addEntity(entity);
+    // Ensure both nodes exist
+    if (!this.graph.nodes.has(a)) {
+      this.addNode(a);
     }
     
-    if (!this.graph.nodes.has(target)) {
-      this.addEntity(target);
+    if (!this.graph.nodes.has(b)) {
+      this.addNode(b);
     }
 
     const edge = {
       id: this.generateId(),
-      source: entity,
-      target: target,
-      relation: relation,
-      properties: properties,
+      source: a,
+      target: b,
+      relation: rel,
+      properties,
       createdAt: new Date().toISOString()
     };
 
@@ -106,103 +80,116 @@ class KnowledgeGraph {
 
     return {
       success: true,
-      edge: edge
+      edge
     };
   }
 
   /**
-   * Query graph for entity relationships
+   * Add a node to the graph
+   */
+  addNode(entity, properties = {}) {
+    this.graph.nodes.set(entity, {
+      ...properties,
+      createdAt: properties.createdAt || new Date().toISOString()
+    });
+    
+    return entity;
+  }
+
+  /**
+   * Get all relations for an entity
+   */
+  get(a) {
+    if (!this.graph.nodes.has(a)) {
+      return [];
+    }
+
+    const relations = this.graph.edges
+      .filter(e => e.source === a || e.target === a)
+      .map(e => ({
+        relation: e.relation,
+        entity: e.source === a ? e.target : e.source,
+        direction: e.source === a ? 'outgoing' : 'incoming',
+        properties: e.properties,
+        id: e.id
+      }));
+
+    return relations;
+  }
+
+  /**
+   * Query the graph with depth
    */
   query(entity, depth = 1) {
     if (!this.graph.nodes.has(entity)) {
       return {
         entity,
         found: false,
-        nodes: [],
-        edges: []
+        relations: []
       };
     }
 
-    const visitedNodes = new Set();
-    const relevantEdges = new Set();
+    const visited = new Set();
+    const relations = [];
     
-    this.traverseGraph(entity, depth, visitedNodes, relevantEdges);
+    this.traverse(entity, depth, visited, relations);
 
     return {
       entity,
       found: true,
       properties: this.graph.nodes.get(entity),
-      nodes: Array.from(visitedNodes).map(node => ({
-        id: node,
-        properties: this.graph.nodes.get(node)
-      })),
-      edges: Array.from(relevantEdges).map(edgeId => 
-        this.graph.edges.find(e => e.id === edgeId)
-      ),
-      depth: depth
+      relations,
+      depth
     };
   }
 
   /**
-   * Traverse graph to find relationships
+   * Traverse the graph
    */
-  traverseGraph(entity, depth, visitedNodes, relevantEdges, currentDepth = 0) {
-    if (currentDepth > depth) return;
+  traverse(entity, depth, visited, relations, currentDepth = 0) {
+    if (currentDepth >= depth || visited.has(entity)) return;
     
-    visitedNodes.add(entity);
-
-    // Find edges connected to this entity
-    const connectedEdges = this.graph.edges.filter(e => 
+    visited.add(entity);
+    
+    const edges = this.graph.edges.filter(e => 
       e.source === entity || e.target === entity
     );
-
-    for (const edge of connectedEdges) {
-      relevantEdges.add(edge.id);
-      
+    
+    for (const edge of edges) {
       const neighbor = edge.source === entity ? edge.target : edge.source;
       
-      if (!visitedNodes.has(neighbor)) {
-        this.traverseGraph(neighbor, depth, visitedNodes, relevantEdges, currentDepth + 1);
+      relations.push({
+        from: entity,
+        to: neighbor,
+        relation: edge.relation,
+        depth: currentDepth + 1,
+        properties: edge.properties
+      });
+      
+      if (currentDepth + 1 < depth) {
+        this.traverse(neighbor, depth, visited, relations, currentDepth + 1);
       }
     }
-  }
-
-  /**
-   * Search for entities by property
-   */
-  searchEntities(query, property = 'name') {
-    const results = [];
-    
-    for (const [entity, properties] of this.graph.nodes) {
-      if (entity.toLowerCase().includes(query.toLowerCase())) {
-        results.push({ entity, properties });
-      } else if (properties[property] && 
-                 String(properties[property]).toLowerCase().includes(query.toLowerCase())) {
-        results.push({ entity, properties });
-      }
-    }
-
-    return results;
   }
 
   /**
    * Find path between two entities
    */
-  findPath(source, target, maxDepth = 5) {
-    if (!this.graph.nodes.has(source) || !this.graph.nodes.has(target)) {
+  findPath(from, to, maxDepth = 5) {
+    if (!this.graph.nodes.has(from) || !this.graph.nodes.has(to)) {
       return null;
     }
 
-    const queue = [{ node: source, path: [source] }];
-    const visited = new Set([source]);
+    const queue = [{ node: from, path: [from] }];
+    const visited = new Set([from]);
 
     while (queue.length > 0) {
       const { node, path } = queue.shift();
 
-      if (node === target) {
+      if (node === to) {
         return {
           found: true,
-          path: path,
+          path,
           length: path.length - 1
         };
       }
@@ -248,25 +235,6 @@ class KnowledgeGraph {
   }
 
   /**
-   * Get all relations for an entity
-   */
-  getRelations(entity) {
-    if (!this.graph.nodes.has(entity)) {
-      return [];
-    }
-
-    return this.graph.edges
-      .filter(e => e.source === entity || e.target === entity)
-      .map(e => ({
-        type: e.relation,
-        with: e.source === entity ? e.target : e.source,
-        direction: e.source === entity ? 'outgoing' : 'incoming',
-        properties: e.properties,
-        createdAt: e.createdAt
-      }));
-  }
-
-  /**
    * Remove entity and its relations
    */
   removeEntity(entity) {
@@ -286,12 +254,12 @@ class KnowledgeGraph {
 
     return {
       success: true,
-      entity: entity
+      entity
     };
   }
 
   /**
-   * Remove relation
+   * Remove a specific relation
    */
   removeRelation(edgeId) {
     const initialLength = this.graph.edges.length;
@@ -306,43 +274,34 @@ class KnowledgeGraph {
   }
 
   /**
+   * Search for entities by name or property
+   */
+  search(query) {
+    const results = [];
+    const queryLower = query.toLowerCase();
+    
+    for (const [entity, properties] of this.graph.nodes) {
+      if (entity.toLowerCase().includes(queryLower)) {
+        results.push({ entity, properties, match: 'name' });
+      } else if (properties.type && properties.type.toLowerCase().includes(queryLower)) {
+        results.push({ entity, properties, match: 'type' });
+      }
+    }
+    
+    return results;
+  }
+
+  /**
    * Get graph statistics
    */
   getStats() {
     return {
       nodes: this.graph.nodes.size,
       edges: this.graph.edges.length,
-      nodeTypes: this.getNodeTypeDistribution(),
-      relationTypes: this.getRelationTypeDistribution(),
-      density: this.calculateDensity()
+      density: this.calculateDensity(),
+      nodeTypes: this.getNodeTypes(),
+      relationTypes: this.getRelationTypes()
     };
-  }
-
-  /**
-   * Get node type distribution
-   */
-  getNodeTypeDistribution() {
-    const types = {};
-    
-    for (const [_, properties] of this.graph.nodes) {
-      const type = properties.type || 'unknown';
-      types[type] = (types[type] || 0) + 1;
-    }
-    
-    return types;
-  }
-
-  /**
-   * Get relation type distribution
-   */
-  getRelationTypeDistribution() {
-    const types = {};
-    
-    for (const edge of this.graph.edges) {
-      types[edge.relation] = (types[edge.relation] || 0) + 1;
-    }
-    
-    return types;
   }
 
   /**
@@ -357,72 +316,76 @@ class KnowledgeGraph {
   }
 
   /**
-   * Export graph as JSON-LD
+   * Get distribution of node types
    */
-  exportJsonLd() {
-    const nodes = [];
-    const edges = [];
-
-    // Convert nodes
-    for (const [id, properties] of this.graph.nodes) {
-      nodes.push({
-        '@id': id,
-        '@type': properties.type || 'Entity',
-        ...properties
-      });
+  getNodeTypes() {
+    const types = {};
+    
+    for (const [_, props] of this.graph.nodes) {
+      const type = props.type || 'unknown';
+      types[type] = (types[type] || 0) + 1;
     }
+    
+    return types;
+  }
 
-    // Convert edges
+  /**
+   * Get distribution of relation types
+   */
+  getRelationTypes() {
+    const types = {};
+    
     for (const edge of this.graph.edges) {
-      edges.push({
-        '@id': edge.id,
-        '@type': edge.relation,
-        source: edge.source,
-        target: edge.target,
-        ...edge.properties
-      });
+      types[edge.relation] = (types[edge.relation] || 0) + 1;
     }
+    
+    return types;
+  }
 
+  /**
+   * Export graph as JSON
+   */
+  export() {
     return {
-      '@context': 'https://schema.org',
-      '@graph': [...nodes, ...edges]
+      nodes: Array.from(this.graph.nodes.entries()).map(([id, props]) => ({
+        id,
+        ...props
+      })),
+      edges: this.graph.edges
     };
   }
 
   /**
-   * Import from JSON-LD
+   * Import graph from JSON
    */
-  importJsonLd(data) {
-    try {
-      const graph = data['@graph'] || [];
-      
-      for (const item of graph) {
-        if (item['@id'] && !item.source && !item.target) {
-          // This is a node
-          const { '@id': id, '@type': type, ...properties } = item;
-          this.addEntity(id, { ...properties, type });
-        } else if (item.source && item.target) {
-          // This is an edge
-          this.addRelation(
-            item.source,
-            item['@type'] || 'relatedTo',
-            item.target,
-            item
-          );
-        }
-      }
-      
-      return { success: true, imported: graph.length };
-    } catch (error) {
-      return { success: false, error: error.message };
+  import(data) {
+    if (data.nodes) {
+      data.nodes.forEach(node => {
+        const { id, ...props } = node;
+        this.graph.nodes.set(id, props);
+      });
     }
+    
+    if (data.edges) {
+      this.graph.edges.push(...data.edges);
+    }
+    
+    this.saveGraph();
+    
+    return {
+      success: true,
+      imported: {
+        nodes: data.nodes?.length || 0,
+        edges: data.edges?.length || 0
+      }
+    };
   }
 
   /**
    * Generate unique ID
    */
   generateId() {
-    return 'edge_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    return `edge_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
 
   /**
