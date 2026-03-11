@@ -1,18 +1,61 @@
 {
   "name": "cephasgm-ai",
-  "version": "2.0.0",
-  "description": "CephasGM AI Backend Functions",
-  "engines": {
-    "node": "18"
+  "version": "4.1.0",
+  "description": "CephasGM AI Platform - Complete Phase 1-4 Integration",
+  "main": "api/server.js",
+  "scripts": {
+    "start": "node api/server.js",
+    "dev": "nodemon api/server.js",
+    "test": "jest",
+    "cluster:status": "curl http://localhost:4000/cluster",
+    "agents:list": "curl http://localhost:4000/agents",
+    "insights": "curl http://localhost:4000/insights",
+    "audio:test": "node tests/audio-test.js",
+    "models:list": "node -e \"require('./gpu/local-inference').getAvailableModels().then(console.log)\"",
+    "clean": "rm -rf uploads/audio/* temp/* generated-videos/* generated-images/*",
+    "setup": "npm install && mkdir -p uploads/audio temp generated-videos generated-images"
   },
-  "main": "index.js",
   "dependencies": {
-    "firebase-functions": "^4.0.0",
-    "firebase-admin": "^11.0.0",
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "body-parser": "^1.20.2",
     "node-fetch": "^2.6.7",
+    "dotenv": "^16.3.1",
+    "multer": "^1.4.5-lts.1",
+    "@pinecone-database/pinecone": "^2.0.0",
     "pdf-parse": "^1.1.1",
     "busboy": "^1.6.0",
-    "cors": "^2.8.5"
+    "vm2": "^3.9.19",
+    "uuid": "^9.0.0"
   },
-  "private": true
+  "devDependencies": {
+    "nodemon": "^3.0.1",
+    "jest": "^29.6.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "ai",
+    "operating-system",
+    "multi-agent",
+    "distributed-computing",
+    "gpu-cluster",
+    "machine-learning",
+    "knowledge-graph",
+    "feedback-loop",
+    "speech-to-text",
+    "text-to-speech",
+    "whisper",
+    "audio-processing",
+    "vector-database",
+    "multimodal",
+    "automation"
+  ],
+  "author": "CephasGM",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cephasgm/cephasgm-ai"
+  }
 }
