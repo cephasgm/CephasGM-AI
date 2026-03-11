@@ -24,12 +24,13 @@ color:white;
 
 .overlay{
 background:rgba(0,0,0,0.6);
-height:100vh;
+min-height:100vh;
 display:flex;
 flex-direction:column;
 align-items:center;
 justify-content:center;
 text-align:center;
+padding:20px;
 }
 
 h1{
@@ -58,6 +59,32 @@ width:100%;
 padding:12px;
 border-radius:6px;
 border:none;
+margin:10px 0;
+}
+
+.user-info {
+position: absolute;
+top: 20px;
+right: 20px;
+display: flex;
+align-items: center;
+gap: 10px;
+background: rgba(0,0,0,0.5);
+padding: 10px 20px;
+border-radius: 30px;
+}
+
+.user-email {
+color: #ffb300;
+font-size: 14px;
+}
+
+.logout-btn {
+padding: 5px 15px;
+font-size: 14px;
+margin: 0;
+background: #dc3545;
+color: white;
 }
 
 </style>
@@ -68,35 +95,77 @@ border:none;
 
 <div id="root"></div>
 
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js"></script>
+
+<!-- React -->
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
 
 <script type="text/babel">
 
+// Firebase configuration
+const firebaseConfig = {
+apiKey: "AIzaSyAukJQx3pEqXoyFR9tyfeLckJaBIgYtGFA",
+authDomain: "cephasgm-ai.firebaseapp.com",
+projectId: "cephasgm-ai",
+storageBucket: "cephasgm-ai.firebasestorage.app",
+messagingSenderId: "304163647028",
+appId: "1:304163647028:web:2920b2cfb9be4049806461",
+measurementId: "G-LYGWP38ZTR"
+};
+
+// Initialize Firebase
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+
 function App(){
 
 const [message,setMessage] = React.useState("")
 const [chat,setChat] = React.useState([])
+const [user, setUser] = React.useState(null)
+
+// Check auth state on component mount
+React.useEffect(() => {
+  const unsubscribe = auth.onAuthStateChanged((user) => {
+    setUser(user);
+  });
+  return () => unsubscribe();
+}, [])
 
 function send(){
+  if(!message) return
+  setChat([...chat,{user:message,ai:"AI response placeholder"}])
+  setMessage("")
+}
 
-if(!message) return
-
-setChat([...chat,{user:message,ai:"AI response placeholder"}])
-setMessage("")
+function logout() {
+  auth.signOut().then(() => {
+    setUser(null);
+  });
 }
 
 return(
 
 <div className="overlay">
 
+{user && (
+  <div className="user-info">
+    <span className="user-email">{user.email}</span>
+    <button className="logout-btn" onClick={logout}>Logout</button>
+  </div>
+)}
+
 <h1>CephasGM AI</h1>
 
 <p>African Inspired Artificial Intelligence</p>
 
-<a href="login-signup.html">
-<button>Login / Signup (Optional)</button>
+<a href={user ? "#" : "login-signup.html"}>
+  <button onClick={(e) => user && e.preventDefault()}>
+    {user ? `Logged in as ${user.email}` : "Login / Signup"}
+  </button>
 </a>
 
 <div className="chat-box">
@@ -129,13 +198,19 @@ ReactDOM.createRoot(document.getElementById("root")).render(<App/>)
 </script>
 
 <script>
-
 if('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js')
+      .then(reg => console.log("Service Worker Registered", reg))
+      .catch(err => console.log("Service Worker Registration Failed", err));
+  });
+}
 
-navigator.serviceWorker.register('sw.js')
-.then(()=>console.log("Service Worker Registered"))
-
+// Check if app is being opened from home screen
+if (window.matchMedia('(display-mode: standalone)').matches) {
+  console.log("Running in PWA mode");
 }
 </script>
+
 </body>
 </html>
