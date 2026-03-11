@@ -1,5 +1,6 @@
 {
   "name": "CephasGM AI",
+  "short_name": "CephasAI",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#000000",
