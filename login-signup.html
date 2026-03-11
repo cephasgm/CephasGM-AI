@@ -1,60 +1,206 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<title>Login - CephasGM AI</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login - CephasGM AI</title>
+  <link rel="icon" href="icon-192.png">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background-image: url("https://images.unsplash.com/photo-1508672019048-805c876b67e2");
+      background-size: cover;
+      background-position: center;
+      color: white;
+      min-height: 100vh;
+    }
+
+    .overlay {
+      background: rgba(0, 0, 0, 0.7);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 20px;
+    }
+
+    .auth-container {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      padding: 40px;
+      border-radius: 15px;
+      width: 90%;
+      max-width: 400px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+
+    h2 {
+      font-size: 2.5rem;
+      margin-bottom: 20px;
+      color: #ffb300;
+    }
+
+    h3 {
+      margin-bottom: 30px;
+      font-weight: normal;
+    }
+
+    input {
+      width: 100%;
+      padding: 15px;
+      margin: 10px 0;
+      border-radius: 8px;
+      border: none;
+      background: rgba(255, 255, 255, 0.9);
+      font-size: 16px;
+    }
+
+    input:focus {
+      outline: 2px solid #ffb300;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    button {
+      flex: 1;
+      padding: 15px;
+      font-size: 16px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      background: #ffb300;
+      color: black;
+      font-weight: bold;
+      transition: transform 0.2s, opacity 0.2s;
+    }
+
+    button:hover {
+      transform: translateY(-2px);
+      opacity: 0.9;
+    }
+
+    .back-link {
+      margin-top: 20px;
+    }
+
+    .back-link a {
+      color: #ffb300;
+      text-decoration: none;
+    }
+
+    .back-link a:hover {
+      text-decoration: underline;
+    }
+
+    .error-message {
+      color: #ff6b6b;
+      margin-top: 10px;
+    }
+  </style>
 </head>
-
 <body>
+  <div class="overlay">
+    <div class="auth-container">
+      <h2>CephasGM AI</h2>
+      <h3>Login / Signup</h3>
+      
+      <input id="email" type="email" placeholder="Email" required><br>
+      <input id="password" type="password" placeholder="Password" required minlength="6"><br>
+      
+      <div class="button-group">
+        <button onclick="signup()">Sign Up</button>
+        <button onclick="login()">Log In</button>
+      </div>
 
-<h2>Login / Signup</h2>
+      <div class="back-link">
+        <a href="index.html">← Back to Home</a>
+      </div>
 
-<input id="email" placeholder="Email"><br><br>
-<input id="password" type="password" placeholder="Password"><br><br>
+      <div id="message" class="error-message"></div>
+    </div>
+  </div>
 
-<button onclick="signup()">Signup</button>
-<button onclick="login()">Login</button>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
-<script type="module">
+    const firebaseConfig = {
+      apiKey: "AIzaSyAukJQx3pEqXoyFR9tyfeLckJaBIgYtGFA",
+      authDomain: "cephasgm-ai.firebaseapp.com",
+      projectId: "cephasgm-ai",
+      storageBucket: "cephasgm-ai.firebasestorage.app",
+      messagingSenderId: "304163647028",
+      appId: "1:304163647028:web:2920b2cfb9be4049806461",
+      measurementId: "G-LYGWP38ZTR"
+    };
 
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
 
-const firebaseConfig = {
-apiKey: "AIzaSyAukJQx3pEqXoyFR9tyfeLckJaBIgYtGFA",
-authDomain: "cephasgm-ai.firebaseapp.com",
-projectId: "cephasgm-ai",
-storageBucket: "cephasgm-ai.firebasestorage.app",
-messagingSenderId: "304163647028",
-appId: "1:304163647028:web:2920b2cfb9be4049806461",
-measurementId: "G-LYGWP38ZTR"
-};
+    function showMessage(msg, isError = true) {
+      const messageDiv = document.getElementById("message");
+      messageDiv.textContent = msg;
+      messageDiv.style.color = isError ? "#ff6b6b" : "#4caf50";
+    }
 
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
+    window.signup = function() {
+      const email = document.getElementById("email").value.trim();
+      const password = document.getElementById("password").value;
 
-window.signup = function(){
+      if (!email || !password) {
+        showMessage("Please fill in all fields");
+        return;
+      }
 
-const email = document.getElementById("email").value
-const password = document.getElementById("password").value
+      if (password.length < 6) {
+        showMessage("Password must be at least 6 characters");
+        return;
+      }
 
-createUserWithEmailAndPassword(auth,email,password)
-.then(()=>alert("Signup successful"))
-.catch(e=>alert(e.message))
+      createUserWithEmailAndPassword(auth, email, password)
+        .then(() => {
+          showMessage("Signup successful! You can now log in.", false);
+          document.getElementById("email").value = "";
+          document.getElementById("password").value = "";
+        })
+        .catch(error => {
+          showMessage(error.message);
+        });
+    };
 
-}
+    window.login = function() {
+      const email = document.getElementById("email").value.trim();
+      const password = document.getElementById("password").value;
 
-window.login = function(){
+      if (!email || !password) {
+        showMessage("Please fill in all fields");
+        return;
+      }
 
-const email = document.getElementById("email").value
-const password = document.getElementById("password").value
-
-signInWithEmailAndPassword(auth,email,password)
-.then(()=>alert("Login successful"))
-.catch(e=>alert(e.message))
-
-}
-
-</script>
-
+      signInWithEmailAndPassword(auth, email, password)
+        .then(() => {
+          showMessage("Login successful! Redirecting...", false);
+          setTimeout(() => {
+            window.location.href = "index.html";
+          }, 1500);
+        })
+        .catch(error => {
+          showMessage(error.message);
+        });
+    };
+  </script>
 </body>
 </html>
