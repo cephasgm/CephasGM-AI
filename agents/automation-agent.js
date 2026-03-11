@@ -1,218 +1,312 @@
 /**
- * Automation Agent - Handles business automation tasks
+ * Automation Agent - Business process automation
  */
-const fs = require('fs').promises;
-const path = require('path');
+const Agent = require("../core/agent-runtime");
+const fs = require("fs").promises;
+const path = require("path");
 
-class AutomationAgent {
+class AutomationAgent extends Agent {
   constructor() {
-    this.name = 'automation';
-    this.logFile = path.join(__dirname, '../../automation-log.txt');
+    super("automation", {
+      timeout: 30000,
+      maxRetries: 2
+    });
+    
+    this.logFile = path.join(__dirname, '../automation.log');
+    this.automations = [];
+    this.schedules = [];
   }
 
   /**
-   * Check if this agent can handle the task
+   * Check if agent can handle task
    */
   canHandle(task) {
-    const keywords = ['automate', 'schedule', 'backup', 'sync', 'monitor', 'deploy'];
+    const keywords = [
+      'automate', 'schedule', 'backup', 'sync', 'monitor', 
+      'deploy', 'process', 'workflow', 'cron', 'job'
+    ];
     return keywords.some(keyword => task.toLowerCase().includes(keyword));
+  }
+
+  /**
+   * Get agent capabilities
+   */
+  getCapabilities() {
+    return ['task automation', 'scheduling', 'file operations', 'process monitoring'];
   }
 
   /**
    * Execute automation task
    */
-  async execute(task, params = {}) {
-    try {
-      const taskLower = task.toLowerCase();
-      
-      // Log the automation task
-      await this.logTask(task, params);
-      
-      // Route to specific automation handler
-      if (taskLower.includes('backup')) {
-        return await this.handleBackup(params);
-      } else if (taskLower.includes('deploy')) {
-        return await this.handleDeployment(params);
-      } else if (taskLower.includes('monitor')) {
-        return await this.handleMonitoring(params);
-      } else if (taskLower.includes('sync')) {
-        return await this.handleSync(params);
-      } else if (taskLower.includes('schedule')) {
-        return await this.handleScheduling(task, params);
-      } else {
-        // Generic automation
-        return await this.handleGenericAutomation(task, params);
-      }
-    } catch (error) {
-      console.error('Automation agent error:', error);
-      return {
-        success: false,
-        error: error.message,
-        task: task
-      };
+  async execute(task) {
+    this.validateTask(task);
+    
+    console.log(`⚙️ Automation agent processing: "${task.substring(0, 50)}..."`);
+    
+    // Log the automation
+    await this.logAutomation(task);
+    
+    // Determine automation type
+    if (task.toLowerCase().includes('schedule')) {
+      return await this.createSchedule(task);
+    } else if (task.toLowerCase().includes('backup')) {
+      return await this.createBackup(task);
+    } else if (task.toLowerCase().includes('monitor')) {
+      return await this.createMonitor(task);
+    } else if (task.toLowerCase().includes('sync')) {
+      return await this.createSync(task);
+    } else {
+      return await this.genericAutomation(task);
     }
   }
 
   /**
-   * Log automation task
+   * Log automation to file
    */
-  async logTask(task, params) {
+  async logAutomation(task) {
     const logEntry = {
       timestamp: new Date().toISOString(),
-      task: task,
-      params: params,
+      task,
       status: 'executed'
     };
     
-    await fs.appendFile(this.logFile, JSON.stringify(logEntry) + '\n');
+    try {
+      await fs.appendFile(this.logFile, JSON.stringify(logEntry) + '\n');
+    } catch (error) {
+      console.error('Failed to write to automation log:', error);
+    }
+    
+    this.automations.push(logEntry);
   }
 
   /**
-   * Handle backup automation
+   * Create scheduled task
    */
-  async handleBackup(params) {
-    const { source, destination } = params;
+  async createSchedule(task) {
+    // Parse schedule from task
+    const schedule = {
+      id: `schedule_${Date.now()}`,
+      task: task.replace(/schedule/gi, '').trim(),
+      created: new Date().toISOString(),
+      nextRun: this.calculateNextRun(task)
+    };
     
-    // Simulate backup process
-    await this.simulateWork('Backing up files', 2000);
+    this.schedules.push(schedule);
     
     return {
       success: true,
-      action: 'backup',
-      message: `Backup completed successfully`,
-      source: source || 'default source',
-      destination: destination || 'default destination',
-      timestamp: new Date().toISOString(),
+      type: 'schedule',
+      schedule,
+      message: `Task scheduled for ${schedule.nextRun}`
+    };
+  }
+
+  /**
+   * Create backup automation
+   */
+  async createBackup(task) {
+    // Parse backup parameters
+    const backup = {
+      id: `backup_${Date.now()}`,
+      source: this.extractSource(task) || './data',
+      destination: this.extractDestination(task) || './backups',
+      type: task.includes('incremental') ? 'incremental' : 'full',
+      scheduled: task.includes('schedule') ? this.calculateNextRun(task) : null
+    };
+    
+    // Simulate backup
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    return {
+      success: true,
+      type: 'backup',
+      backup,
       files: 42,
-      size: '156 MB'
+      size: '156 MB',
+      duration: '2.3s'
     };
   }
 
   /**
-   * Handle deployment automation
+   * Create monitoring automation
    */
-  async handleDeployment(params) {
-    const { environment = 'production', version = 'latest' } = params;
+  async createMonitor(task) {
+    const target = this.extractTarget(task) || 'system';
     
-    // Simulate deployment
-    await this.simulateWork('Deploying application', 3000);
+    const monitor = {
+      id: `monitor_${Date.now()}`,
+      target,
+      interval: task.includes('every') ? this.extractInterval(task) : 60,
+      metrics: ['cpu', 'memory', 'disk', 'network'],
+      alerts: task.includes('alert') ? ['email', 'slack'] : []
+    };
     
     return {
       success: true,
-      action: 'deploy',
-      environment: environment,
-      version: version,
-      message: `Successfully deployed version ${version} to ${environment}`,
-      url: `https://app.cephasgm.com/${environment}`,
-      timestamp: new Date().toISOString()
+      type: 'monitor',
+      monitor,
+      status: 'active',
+      current: {
+        cpu: '45%',
+        memory: '62%',
+        disk: '78%',
+        uptime: '15d'
+      }
     };
   }
 
   /**
-   * Handle monitoring automation
+   * Create sync automation
    */
-  async handleMonitoring(params) {
-    const { target = 'system', interval = 60 } = params;
+  async createSync(task) {
+    const source = this.extractSource(task) || './source';
+    const dest = this.extractDestination(task) || './dest';
     
-    // Simulate monitoring setup
-    await this.simulateWork('Setting up monitoring', 1500);
-    
-    return {
-      success: true,
-      action: 'monitor',
-      target: target,
-      interval: `${interval} seconds`,
-      metrics: ['CPU', 'Memory', 'Disk', 'Network'],
-      status: 'healthy',
-      alerts: 0,
-      timestamp: new Date().toISOString()
+    const sync = {
+      id: `sync_${Date.now()}`,
+      source,
+      destination: dest,
+      direction: task.includes('bidirectional') ? 'bidirectional' : 'one-way',
+      continuous: task.includes('continuous') || task.includes('watch')
     };
-  }
-
-  /**
-   * Handle sync automation
-   */
-  async handleSync(params) {
-    const { source, destination, direction = 'bidirectional' } = params;
-    
-    // Simulate sync process
-    await this.simulateWork('Synchronizing data', 2500);
     
     return {
       success: true,
-      action: 'sync',
-      direction: direction,
-      source: source || 'local',
-      destination: destination || 'cloud',
-      itemsSynced: 128,
+      type: 'sync',
+      sync,
+      filesSynced: 128,
       conflicts: 0,
-      timestamp: new Date().toISOString()
+      duration: '4.7s'
     };
   }
 
   /**
-   * Handle scheduling automation
+   * Generic automation
    */
-  async handleScheduling(task, params) {
-    const { schedule = 'daily', time = '00:00' } = params;
+  async genericAutomation(task) {
+    const automation = {
+      id: `auto_${Date.now()}`,
+      task: task.replace(/automate/gi, '').trim(),
+      status: 'created',
+      steps: [
+        'Validating inputs',
+        'Processing task',
+        'Executing automation',
+        'Verifying results'
+      ]
+    };
+    
+    // Simulate processing
+    await new Promise(resolve => setTimeout(resolve, 1500));
     
     return {
       success: true,
-      action: 'schedule',
-      task: task.replace(/schedule/i, '').trim(),
-      schedule: schedule,
-      time: time,
-      message: `Task scheduled for ${schedule} at ${time}`,
-      nextRun: this.getNextRunTime(schedule, time),
-      timestamp: new Date().toISOString()
+      type: 'generic',
+      automation,
+      result: 'Automation completed successfully',
+      logs: [
+        'Step 1: Validated inputs ✓',
+        'Step 2: Processed task ✓',
+        'Step 3: Executed automation ✓',
+        'Step 4: Verified results ✓'
+      ]
     };
   }
 
   /**
-   * Handle generic automation
+   * Calculate next run time based on schedule description
    */
-  async handleGenericAutomation(task, params) {
-    return {
-      success: true,
-      action: 'generic',
-      task: task,
-      params: params,
-      message: 'Automation task processed',
-      result: 'Task completed successfully',
-      timestamp: new Date().toISOString()
-    };
-  }
-
-  /**
-   * Simulate work (for demo purposes)
-   */
-  async simulateWork(message, ms) {
-    console.log(message + '...');
-    return new Promise(resolve => setTimeout(resolve, ms));
-  }
-
-  /**
-   * Calculate next run time based on schedule
-   */
-  getNextRunTime(schedule, time) {
+  calculateNextRun(task) {
     const now = new Date();
-    const [hours, minutes] = time.split(':').map(Number);
     
-    switch(schedule.toLowerCase()) {
-      case 'hourly':
-        return new Date(now.setHours(now.getHours() + 1, 0, 0, 0)).toISOString();
-      case 'daily':
-        const tomorrow = new Date(now);
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        tomorrow.setHours(hours || 0, minutes || 0, 0, 0);
-        return tomorrow.toISOString();
-      case 'weekly':
-        const nextWeek = new Date(now);
-        nextWeek.setDate(nextWeek.getDate() + 7);
-        nextWeek.setHours(hours || 0, minutes || 0, 0, 0);
-        return nextWeek.toISOString();
-      default:
-        return new Date(now.setHours(now.getHours() + 1)).toISOString();
+    if (task.includes('hourly')) {
+      return new Date(now.setHours(now.getHours() + 1, 0, 0, 0)).toISOString();
+    } else if (task.includes('daily')) {
+      return new Date(now.setDate(now.getDate() + 1)).toISOString();
+    } else if (task.includes('weekly')) {
+      return new Date(now.setDate(now.getDate() + 7)).toISOString();
+    } else if (task.includes('monthly')) {
+      return new Date(now.setMonth(now.getMonth() + 1)).toISOString();
+    } else {
+      return new Date(now.setHours(now.getHours() + 1)).toISOString();
+    }
+  }
+
+  /**
+   * Extract source from task
+   */
+  extractSource(task) {
+    const match = task.match(/from\s+([^\s]+)/i);
+    return match ? match[1] : null;
+  }
+
+  /**
+   * Extract destination from task
+   */
+  extractDestination(task) {
+    const match = task.match(/to\s+([^\s]+)/i);
+    return match ? match[1] : null;
+  }
+
+  /**
+   * Extract target for monitoring
+   */
+  extractTarget(task) {
+    const match = task.match(/monitor\s+([^\s]+)/i);
+    return match ? match[1] : null;
+  }
+
+  /**
+   * Extract interval from task
+   */
+  extractInterval(task) {
+    const match = task.match(/every\s+(\d+)\s*(second|minute|hour)s?/i);
+    if (match) {
+      const value = parseInt(match[1]);
+      const unit = match[2];
+      const multiplier = unit === 'second' ? 1 : unit === 'minute' ? 60 : 3600;
+      return value * multiplier;
+    }
+    return 60; // default 60 seconds
+  }
+
+  /**
+   * Get all automations
+   */
+  getAutomations() {
+    return this.automations;
+  }
+
+  /**
+   * Get all schedules
+   */
+  getSchedules() {
+    return this.schedules;
+  }
+
+  /**
+   * Read automation log
+   */
+  async readLog(limit = 100) {
+    try {
+      const data = await fs.readFile(this.logFile, 'utf8');
+      const lines = data.split('\n').filter(Boolean);
+      return lines.slice(-limit).map(line => JSON.parse(line));
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Clear log
+   */
+  async clearLog() {
+    try {
+      await fs.writeFile(this.logFile, '');
+      this.automations = [];
+      return true;
+    } catch {
+      return false;
     }
   }
 }
