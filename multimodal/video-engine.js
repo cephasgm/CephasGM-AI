@@ -1,26 +1,25 @@
 /**
- * Video Engine - Generate videos from text prompts
+ * Multimodal Video Engine - Video generation and processing
  */
-const fetch = require("node-fetch");
-const fs = require("fs").promises;
-const path = require("path");
+const EventEmitter = require('events');
+const fs = require('fs').promises;
+const path = require('path');
 
-class VideoEngine {
+class VideoEngine extends EventEmitter {
   constructor() {
+    super();
+    
     this.providers = {
-      'runwayml': {
-        apiUrl: 'https://api.runwayml.com/v1/video',
-        models: ['gen-2', 'gen-1']
-      },
-      'stable-video': {
-        apiUrl: 'https://api.stability.ai/v2beta/stable-video',
-        models: ['svd', 'svd-xt']
-      }
+      'runwayml': { models: ['gen-2', 'gen-1'] },
+      'stable-video': { models: ['svd', 'svd-xt'] }
     };
     
-    this.generatedVideos = [];
+    this.generated = [];
     this.outputDir = path.join(__dirname, '../generated-videos');
+    
     this.initOutputDir();
+    
+    console.log('🎬 Video engine initialized');
   }
 
   /**
@@ -29,7 +28,6 @@ class VideoEngine {
   async initOutputDir() {
     try {
       await fs.mkdir(this.outputDir, { recursive: true });
-      console.log('Video output directory initialized');
     } catch (error) {
       console.error('Failed to create video directory:', error);
     }
@@ -47,64 +45,76 @@ class VideoEngine {
       fps = 24
     } = options;
 
-    if (!prompt || typeof prompt !== 'string') {
-      throw new Error('Prompt must be a non-empty string');
+    const startTime = Date.now();
+    const requestId = this.generateRequestId();
+
+    console.log(`🎬 [${requestId}] Generating video: "${prompt.substring(0, 50)}..."`);
+
+    try {
+      // Simulate video generation
+      await this.simulateDelay(3000);
+
+      const videoData = {
+        id: requestId,
+        prompt,
+        provider,
+        model,
+        duration,
+        resolution,
+        fps,
+        url: this.getVideoUrl(requestId),
+        thumbnail: this.getThumbnailUrl(requestId, resolution),
+        timestamp: new Date().toISOString()
+      };
+
+      this.generated.push(videoData);
+      await this.saveMetadata(videoData);
+
+      this.emit('videoGenerated', { requestId, duration });
+
+      return {
+        success: true,
+        ...videoData,
+        latency: Date.now() - startTime
+      };
+
+    } catch (error) {
+      console.error('Video generation failed:', error);
+
+      return {
+        success: false,
+        requestId,
+        error: error.message,
+        url: this.getPlaceholderUrl(prompt, resolution)
+      };
     }
-
-    console.log(`🎬 Video engine generating: "${prompt.substring(0, 50)}..."`);
-
-    // Simulate video generation
-    await new Promise(resolve => setTimeout(resolve, 3000));
-
-    const videoId = this.generateId();
-    const videoUrl = `https://storage.googleapis.com/cephasgm-demo/videos/${videoId}.mp4`;
-
-    const result = {
-      success: true,
-      id: videoId,
-      prompt: prompt,
-      url: videoUrl,
-      provider: provider,
-      model: model,
-      duration: duration,
-      resolution: resolution,
-      fps: fps,
-      timestamp: new Date().toISOString(),
-      demo: true,
-      message: "Video generation simulated. In production, this would use RunwayML or Stable Video API."
-    };
-
-    // Store metadata
-    this.generatedVideos.push(result);
-    await this.saveMetadata(result);
-
-    return result;
   }
 
   /**
-   * Generate with RunwayML (real implementation would use API)
+   * Generate with RunwayML (placeholder)
    */
   async generateWithRunway(prompt, model, duration, resolution) {
-    // This would call the actual RunwayML API
-    // For now, return simulated result
-    return {
-      success: true,
-      url: `https://via.placeholder.com/1024x576.png?text=${encodeURIComponent(prompt.substring(0, 30))}`,
-      provider: 'runwayml',
-      model
-    };
+    // This would call actual RunwayML API
+    return this.simulateGeneration(prompt, duration);
   }
 
   /**
-   * Generate with Stable Video (real implementation would use API)
+   * Generate with Stable Video (placeholder)
    */
   async generateWithStableVideo(prompt, model, duration) {
-    // This would call the actual Stability AI API
+    // This would call actual Stability AI API
+    return this.simulateGeneration(prompt, duration);
+  }
+
+  /**
+   * Simulate video generation
+   */
+  async simulateGeneration(prompt, duration) {
+    await this.simulateDelay(2000);
+
     return {
-      success: true,
-      url: `https://via.placeholder.com/1024x576.png?text=Stable+Video`,
-      provider: 'stable-video',
-      model
+      url: this.getPlaceholderUrl(prompt, '1024x576'),
+      simulated: true
     };
   }
 
@@ -112,9 +122,8 @@ class VideoEngine {
    * Get generation status
    */
   async getStatus(videoId) {
-    // In production, this would check with the provider
-    const video = this.generatedVideos.find(v => v.id === videoId);
-    
+    const video = this.generated.find(v => v.id === videoId);
+
     if (video) {
       return {
         id: videoId,
@@ -123,11 +132,13 @@ class VideoEngine {
         ...video
       };
     }
-    
+
+    // Simulate in-progress
     return {
       id: videoId,
       status: 'processing',
-      progress: Math.floor(Math.random() * 100)
+      progress: Math.floor(Math.random() * 100),
+      estimatedRemaining: 30
     };
   }
 
@@ -136,98 +147,111 @@ class VideoEngine {
    */
   async listVideos(limit = 10) {
     const metadataPath = path.join(this.outputDir, 'metadata.json');
-    
+
     try {
       const data = await fs.readFile(metadataPath, 'utf8');
       const videos = JSON.parse(data);
       return videos.slice(-limit).reverse();
     } catch {
-      return this.generatedVideos.slice(-limit).reverse();
+      return this.generated.slice(-limit).reverse();
     }
   }
 
   /**
-   * Save video metadata
+   * Save metadata
    */
-  async saveMetadata(videoInfo) {
+  async saveMetadata(videoData) {
     const metadataPath = path.join(this.outputDir, 'metadata.json');
-    
+
     try {
       let metadata = [];
-      
+
       try {
         const existing = await fs.readFile(metadataPath, 'utf8');
         metadata = JSON.parse(existing);
       } catch {
         // No existing metadata
       }
-      
-      metadata.push(videoInfo);
-      
-      // Keep last 50 videos
+
+      metadata.push(videoData);
+
       if (metadata.length > 50) {
         metadata = metadata.slice(-50);
       }
-      
+
       await fs.writeFile(metadataPath, JSON.stringify(metadata, null, 2));
-      
+
     } catch (error) {
       console.error('Failed to save metadata:', error);
     }
   }
 
   /**
-   * Generate unique ID
+   * Get video URL (placeholder)
    */
-  generateId() {
-    return `vid_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  getVideoUrl(id) {
+    return `https://storage.cephasgm.ai/videos/${id}.mp4`;
   }
 
   /**
-   * Get engine statistics
+   * Get thumbnail URL
+   */
+  getThumbnailUrl(id, resolution) {
+    const [width, height] = resolution.split('x').map(Number);
+    return `https://via.placeholder.com/${width}x${height}.png?text=Video+${id}`;
+  }
+
+  /**
+   * Get placeholder URL
+   */
+  getPlaceholderUrl(prompt, resolution) {
+    const encodedPrompt = encodeURIComponent(prompt.substring(0, 30));
+    return `https://via.placeholder.com/${resolution}.png?text=${encodedPrompt}`;
+  }
+
+  /**
+   * Get engine stats
    */
   getStats() {
     return {
-      generatedCount: this.generatedVideos.length,
-      lastGenerated: this.generatedVideos[this.generatedVideos.length - 1]?.timestamp
+      generatedCount: this.generated.length,
+      lastGenerated: this.generated[this.generated.length - 1]?.timestamp,
+      providers: Object.keys(this.providers)
     };
   }
 
   /**
-   * Validate video generation parameters
-   */
-  validateOptions(options) {
-    const errors = [];
-    
-    if (options.duration && (options.duration < 1 || options.duration > 60)) {
-      errors.push('Duration must be between 1 and 60 seconds');
-    }
-    
-    if (options.fps && (options.fps < 1 || options.fps > 60)) {
-      errors.push('FPS must be between 1 and 60');
-    }
-    
-    return errors;
-  }
-
-  /**
-   * Estimate cost for video generation
+   * Estimate cost
    */
   estimateCost(options = {}) {
     const baseCost = 0.05; // $0.05 per second
     const duration = options.duration || 5;
     const resolution = options.resolution || '1024x576';
-    
+
     let multiplier = 1;
     if (resolution === '1920x1080') multiplier = 2;
     if (resolution === '3840x2160') multiplier = 4;
-    
+
     return {
       estimatedCost: baseCost * duration * multiplier,
       currency: 'USD',
       duration,
       resolution
     };
+  }
+
+  /**
+   * Generate request ID
+   */
+  generateRequestId() {
+    return `video_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  /**
+   * Simulate delay
+   */
+  simulateDelay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 }
 
