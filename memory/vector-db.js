@@ -1,169 +1,76 @@
 /**
  * Vector Database - Store and search vector embeddings
+ * Supports multiple backends and similarity search
  */
+const EventEmitter = require('events');
 const fs = require('fs').promises;
 const path = require('path');
-const config = require('../config');
 
-class VectorDatabase {
+class VectorDatabase extends EventEmitter {
   constructor() {
+    super();
+    
     this.vectors = [];
     this.index = new Map();
-    this.storagePath = path.join(__dirname, '../../vectors.json');
-    this.dbType = config.vectorDbType || 'memory';
+    this.storagePath = path.join(__dirname, '../vectors.json');
     
-    this.initDatabase();
+    this.load();
+    
+    console.log('🧠 Vector database initialized');
   }
 
   /**
-   * Initialize database
+   * Add vector to database
    */
-  async initDatabase() {
-    try {
-      if (this.dbType === 'memory') {
-        await this.loadFromFile();
-      } else if (this.dbType === 'pinecone') {
-        await this.initPinecone();
+  add(vector, metadata = {}) {
+    const id = this.generateId();
+
+    const entry = {
+      id,
+      vector: vector.values || vector,
+      metadata: {
+        ...metadata,
+        addedAt: new Date().toISOString()
       }
-      console.log(`Vector database initialized (${this.dbType})`);
-    } catch (error) {
-      console.error('Failed to initialize vector database:', error);
-    }
+    };
+
+    this.vectors.push(entry);
+    this.index.set(id, this.vectors.length - 1);
+
+    this.emit('vectorAdded', { id, size: this.vectors.length });
+
+    this.save();
+
+    return {
+      success: true,
+      id,
+      position: this.vectors.length - 1
+    };
   }
 
   /**
-   * Load vectors from file (for memory mode)
+   * Add multiple vectors
    */
-  async loadFromFile() {
-    try {
-      const data = await fs.readFile(this.storagePath, 'utf8');
-      this.vectors = JSON.parse(data);
-      this.buildIndex();
-      console.log(`Loaded ${this.vectors.length} vectors from storage`);
-    } catch {
-      console.log('No existing vectors found, starting fresh');
+  addMany(vectors) {
+    const results = [];
+
+    for (const v of vectors) {
+      results.push(this.add(v.vector, v.metadata));
     }
-  }
 
-  /**
-   * Save vectors to file
-   */
-  async saveToFile() {
-    try {
-      await fs.writeFile(this.storagePath, JSON.stringify(this.vectors, null, 2));
-    } catch (error) {
-      console.error('Failed to save vectors:', error);
-    }
-  }
-
-  /**
-   * Initialize Pinecone client
-   */
-  async initPinecone() {
-    try {
-      const { Pinecone } = require('@pinecone-database/pinecone');
-      this.pinecone = new Pinecone({
-        apiKey: config.pineconeKey
-      });
-      
-      this.index = this.pinecone.Index('cephasgm');
-      console.log('Pinecone initialized');
-    } catch (error) {
-      console.error('Failed to initialize Pinecone, falling back to memory:', error);
-      this.dbType = 'memory';
-    }
-  }
-
-  /**
-   * Build in-memory index
-   */
-  buildIndex() {
-    this.index.clear();
-    this.vectors.forEach((vector, idx) => {
-      this.index.set(vector.id, idx);
-    });
-  }
-
-  /**
-   * Store vector
-   */
-  async store(vector, metadata = {}) {
-    try {
-      if (!vector || !vector.id || !vector.values) {
-        throw new Error('Vector must have id and values');
-      }
-
-      const vectorData = {
-        id: vector.id,
-        values: vector.values,
-        metadata: {
-          ...metadata,
-          timestamp: new Date().toISOString()
-        }
-      };
-
-      if (this.dbType === 'pinecone') {
-        await this.index.upsert([vectorData]);
-      } else {
-        // Memory mode
-        const existingIdx = this.index.get(vector.id);
-        if (existingIdx !== undefined) {
-          this.vectors[existingIdx] = vectorData;
-        } else {
-          this.vectors.push(vectorData);
-          this.index.set(vector.id, this.vectors.length - 1);
-        }
-        await this.saveToFile();
-      }
-
-      return {
-        success: true,
-        id: vector.id,
-        stored: true
-      };
-
-    } catch (error) {
-      console.error('Vector store error:', error);
-      return {
-        success: false,
-        error: error.message
-      };
-    }
+    return results;
   }
 
   /**
    * Search for similar vectors
    */
-  async search(vector, limit = 10, threshold = 0.5) {
-    try {
-      if (!vector || !vector.values) {
-        throw new Error('Search vector must have values');
-      }
+  search(query, limit = 10, threshold = 0.5) {
+    const queryVector = query.values || query;
 
-      if (this.dbType === 'pinecone') {
-        return await this.pineconeSearch(vector.values, limit, threshold);
-      } else {
-        return this.memorySearch(vector.values, limit, threshold);
-      }
-
-    } catch (error) {
-      console.error('Vector search error:', error);
-      return {
-        success: false,
-        error: error.message,
-        results: []
-      };
-    }
-  }
-
-  /**
-   * Search in memory mode
-   */
-  memorySearch(queryVector, limit, threshold) {
     const results = this.vectors
       .map(item => ({
         id: item.id,
-        score: this.cosineSimilarity(queryVector, item.values),
+        score: this.cosineSimilarity(queryVector, item.vector),
         metadata: item.metadata
       }))
       .filter(item => item.score >= threshold)
@@ -172,33 +79,73 @@ class VectorDatabase {
 
     return {
       success: true,
-      results,
-      count: results.length
+      count: results.length,
+      results
     };
   }
 
   /**
-   * Search in Pinecone
+   * Get vector by ID
    */
-  async pineconeSearch(queryVector, limit, threshold) {
-    const response = await this.index.query({
-      vector: queryVector,
-      topK: limit,
-      includeMetadata: true
-    });
+  get(id) {
+    const position = this.index.get(id);
+    
+    if (position === undefined) {
+      return null;
+    }
 
-    const results = response.matches
-      .filter(match => match.score >= threshold)
-      .map(match => ({
-        id: match.id,
-        score: match.score,
-        metadata: match.metadata
-      }));
+    return this.vectors[position];
+  }
+
+  /**
+   * Update vector
+   */
+  update(id, vector, metadata = {}) {
+    const position = this.index.get(id);
+    
+    if (position === undefined) {
+      return { success: false, error: 'Vector not found' };
+    }
+
+    this.vectors[position] = {
+      id,
+      vector: vector.values || vector,
+      metadata: {
+        ...this.vectors[position].metadata,
+        ...metadata,
+        updatedAt: new Date().toISOString()
+      }
+    };
+
+    this.save();
 
     return {
       success: true,
-      results,
-      count: results.length
+      id
+    };
+  }
+
+  /**
+   * Delete vector
+   */
+  delete(id) {
+    const position = this.index.get(id);
+    
+    if (position === undefined) {
+      return { success: false, error: 'Vector not found' };
+    }
+
+    this.vectors.splice(position, 1);
+    this.index.delete(id);
+
+    // Rebuild index
+    this.rebuildIndex();
+
+    this.save();
+
+    return {
+      success: true,
+      id
     };
   }
 
@@ -229,167 +176,97 @@ class VectorDatabase {
   }
 
   /**
-   * Delete vector by ID
+   * Rebuild index
    */
-  async delete(id) {
-    try {
-      if (!id) {
-        throw new Error('Vector ID is required');
-      }
-
-      if (this.dbType === 'pinecone') {
-        await this.index.delete1({ ids: [id] });
-      } else {
-        const idx = this.index.get(id);
-        if (idx !== undefined) {
-          this.vectors.splice(idx, 1);
-          this.index.delete(id);
-          
-          // Rebuild index
-          this.buildIndex();
-          await this.saveToFile();
-        }
-      }
-
-      return {
-        success: true,
-        id,
-        deleted: true
-      };
-
-    } catch (error) {
-      console.error('Vector delete error:', error);
-      return {
-        success: false,
-        error: error.message
-      };
-    }
-  }
-
-  /**
-   * Get vector by ID
-   */
-  async get(id) {
-    try {
-      if (this.dbType === 'pinecone') {
-        const response = await this.index.fetch([id]);
-        return {
-          success: true,
-          vector: response.vectors[id]
-        };
-      } else {
-        const idx = this.index.get(id);
-        if (idx !== undefined) {
-          return {
-            success: true,
-            vector: this.vectors[idx]
-          };
-        }
-        return {
-          success: false,
-          error: 'Vector not found'
-        };
-      }
-    } catch (error) {
-      return {
-        success: false,
-        error: error.message
-      };
-    }
-  }
-
-  /**
-   * List all vectors (with pagination)
-   */
-  async list(limit = 100, offset = 0) {
-    try {
-      if (this.dbType === 'pinecone') {
-        // Pinecone doesn't support listing all vectors directly
-        // This is a limitation of the API
-        return {
-          success: true,
-          vectors: [],
-          total: 0,
-          message: 'Pinecone does not support listing all vectors'
-        };
-      } else {
-        const vectors = this.vectors
-          .slice(offset, offset + limit)
-          .map(v => ({
-            id: v.id,
-            metadata: v.metadata
-          }));
-
-        return {
-          success: true,
-          vectors,
-          total: this.vectors.length,
-          offset,
-          limit
-        };
-      }
-    } catch (error) {
-      return {
-        success: false,
-        error: error.message
-      };
-    }
+  rebuildIndex() {
+    this.index.clear();
+    this.vectors.forEach((item, idx) => {
+      this.index.set(item.id, idx);
+    });
   }
 
   /**
    * Get database statistics
    */
-  async getStats() {
-    if (this.dbType === 'pinecone') {
-      try {
-        const stats = await this.index.describeIndexStats();
-        return {
-          type: 'pinecone',
-          ...stats
-        };
-      } catch {
-        return {
-          type: 'pinecone',
-          error: 'Failed to get stats'
-        };
-      }
-    } else {
-      return {
-        type: 'memory',
-        vectorCount: this.vectors.length,
-        dimension: this.vectors[0]?.values.length || 0
+  getStats() {
+    return {
+      totalVectors: this.vectors.length,
+      dimensions: this.vectors[0]?.vector.length || 0,
+      indexSize: this.index.size
+    };
+  }
+
+  /**
+   * List all vectors (with pagination)
+   */
+  list(limit = 100, offset = 0) {
+    const vectors = this.vectors
+      .slice(offset, offset + limit)
+      .map(v => ({
+        id: v.id,
+        metadata: v.metadata
+      }));
+
+    return {
+      success: true,
+      total: this.vectors.length,
+      offset,
+      limit,
+      vectors
+    };
+  }
+
+  /**
+   * Clear database
+   */
+  clear() {
+    this.vectors = [];
+    this.index.clear();
+    this.save();
+
+    return { success: true };
+  }
+
+  /**
+   * Save to disk
+   */
+  async save() {
+    try {
+      const data = {
+        vectors: this.vectors,
+        index: Array.from(this.index.entries())
       };
+      
+      await fs.writeFile(this.storagePath, JSON.stringify(data, null, 2));
+      
+    } catch (error) {
+      console.error('Failed to save vectors:', error);
     }
   }
 
   /**
-   * Clear all vectors
+   * Load from disk
    */
-  async clear() {
+  async load() {
     try {
-      if (this.dbType === 'pinecone') {
-        // Pinecone delete all not supported directly
-        // Would need to delete and recreate index
-        return {
-          success: false,
-          error: 'Clear not supported on Pinecone - use delete individually'
-        };
-      } else {
-        this.vectors = [];
-        this.index.clear();
-        await this.saveToFile();
-        
-        return {
-          success: true,
-          cleared: true
-        };
-      }
-    } catch (error) {
-      return {
-        success: false,
-        error: error.message
-      };
+      const data = await fs.readFile(this.storagePath, 'utf8');
+      const parsed = JSON.parse(data);
+      
+      this.vectors = parsed.vectors || [];
+      this.index = new Map(parsed.index || []);
+      
+      console.log(`📦 Loaded ${this.vectors.length} vectors from storage`);
+      
+    } catch {
+      console.log('No existing vectors found, starting fresh');
     }
+  }
+
+  /**
+   * Generate unique ID
+   */
+  generateId() {
+    return `vec_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
 }
 
