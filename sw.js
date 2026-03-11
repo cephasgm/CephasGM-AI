@@ -18,8 +18,11 @@ self.addEventListener('install', event => {
 
 // Fetch event - network first, cache fallback
 self.addEventListener('fetch', event => {
-  // Skip caching for external URLs
-  if (event.request.url.startsWith('http') && !event.request.url.includes(window.location.hostname)) {
+  // Only handle GET requests
+  if (event.request.method !== 'GET') return;
+  
+  // Skip cross-origin requests (like Firebase, React, etc.)
+  if (!event.request.url.startsWith(self.location.origin)) {
     return;
   }
   
