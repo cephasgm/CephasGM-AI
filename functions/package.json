@@ -11,6 +11,7 @@
     "firebase-admin": "^11.0.0",
     "node-fetch": "^2.6.7",
     "pdf-parse": "^1.1.1",
+    "busboy": "^1.6.0",
     "cors": "^2.8.5"
   },
   "private": true
