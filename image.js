@@ -2,18 +2,32 @@ async function generateImage(){
 
 const prompt = document.getElementById("imagePrompt").value
 
-const response = await fetch("/api/image",{
+if (!prompt) {
+  alert("Please enter an image description")
+  return
+}
 
-method:"POST",
-headers:{
-"Content-Type":"application/json"
-},
-body:JSON.stringify({prompt})
+try {
+  const response = await fetch("https://us-central1-cephasgm-ai.cloudfunctions.net/image",{
+    method:"POST",
+    headers:{
+      "Content-Type":"application/json"
+    },
+    body:JSON.stringify({prompt})
+  })
 
-})
+  const data = await response.json()
+  
+  const imgElement = document.getElementById("imageResult")
+  if (imgElement) {
+    imgElement.src = data.url
+    imgElement.style.display = "block"
+  }
 
-const data = await response.json()
-
-document.getElementById("imageResult").src = data.url
+} catch(error) {
+  alert("Image generation failed: " + error.message)
+}
 
 }
+
+window.generateImage = generateImage
