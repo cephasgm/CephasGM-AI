@@ -5,6 +5,8 @@ const { exec } = require("child_process");
 const util = require("util");
 const os = require("os");
 const EventEmitter = require("events");
+const path = require("path");
+const fs = require("fs").promises;
 
 const execPromise = util.promisify(exec);
 
@@ -19,11 +21,14 @@ class GPUNode extends EventEmitter {
       tasksProcessed: 0,
       totalInferenceTime: 0,
       memoryUsed: 0,
-      temperature: 0
+      temperature: 0,
+      successCount: 0,
+      failureCount: 0
     };
     
     this.ollamaAvailable = false;
     this.modelsLoaded = new Set();
+    this.modelPaths = new Map();
     
     this.initialize();
   }
@@ -36,11 +41,12 @@ class GPUNode extends EventEmitter {
     
     await this.checkGPU();
     await this.checkOllama();
+    await this.checkModels();
     
     this.status = 'ready';
     this.emit('ready', this.id);
     
-    console.log(`✅ ${this.id} ready - GPU: ${this.gpuInfo ? 'Available' : 'Not available'}`);
+    console.log(`✅ ${this.id} ready - GPU: ${this.gpuInfo?.available ? 'Available' : 'Not available'}`);
   }
 
   /**
@@ -62,9 +68,9 @@ class GPUNode extends EventEmitter {
           
           console.log(`🎮 GPU detected: ${name}`);
         } catch {
-          // No NVIDIA GPU
+          // No NVIDIA GPU or nvidia-smi not available
           this.gpuInfo = {
-            name: 'CPU (No GPU)',
+            name: 'CPU (No GPU detected)',
             available: false
           };
         }
@@ -76,7 +82,10 @@ class GPUNode extends EventEmitter {
       }
     } catch (error) {
       console.log('GPU check failed:', error.message);
-      this.gpuInfo = { available: false };
+      this.gpuInfo = { 
+        name: 'Unknown',
+        available: false 
+      };
     }
   }
 
@@ -88,24 +97,34 @@ class GPUNode extends EventEmitter {
       await execPromise('ollama --version');
       this.ollamaAvailable = true;
       console.log('✅ Ollama detected');
-      
-      // Get loaded models
-      try {
-        const { stdout } = await execPromise('ollama list');
-        const lines = stdout.split('\n').slice(1);
-        lines.forEach(line => {
-          if (line.trim()) {
-            const modelName = line.split(/\s+/)[0];
-            this.modelsLoaded.add(modelName);
-          }
-        });
-      } catch {
-        // No models loaded yet
-      }
-      
     } catch {
       console.log('⚠️ Ollama not found - using simulation mode');
       this.ollamaAvailable = false;
+    }
+  }
+
+  /**
+   * Check available models
+   */
+  async checkModels() {
+    if (!this.ollamaAvailable) return;
+    
+    try {
+      const { stdout } = await execPromise('ollama list');
+      const lines = stdout.split('\n').slice(1);
+      
+      lines.forEach(line => {
+        if (line.trim()) {
+          const parts = line.trim().split(/\s+/);
+          const modelName = parts[0];
+          this.modelsLoaded.add(modelName);
+        }
+      });
+      
+      console.log(`📦 Models available: ${Array.from(this.modelsLoaded).join(', ') || 'none'}`);
+      
+    } catch (error) {
+      console.log('Failed to list models:', error.message);
     }
   }
 
@@ -123,9 +142,19 @@ class GPUNode extends EventEmitter {
 
     try {
       let result;
+      let success = true;
       
-      if (this.ollamaAvailable) {
+      if (this.ollamaAvailable && this.modelsLoaded.has(model)) {
         result = await this.runOllama(prompt, model, options);
+      } else if (this.ollamaAvailable) {
+        // Try to pull the model first
+        console.log(`📥 Model ${model} not found, attempting to pull...`);
+        const pullResult = await this.pullModel(model);
+        if (pullResult.success) {
+          result = await this.runOllama(prompt, model, options);
+        } else {
+          result = await this.simulateInference(prompt, model);
+        }
       } else {
         result = await this.simulateInference(prompt, model);
       }
@@ -135,12 +164,17 @@ class GPUNode extends EventEmitter {
       // Update metrics
       this.metrics.tasksProcessed++;
       this.metrics.totalInferenceTime += inferenceTime;
+      if (success) {
+        this.metrics.successCount++;
+      } else {
+        this.metrics.failureCount++;
+      }
 
       return {
         success: true,
         nodeId: this.id,
         model,
-        prompt,
+        prompt: prompt.substring(0, 100) + (prompt.length > 100 ? '...' : ''),
         output: result.output,
         inferenceTime,
         gpu: this.gpuInfo?.available || false,
@@ -150,11 +184,14 @@ class GPUNode extends EventEmitter {
     } catch (error) {
       console.error(`${this.id} inference failed:`, error);
       
+      this.metrics.failureCount++;
+      
       return {
         success: false,
         nodeId: this.id,
         error: error.message,
-        model
+        model,
+        prompt: prompt.substring(0, 100)
       };
     }
   }
@@ -163,48 +200,101 @@ class GPUNode extends EventEmitter {
    * Run inference with Ollama
    */
   async runOllama(prompt, model, options) {
-    // Ensure model is loaded
-    if (!this.modelsLoaded.has(model)) {
-      console.log(`Loading model ${model}...`);
-      try {
-        await execPromise(`ollama pull ${model}`);
-        this.modelsLoaded.add(model);
-      } catch (error) {
-        console.log(`Failed to load model ${model}, using simulation`);
-        return this.simulateInference(prompt, model);
+    try {
+      // Escape quotes in prompt
+      const escapedPrompt = prompt.replace(/"/g, '\\"');
+      
+      const { stdout, stderr } = await execPromise(
+        `ollama run ${model} "${escapedPrompt}"`,
+        { timeout: options.timeout || 30000 }
+      );
+
+      if (stderr) {
+        console.warn(`Ollama warning: ${stderr}`);
       }
+
+      return {
+        output: stdout.trim(),
+        provider: 'ollama',
+        model,
+        streaming: false
+      };
+      
+    } catch (error) {
+      console.log(`Ollama execution failed: ${error.message}`);
+      throw error;
     }
+  }
 
-    const { stdout } = await execPromise(
-      `ollama run ${model} "${prompt.replace(/"/g, '\\"')}"`,
-      { timeout: options.timeout || 30000 }
-    );
-
-    return {
-      output: stdout.trim(),
-      provider: 'ollama',
-      model
-    };
+  /**
+   * Pull a model
+   */
+  async pullModel(modelName) {
+    try {
+      console.log(`Downloading model ${modelName}...`);
+      
+      const process = exec(`ollama pull ${modelName}`);
+      
+      return new Promise((resolve, reject) => {
+        let output = '';
+        
+        process.stdout.on('data', (data) => {
+          output += data.toString();
+          console.log(`📥 ${data.toString().trim()}`);
+        });
+        
+        process.stderr.on('data', (data) => {
+          console.error(`⚠️ ${data.toString().trim()}`);
+        });
+        
+        process.on('close', (code) => {
+          if (code === 0) {
+            this.modelsLoaded.add(modelName);
+            resolve({ 
+              success: true, 
+              model: modelName,
+              output 
+            });
+          } else {
+            reject(new Error(`Failed to pull model ${modelName}`));
+          }
+        });
+        
+        process.on('error', reject);
+      });
+      
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message,
+        model: modelName
+      };
+    }
   }
 
   /**
    * Simulate inference for demo
    */
   async simulateInference(prompt, model) {
-    // Simulate GPU processing time
+    // Simulate processing time based on prompt length
     const processingTime = this.gpuInfo?.available ? 500 : 2000;
     await new Promise(resolve => setTimeout(resolve, processingTime));
 
     const responses = {
-      'llama3': `[Llama3 simulation] I understand you're asking about "${prompt.substring(0, 50)}". This is a simulated response from the GPU node.`,
-      'mistral': `[Mistral simulation] Based on your query "${prompt.substring(0, 40)}", I can provide insights...`,
-      'codellama': `[CodeLlama simulation] Here's code related to "${prompt.substring(0, 30)}"...`
+      'llama3': `[Llama3 simulation] I understand you're asking about "${prompt.substring(0, 50)}". This is a simulated response from the GPU node. To use real models, install Ollama and pull the llama3 model.`,
+      
+      'mistral': `[Mistral simulation] Based on your query "${prompt.substring(0, 40)}", I can provide insights... This is running in simulation mode.`,
+      
+      'codellama': `[CodeLlama simulation] Here's code related to "${prompt.substring(0, 30)}":\n\n// Generated code would appear here\nfunction example() {\n  return "Simulated response";\n}`,
+      
+      'phi3': `[Phi-3 simulation] Processing: "${prompt.substring(0, 50)}"...\n\nThis is a placeholder response. For production use, please set up Ollama.`
     };
 
     return {
-      output: responses[model] || `Simulated inference for "${prompt.substring(0, 50)}..."`,
+      output: responses[model] || `Simulated inference for model "${model}" with prompt: "${prompt.substring(0, 50)}..."`,
       provider: 'simulation',
-      model
+      model,
+      simulated: true
     };
   }
 
@@ -216,7 +306,15 @@ class GPUNode extends EventEmitter {
       id: this.id,
       status: this.status,
       gpu: this.gpuInfo,
-      metrics: this.metrics,
+      metrics: {
+        ...this.metrics,
+        averageInferenceTime: this.metrics.tasksProcessed > 0 
+          ? this.metrics.totalInferenceTime / this.metrics.tasksProcessed 
+          : 0,
+        successRate: this.metrics.tasksProcessed > 0
+          ? (this.metrics.successCount / this.metrics.tasksProcessed * 100).toFixed(1) + '%'
+          : '0%'
+      },
       modelsLoaded: Array.from(this.modelsLoaded),
       ollamaAvailable: this.ollamaAvailable
     };
@@ -237,13 +335,13 @@ class GPUNode extends EventEmitter {
     try {
       console.log(`Loading model ${modelName} on ${this.id}...`);
       
-      await execPromise(`ollama pull ${modelName}`);
-      this.modelsLoaded.add(modelName);
+      const result = await this.pullModel(modelName);
       
       return {
         success: true,
         model: modelName,
-        nodeId: this.id
+        nodeId: this.id,
+        ...result
       };
       
     } catch (error) {
@@ -256,16 +354,17 @@ class GPUNode extends EventEmitter {
   }
 
   /**
-   * Unload a model
+   * Unload a model (remove from memory)
    */
-  unloadModel(modelName) {
-    // Ollama keeps models loaded, so this is just tracking
+  async unloadModel(modelName) {
+    // Ollama keeps models in memory, so this is just tracking
     this.modelsLoaded.delete(modelName);
     
     return {
       success: true,
       model: modelName,
-      unloaded: true
+      unloaded: true,
+      note: 'Model removed from tracking (Ollama may keep it in memory)'
     };
   }
 
@@ -277,7 +376,8 @@ class GPUNode extends EventEmitter {
       return {
         gpuUtilization: 0,
         memoryUtilization: 0,
-        temperature: 0
+        temperature: 0,
+        available: false
       };
     }
 
@@ -292,6 +392,7 @@ class GPUNode extends EventEmitter {
         gpuUtilization: parseInt(util.replace('%', '')),
         memoryUtilization: memUsed,
         temperature: parseInt(temp),
+        available: true,
         timestamp: Date.now()
       };
       
@@ -299,9 +400,41 @@ class GPUNode extends EventEmitter {
       return {
         gpuUtilization: 0,
         memoryUtilization: 0,
-        temperature: 0
+        temperature: 0,
+        available: false,
+        error: 'Failed to get utilization'
       };
     }
+  }
+
+  /**
+   * Test node connectivity
+   */
+  async ping() {
+    return {
+      id: this.id,
+      status: this.status,
+      latency: Date.now(),
+      gpu: this.gpuInfo?.available || false
+    };
+  }
+
+  /**
+   * Get node performance metrics
+   */
+  getPerformance() {
+    const avgTime = this.metrics.tasksProcessed > 0 
+      ? this.metrics.totalInferenceTime / this.metrics.tasksProcessed 
+      : 0;
+    
+    return {
+      tasksPerSecond: avgTime > 0 ? 1000 / avgTime : 0,
+      averageResponseTime: avgTime,
+      throughput: this.metrics.tasksProcessed / (Date.now() - this.metrics.startTime || 1) * 1000,
+      successRate: this.metrics.tasksProcessed > 0
+        ? (this.metrics.successCount / this.metrics.tasksProcessed * 100).toFixed(1)
+        : 0
+    };
   }
 
   /**
@@ -311,7 +444,7 @@ class GPUNode extends EventEmitter {
     console.log(`🛑 Shutting down ${this.id}...`);
     this.status = 'shutting_down';
     
-    // Unload models
+    // Clear models from tracking
     this.modelsLoaded.clear();
     
     this.status = 'stopped';
@@ -319,7 +452,8 @@ class GPUNode extends EventEmitter {
     
     return {
       success: true,
-      nodeId: this.id
+      nodeId: this.id,
+      metrics: this.metrics
     };
   }
 }
