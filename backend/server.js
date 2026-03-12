@@ -8,10 +8,10 @@ const config = require('./config');
 const path = require('path');
 
 // Import AI modules
-const chatEngine = require('../ai/chat-engine');
-const codeInterpreter = require('../ai/code-interpreter');
+const chatEngine = require('./ai/chat-engine');
+const codeInterpreter = require('./ai/code-interpreter');
 const videoGenerator = require('./ai/video-generator');
-const modelHost = require('../ai/model-host');
+const modelHost = require('./ai/model-host');
 
 // Import agents
 const agentManager = require('./agents/manager');
@@ -20,11 +20,11 @@ const codingAgent = require('./agents/coding-agent');
 const automationAgent = require('./agents/automation-agent');
 
 // Import memory modules
-const vectorDb = require('../memory/vector-db');
-const knowledgeGraph = require('../memory/knowledge-graph');
+const vectorDb = require('./memory/vector-db');
+const knowledgeGraph = require('./memory/knowledge-graph');
 
 // Import GPU module
-const localInference = require('../gpu/local-inference');
+const localInference = require('./gpu/local-inference');
 
 const app = express();
 const PORT = config.port;
