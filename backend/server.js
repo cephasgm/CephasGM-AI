@@ -14,10 +14,10 @@ const videoGenerator = require('./ai/video-generator');
 const modelHost = require('./ai/model-host');
 
 // Import agents
-const agentManager = require('./agents/manager');
-const researchAgent = require('./agents/research-agent');
-const codingAgent = require('./agents/coding-agent');
-const automationAgent = require('./agents/automation-agent');
+const agentManager = require('../agents/manager');
+const researchAgent = require('../agents/research-agent');
+const codingAgent = require('../agents/coding-agent');
+const automationAgent = require('../agents/automation-agent');
 
 // Import memory modules
 const vectorDb = require('./memory/vector-db');
