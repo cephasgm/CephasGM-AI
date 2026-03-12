@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CephasGM AI </title>
+<title>CephasGM AI - Phase 6</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🤖</text></svg>">
 
@@ -827,11 +827,53 @@ h1 {
 <script src="memory.js" type="module"></script>
 
 <script>
-// Global variables
+// ============================================
+// Global Variables
+// ============================================
 let currentUser = null;
 let API_BASE = ''; // Will be set based on availability
+let chatHistory = [];
 
-// Firebase configuration
+// ============================================
+// API Configuration - FIXED for Render
+// ============================================
+const RENDER_URL = 'https://cephasgm-ai.onrender.com';
+const LOCAL_URL = 'http://localhost:6000';
+
+async function checkAPI() {
+  // Try Render URL first (production)
+  try {
+    const response = await fetch(`${RENDER_URL}/health`, { 
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+      mode: 'cors'
+    });
+    if (response.ok) {
+      API_BASE = RENDER_URL;
+      console.log('✅ Connected to Render API');
+      return;
+    }
+  } catch (error) {
+    console.log('Render API not available, trying local...');
+  }
+
+  // Fallback to localhost (development)
+  try {
+    const response = await fetch(`${LOCAL_URL}/health`);
+    if (response.ok) {
+      API_BASE = LOCAL_URL;
+      console.log('✅ Connected to Local API');
+    } else {
+      console.log('⚠️ Running in offline mode - some features may be limited');
+    }
+  } catch {
+    console.log('⚠️ Running in offline mode - some features may be limited');
+  }
+}
+
+// ============================================
+// Firebase Configuration
+// ============================================
 const firebaseConfig = {
   apiKey: "AIzaSyAukJQx3pEqXoyFR9tyfeLckJaBIgYtGFA",
   authDomain: "cephasgm-ai.firebaseapp.com",
@@ -845,21 +887,106 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 
-// Check API availability
-async function checkAPI() {
+// ============================================
+// Chat Functions - ADDED
+// ============================================
+async function sendMessage() {
+  const input = document.getElementById('userInput');
+  const message = input.value.trim();
+  
+  if (!message) return;
+  
+  // Add user message to chat
+  addMessageToChat('user', message);
+  input.value = '';
+  
   try {
-    const response = await fetch('http://localhost:6000/health');
-    if (response.ok) {
-      API_BASE = 'http://localhost:6000';
-      console.log('✅ Connected to Phase 6 API');
+    let response;
+    
+    if (API_BASE) {
+      // Use backend API
+      const res = await fetch(`${API_BASE}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          prompt: message,
+          options: { stream: false }
+        })
+      });
+      const data = await res.json();
+      response = data.output || data.response || JSON.stringify(data);
+    } else if (window.chatEngine) {
+      // Use local Phase 2/3 functions
+      response = await window.chatEngine(message);
+    } else {
+      // Simulated response
+      const responses = [
+        "I understand your question. Let me think about that...",
+        "That's an interesting point. Here's what I think...",
+        "Based on my analysis, I would suggest...",
+        "Great question! Let me provide some insights..."
+      ];
+      response = responses[Math.floor(Math.random() * responses.length)];
     }
-  } catch {
-    console.log('⚠️ Running in local mode (Phase 2)');
+    
+    // Add AI response to chat
+    addMessageToChat('ai', response);
+    
+    // Save to memory
+    saveToMemory(message, response);
+    
+  } catch (error) {
+    console.error('Chat error:', error);
+    addMessageToChat('ai', 'Sorry, I encountered an error. Please try again.');
   }
 }
-checkAPI();
 
-// Auth state observer
+function addMessageToChat(sender, content) {
+  const chatBox = document.getElementById('chat');
+  const messageDiv = document.createElement('div');
+  messageDiv.className = `message ${sender}-message`;
+  
+  const timestamp = new Date().toLocaleTimeString();
+  
+  messageDiv.innerHTML = `
+    <div class="message-header">
+      <span>${sender === 'user' ? 'You' : 'CephasGM AI'}</span>
+      <span class="timestamp">${timestamp}</span>
+    </div>
+    <div class="message-content">${content}</div>
+  `;
+  
+  chatBox.appendChild(messageDiv);
+  chatBox.scrollTop = chatBox.scrollHeight;
+  
+  // Save to local history
+  chatHistory.push({ sender, content, timestamp });
+}
+
+function clearChat() {
+  if (confirm('Clear chat history?')) {
+    document.getElementById('chat').innerHTML = '';
+    chatHistory = [];
+    localStorage.removeItem('chatHistory');
+  }
+}
+
+function saveToMemory(prompt, response) {
+  // Save to localStorage
+  const memory = {
+    prompt,
+    response,
+    timestamp: new Date().toISOString()
+  };
+  
+  const memories = JSON.parse(localStorage.getItem('chatMemories') || '[]');
+  memories.unshift(memory);
+  localStorage.setItem('chatMemories', JSON.stringify(memories.slice(0, 50))); // Keep last 50
+}
+
+// ============================================
+// Auth Functions
+// ============================================
 auth.onAuthStateChanged(user => {
   currentUser = user;
   
@@ -876,6 +1003,7 @@ auth.onAuthStateChanged(user => {
     
     // Load initial data
     loadMemories();
+    loadChatHistory();
   } else {
     userInfo.style.display = 'none';
     authMessage.style.display = 'block';
@@ -883,14 +1011,30 @@ auth.onAuthStateChanged(user => {
   }
 });
 
-// Logout
 document.getElementById('logoutBtn').addEventListener('click', () => {
   auth.signOut().then(() => {
     window.location.href = 'index.html';
   });
 });
 
-// Tab switching
+function loadChatHistory() {
+  const memories = JSON.parse(localStorage.getItem('chatMemories') || '[]');
+  const chatBox = document.getElementById('chat');
+  chatBox.innerHTML = '';
+  
+  memories.forEach(memory => {
+    if (memory.prompt) {
+      addMessageToChat('user', memory.prompt);
+    }
+    if (memory.response) {
+      addMessageToChat('ai', memory.response);
+    }
+  });
+}
+
+// ============================================
+// Tab Switching
+// ============================================
 function switchTab(tabName) {
   document.querySelectorAll('.tab-content').forEach(tab => {
     tab.classList.remove('active');
@@ -905,6 +1049,7 @@ function switchTab(tabName) {
     btn.classList.remove('active');
   });
   
+  // Find and activate the clicked button
   event.target.classList.add('active');
 }
 
@@ -1146,9 +1291,9 @@ async function runAgent(task, type = 'auto') {
       result = { result: `Simulated: ${task}` };
     }
 
-    resultDiv.textContent = JSON.stringify(result, null, 2);
+    resultDiv.innerHTML = `<pre>${JSON.stringify(result, null, 2)}</pre>`;
   } catch (error) {
-    resultDiv.textContent = `Error: ${error.message}`;
+    resultDiv.innerHTML = `<p class="status error">Error: ${error.message}</p>`;
   }
 }
 
@@ -1200,26 +1345,34 @@ async function loadMemories() {
   try {
     let memories = [];
     
+    // Load from localStorage first
+    const localMemories = JSON.parse(localStorage.getItem('chatMemories') || '[]');
+    
     if (API_BASE) {
-      const response = await fetch(`${API_BASE}/memory/vectors`);
-      const data = await response.json();
-      memories = data.vectors || [];
-    } else if (window.getRecentMemories) {
-      memories = await getRecentMemories(10);
+      try {
+        const response = await fetch(`${API_BASE}/memory/vectors`);
+        const data = await response.json();
+        memories = data.vectors || [];
+      } catch (e) {
+        console.log('Using local memories only');
+      }
     }
 
     const memoryList = document.getElementById('memoryList');
     
-    if (memories.length === 0) {
+    if (localMemories.length === 0 && memories.length === 0) {
       memoryList.innerHTML = '<div style="text-align: center; padding: 20px;">No memories yet. Start chatting!</div>';
       return;
     }
     
-    memoryList.innerHTML = memories.map(m => `
-      <div class="memory-item" onclick="document.getElementById('userInput').value = '${(m.prompt || m.metadata?.prompt || '').replace(/'/g, "\\'")}'">
-        <div class="memory-prompt">Q: ${m.prompt || m.metadata?.prompt || 'Memory'}</div>
-        <div class="memory-response">A: ${(m.response || m.metadata?.response || '').substring(0, 100)}...</div>
-        <div class="memory-time">${new Date(m.timestamp || m.metadata?.timestamp).toLocaleString()}</div>
+    // Combine and display memories
+    const allMemories = [...localMemories, ...memories];
+    
+    memoryList.innerHTML = allMemories.slice(0, 20).map(m => `
+      <div class="memory-item" onclick="document.getElementById('userInput').value = '${(m.prompt || '').replace(/'/g, "\\'")}'">
+        <div class="memory-prompt">Q: ${m.prompt || 'Memory'}</div>
+        <div class="memory-response">A: ${(m.response || '').substring(0, 100)}...</div>
+        <div class="memory-time">${new Date(m.timestamp).toLocaleString()}</div>
       </div>
     `).join('');
   } catch (error) {
@@ -1235,19 +1388,11 @@ async function searchMemory() {
   }
   
   try {
-    let results = [];
-    
-    if (API_BASE) {
-      const response = await fetch(`${API_BASE}/memory/search`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query })
-      });
-      const data = await response.json();
-      results = data.results || [];
-    } else if (window.searchMemories) {
-      results = await searchMemories(query);
-    }
+    const localMemories = JSON.parse(localStorage.getItem('chatMemories') || '[]');
+    const results = localMemories.filter(m => 
+      (m.prompt && m.prompt.toLowerCase().includes(query.toLowerCase())) ||
+      (m.response && m.response.toLowerCase().includes(query.toLowerCase()))
+    );
 
     const memoryList = document.getElementById('memoryList');
     
@@ -1256,10 +1401,11 @@ async function searchMemory() {
       return;
     }
     
-    memoryList.innerHTML = results.map(r => `
+    memoryList.innerHTML = results.slice(0, 20).map(m => `
       <div class="memory-item">
-        <div class="memory-prompt">Similarity: ${(r.score || r.similarity || 0) * 100}%</div>
-        <div class="memory-response">${r.metadata?.prompt || r.text || 'Memory'}</div>
+        <div class="memory-prompt">Q: ${m.prompt || 'Memory'}</div>
+        <div class="memory-response">A: ${(m.response || '').substring(0, 100)}...</div>
+        <div class="memory-time">${new Date(m.timestamp).toLocaleString()}</div>
       </div>
     `).join('');
   } catch (error) {
@@ -1269,8 +1415,10 @@ async function searchMemory() {
 
 function clearLocalMemory() {
   if (confirm('Clear all local memory?')) {
+    localStorage.removeItem('chatMemories');
     localStorage.removeItem('chatHistory');
     loadMemories();
+    document.getElementById('chat').innerHTML = '';
   }
 }
 
@@ -1287,7 +1435,7 @@ async function conductResearch() {
   }
 
   const resultsDiv = document.getElementById('researchResults');
-  resultsDiv.innerHTML = '<p class="text-yellow-400">🔬 Researching...</p>';
+  resultsDiv.innerHTML = '<p>🔬 Researching...</p>';
 
   try {
     let result;
@@ -1306,9 +1454,9 @@ async function conductResearch() {
       result = { summary: `Research on "${topic}" would be performed here.` };
     }
 
-    resultsDiv.innerHTML = `<pre class="whitespace-pre-wrap">${JSON.stringify(result, null, 2)}</pre>`;
+    resultsDiv.innerHTML = `<pre>${JSON.stringify(result, null, 2)}</pre>`;
   } catch (error) {
-    resultsDiv.innerHTML = `<p class="text-red-400">Error: ${error.message}</p>`;
+    resultsDiv.innerHTML = `<p class="status error">Error: ${error.message}</p>`;
   }
 }
 
@@ -1362,7 +1510,7 @@ async function generateAudio() {
       `;
     }
   } catch (error) {
-    audioPlayer.innerHTML = `<p class="text-red-400">Error: ${error.message}</p>`;
+    audioPlayer.innerHTML = `<p class="status error">Error: ${error.message}</p>`;
   }
 }
 
@@ -1379,7 +1527,7 @@ async function runCode() {
   }
 
   const output = document.getElementById('codeOutput');
-  output.innerHTML = '<p class="text-yellow-400">Executing...</p>';
+  output.innerHTML = '<p>Executing...</p>';
 
   try {
     let result;
@@ -1400,9 +1548,9 @@ async function runCode() {
       result = { output: 'Code execution simulated' };
     }
 
-    output.innerHTML = `<pre class="whitespace-pre-wrap">${JSON.stringify(result, null, 2)}</pre>`;
+    output.innerHTML = `<pre>${JSON.stringify(result, null, 2)}</pre>`;
   } catch (error) {
-    output.innerHTML = `<p class="text-red-400">Error: ${error.message}</p>`;
+    output.innerHTML = `<p class="status error">Error: ${error.message}</p>`;
   }
 }
 
@@ -1415,7 +1563,7 @@ async function debugCode() {
   }
 
   const output = document.getElementById('codeOutput');
-  output.innerHTML = '<p class="text-yellow-400">Debugging...</p>';
+  output.innerHTML = '<p>Debugging...</p>';
 
   try {
     let result;
@@ -1433,9 +1581,9 @@ async function debugCode() {
       result = { issues: ['No issues found (simulated)'] };
     }
 
-    output.innerHTML = `<pre class="whitespace-pre-wrap">${JSON.stringify(result, null, 2)}</pre>`;
+    output.innerHTML = `<pre>${JSON.stringify(result, null, 2)}</pre>`;
   } catch (error) {
-    output.innerHTML = `<p class="text-red-400">Error: ${error.message}</p>`;
+    output.innerHTML = `<p class="status error">Error: ${error.message}</p>`;
   }
 }
 
@@ -1444,13 +1592,19 @@ function clearCode() {
   document.getElementById('codeOutput').innerHTML = '';
 }
 
-// Initialize
-window.onload = function() {
+// ============================================
+// Initialize Everything
+// ============================================
+window.onload = async function() {
+  await checkAPI();
   initVoice();
+  loadChatHistory();
 };
 
 // Make functions globally available
 window.switchTab = switchTab;
+window.sendMessage = sendMessage;
+window.clearChat = clearChat;
 window.generateImage = generateImage;
 window.uploadFile = uploadFile;
 window.startVoice = startVoice;
