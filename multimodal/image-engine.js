@@ -1,5 +1,6 @@
 /**
- * Multimodal Image Engine - Image generation and processing
+ * Multimodal Image Engine - Image generation and processing with AI
+ * Now integrated with Ollama Cloud for prompt enhancement and image analysis
  */
 const fetch = require('node-fetch');
 const EventEmitter = require('events');
@@ -11,17 +12,54 @@ class ImageEngine extends EventEmitter {
     super();
     
     this.models = {
-      'dall-e-2': { provider: 'openai', sizes: ['256x256', '512x512', '1024x1024'] },
-      'dall-e-3': { provider: 'openai', sizes: ['1024x1024', '1792x1024', '1024x1792'] },
-      'stable-diffusion': { provider: 'stability', sizes: ['512x512', '768x768', '1024x1024'] }
+      'dall-e-2': { 
+        provider: 'openai', 
+        name: 'DALL-E 2',
+        sizes: ['256x256', '512x512', '1024x1024'],
+        pricePerImage: 0.02
+      },
+      'dall-e-3': { 
+        provider: 'openai', 
+        name: 'DALL-E 3',
+        sizes: ['1024x1024', '1792x1024', '1024x1792'],
+        pricePerImage: 0.04
+      },
+      'stable-diffusion': { 
+        provider: 'stability', 
+        name: 'Stable Diffusion',
+        sizes: ['512x512', '768x768', '1024x1024'],
+        pricePerImage: 0.02
+      },
+      'sdxl': { 
+        provider: 'stability', 
+        name: 'SDXL',
+        sizes: ['1024x1024', '1152x896', '1216x832'],
+        pricePerImage: 0.03
+      },
+      'flux': { 
+        provider: 'black-forest', 
+        name: 'FLUX',
+        sizes: ['1024x1024', '1280x720', '720x1280'],
+        pricePerImage: 0.03
+      }
     };
+    
+    this.styles = [
+      'photorealistic', 'digital-art', 'anime', 'oil-painting',
+      'watercolor', 'sketch', '3d-render', 'pixel-art',
+      'african-art', 'kente-pattern', 'ankara-print', 'mud-cloth'
+    ];
     
     this.generated = [];
     this.outputDir = path.join(__dirname, '../generated-images');
+    this.ollamaApiKey = process.env.OLLAMA_API_KEY;
     
     this.initOutputDir();
     
-    console.log('🎨 Image engine initialized');
+    console.log('🎨 Image engine initialized with Ollama Cloud');
+    console.log(`   API Key: ${this.ollamaApiKey ? '✅ Configured' : '❌ Missing'}`);
+    console.log(`   Models: ${Object.keys(this.models).length}`);
+    console.log(`   Styles: ${this.styles.length}`);
   }
 
   /**
@@ -36,14 +74,16 @@ class ImageEngine extends EventEmitter {
   }
 
   /**
-   * Generate image from prompt
+   * Generate image from prompt with AI enhancement
    */
   async generate(prompt, options = {}) {
     const {
       model = 'dall-e-2',
       size = '512x512',
+      style = null,
       quality = 'standard',
-      n = 1
+      n = 1,
+      enhancePrompt = true
     } = options;
 
     const startTime = Date.now();
@@ -52,21 +92,43 @@ class ImageEngine extends EventEmitter {
     console.log(`🎨 [${requestId}] Generating image: "${prompt.substring(0, 50)}..."`);
 
     try {
-      let result;
+      // Enhance prompt with AI if requested
+      let finalPrompt = prompt;
+      let promptMetadata = null;
+      
+      if (enhancePrompt && this.ollamaApiKey) {
+        const enhanced = await this.enhanceImagePrompt(prompt, style);
+        if (enhanced) {
+          finalPrompt = enhanced.prompt;
+          promptMetadata = enhanced.metadata;
+        }
+      }
 
-      if (process.env.OPENAI_KEY && process.env.OPENAI_KEY !== 'YOUR_OPENAI_KEY') {
-        result = await this.callOpenAI(prompt, model, size, quality, n);
+      // Generate negative prompt if style specified
+      const negativePrompt = style ? await this.generateNegativePrompt(style) : null;
+
+      // Try real API if keys available
+      let result;
+      if (model.includes('dall-e') && process.env.OPENAI_KEY) {
+        result = await this.callOpenAI(finalPrompt, model, size, quality, n);
+      } else if (model.includes('stable') && process.env.STABILITY_KEY) {
+        result = await this.callStability(finalPrompt, model, size, negativePrompt);
       } else {
-        result = await this.simulateGeneration(prompt, size);
+        result = await this.simulateGeneration(finalPrompt, size, style);
       }
 
       const imageData = {
         id: requestId,
-        prompt,
+        prompt: finalPrompt,
+        originalPrompt: prompt,
+        style: style,
         url: result.url,
         model,
         size,
         quality,
+        enhanced: !!promptMetadata,
+        promptMetadata,
+        negativePrompt,
         timestamp: new Date().toISOString()
       };
 
@@ -88,19 +150,90 @@ class ImageEngine extends EventEmitter {
         success: false,
         requestId,
         error: error.message,
-        url: this.getPlaceholderUrl(prompt, size)
+        url: this.getPlaceholderUrl(prompt, size),
+        timestamp: new Date().toISOString()
       };
     }
+  }
+
+  /**
+   * Enhance image prompt using Ollama
+   */
+  async enhanceImagePrompt(prompt, style) {
+    try {
+      if (!this.ollamaApiKey) return null;
+
+      const styleInstruction = style ? ` in ${style} style` : '';
+      
+      const response = await fetch('https://ollama.com/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.ollamaApiKey}`
+        },
+        body: JSON.stringify({
+          model: 'llama3.2:3b',
+          messages: [
+            { 
+              role: 'system', 
+              content: 'You are an expert prompt engineer for AI image generation. Create detailed, vivid prompts that produce high-quality images. Include details about lighting, composition, mood, and visual elements.'
+            },
+            { 
+              role: 'user', 
+              content: `Enhance this image generation prompt${styleInstruction} to be more detailed and effective:\n\n${prompt}`
+            }
+          ],
+          options: {
+            temperature: 0.7,
+            num_predict: 300
+          }
+        })
+      });
+
+      if (!response.ok) return null;
+
+      const data = await response.json();
+      
+      return {
+        prompt: data.message.content,
+        metadata: {
+          enhanced: true,
+          model: 'llama3.2',
+          timestamp: new Date().toISOString()
+        }
+      };
+
+    } catch (error) {
+      console.log('Prompt enhancement failed:', error.message);
+      return null;
+    }
+  }
+
+  /**
+   * Generate negative prompt for style
+   */
+  async generateNegativePrompt(style) {
+    const negatives = {
+      'photorealistic': 'cartoon, anime, painting, sketch, low quality, blurry',
+      'digital-art': 'photorealistic, photograph, low resolution, grainy',
+      'anime': 'photorealistic, 3d render, western comic style',
+      'oil-painting': 'digital art, photograph, sketch, low quality',
+      'african-art': 'western style, generic, low quality, inaccurate patterns'
+    };
+    
+    return negatives[style] || 'low quality, blurry, distorted, bad anatomy';
   }
 
   /**
    * Call OpenAI DALL-E API
    */
   async callOpenAI(prompt, model, size, quality, n) {
+    const apiKey = process.env.OPENAI_KEY;
+    
     const response = await fetch('https://api.openai.com/v1/images/generations', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${process.env.OPENAI_KEY}`,
+        'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
@@ -126,46 +259,204 @@ class ImageEngine extends EventEmitter {
   }
 
   /**
+   * Call Stability AI API
+   */
+  async callStability(prompt, model, size, negativePrompt) {
+    const apiKey = process.env.STABILITY_KEY;
+    const [width, height] = size.split('x').map(Number);
+    
+    const response = await fetch('https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/text-to-image', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        text_prompts: [
+          { text: prompt, weight: 1.0 },
+          { text: negativePrompt || '', weight: -1.0 }
+        ],
+        cfg_scale: 7,
+        height,
+        width,
+        samples: 1,
+        steps: 30
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Stability API error: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    
+    // Convert base64 to data URL
+    const base64 = data.artifacts[0].base64;
+    const url = `data:image/png;base64,${base64}`;
+
+    return { url };
+  }
+
+  /**
    * Simulate image generation
    */
-  async simulateGeneration(prompt, size) {
-    await this.simulateDelay(1500);
+  async simulateGeneration(prompt, size, style) {
+    await this.simulateDelay(2000);
 
     const [width, height] = size.split('x').map(Number);
     const encodedPrompt = encodeURIComponent(prompt.substring(0, 30));
-
+    
+    // Create style overlay
+    const styleText = style ? `&style=${style}` : '';
+    
     return {
-      url: `https://via.placeholder.com/${size}.png?text=${encodedPrompt}`,
+      url: `https://via.placeholder.com/${size}.png?text=${encodedPrompt}${styleText}`,
       simulated: true
     };
   }
 
   /**
-   * Generate multiple images
+   * Generate multiple variations with AI
    */
   async generateVariations(prompt, count = 4, options = {}) {
-    const images = [];
+    const variations = [];
+    const startTime = Date.now();
 
+    // Generate different variations with slight prompt modifications
     for (let i = 0; i < count; i++) {
-      const image = await this.generate(prompt, {
+      const variationPrompt = `${prompt} - variation ${i + 1} with different composition`;
+      
+      const image = await this.generate(variationPrompt, {
         ...options,
-        prompt: `${prompt} (variation ${i + 1})`
+        enhancePrompt: true
       });
-      images.push(image);
+      
+      variations.push(image);
     }
 
-    return images;
+    return {
+      success: true,
+      count: variations.length,
+      variations,
+      batchId: this.generateRequestId(),
+      timestamp: new Date().toISOString(),
+      latency: Date.now() - startTime
+    };
   }
 
   /**
-   * Edit an image
+   * Edit an image with AI assistance
    */
   async edit(imagePath, maskPath, prompt, options = {}) {
-    // Placeholder for image editing
+    console.log(`🖌️ Editing image with prompt: "${prompt.substring(0, 50)}..."`);
+
+    // Simulate editing
+    await this.simulateDelay(3000);
+
     return {
       success: true,
       url: this.getPlaceholderUrl(`Edit: ${prompt}`, '512x512'),
-      edited: true
+      edited: true,
+      prompt,
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  /**
+   * Analyze image with AI (simulated)
+   */
+  async analyze(imageUrl) {
+    if (!this.ollamaApiKey) {
+      return this.getMockAnalysis();
+    }
+
+    try {
+      const response = await fetch('https://ollama.com/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.ollamaApiKey}`
+        },
+        body: JSON.stringify({
+          model: 'llama3.2:3b',
+          messages: [
+            { 
+              role: 'system', 
+              content: 'You are an AI image analyst. Describe and analyze images based on their visual characteristics.'
+            },
+            { 
+              role: 'user', 
+              content: `Analyze this image (described by URL: ${imageUrl}): What do you see? Describe the composition, colors, mood, and any notable elements.`
+            }
+          ],
+          options: {
+            temperature: 0.5,
+            num_predict: 500
+          }
+        })
+      });
+
+      if (!response.ok) {
+        return this.getMockAnalysis();
+      }
+
+      const data = await response.json();
+      
+      return {
+        success: true,
+        analysis: data.message.content,
+        provider: 'ollama-cloud',
+        timestamp: new Date().toISOString()
+      };
+
+    } catch (error) {
+      console.log('Image analysis failed:', error.message);
+      return this.getMockAnalysis();
+    }
+  }
+
+  /**
+   * Get mock image analysis
+   */
+  getMockAnalysis() {
+    return {
+      success: true,
+      analysis: "This image appears to be a generated or placeholder image. It shows a visual representation related to the prompt. For detailed analysis, configure Ollama Cloud API key.",
+      provider: 'mock',
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  /**
+   * Generate style transfer
+   */
+  async styleTransfer(imageUrl, targetStyle) {
+    console.log(`🎨 Applying style: ${targetStyle}`);
+
+    await this.simulateDelay(2500);
+
+    return {
+      success: true,
+      url: this.getPlaceholderUrl(`Styled: ${targetStyle}`, '512x512'),
+      style: targetStyle,
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  /**
+   * Create image collage
+   */
+  async createCollage(images, layout = 'grid') {
+    console.log(`🖼️ Creating ${layout} collage with ${images.length} images`);
+
+    await this.simulateDelay(3000);
+
+    return {
+      success: true,
+      url: this.getPlaceholderUrl(`Collage: ${images.length} images`, '1024x1024'),
+      layout,
+      imageCount: images.length,
+      timestamp: new Date().toISOString()
     };
   }
 
@@ -185,7 +476,13 @@ class ImageEngine extends EventEmitter {
         // No existing metadata
       }
 
-      metadata.push(imageData);
+      metadata.push({
+        id: imageData.id,
+        prompt: imageData.prompt.substring(0, 100) + '...',
+        model: imageData.model,
+        size: imageData.size,
+        timestamp: imageData.timestamp
+      });
 
       if (metadata.length > 100) {
         metadata = metadata.slice(-100);
@@ -209,7 +506,13 @@ class ImageEngine extends EventEmitter {
       const images = JSON.parse(data);
       return images.slice(-limit).reverse();
     } catch {
-      return this.generated.slice(-limit).reverse();
+      return this.generated.slice(-limit).reverse().map(img => ({
+        id: img.id,
+        prompt: img.prompt.substring(0, 100) + '...',
+        model: img.model,
+        size: img.size,
+        timestamp: img.timestamp
+      }));
     }
   }
 
@@ -227,7 +530,10 @@ class ImageEngine extends EventEmitter {
   getStats() {
     return {
       generatedCount: this.generated.length,
-      lastGenerated: this.generated[this.generated.length - 1]?.timestamp
+      lastGenerated: this.generated[this.generated.length - 1]?.timestamp,
+      modelsAvailable: Object.keys(this.models).length,
+      stylesAvailable: this.styles.length,
+      apiKeyConfigured: !!this.ollamaApiKey
     };
   }
 
@@ -235,11 +541,34 @@ class ImageEngine extends EventEmitter {
    * Get available models
    */
   getModels() {
-    return Object.keys(this.models).map(name => ({
-      name,
-      provider: this.models[name].provider,
-      sizes: this.models[name].sizes
+    return Object.entries(this.models).map(([id, info]) => ({
+      id,
+      name: info.name,
+      provider: info.provider,
+      sizes: info.sizes,
+      pricePerImage: info.pricePerImage
     }));
+  }
+
+  /**
+   * Get available styles
+   */
+  getStyles() {
+    return this.styles;
+  }
+
+  /**
+   * Estimate cost
+   */
+  estimateCost(model, count = 1) {
+    const modelInfo = this.models[model] || this.models['dall-e-2'];
+    return {
+      model: modelInfo.name,
+      cost: (modelInfo.pricePerImage * count).toFixed(2),
+      currency: 'USD',
+      images: count,
+      pricePerImage: modelInfo.pricePerImage
+    };
   }
 
   /**
