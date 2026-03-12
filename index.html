@@ -516,7 +516,7 @@ h1 {
   border: none;
 }
 
-/* Research Tab (New) */
+/* Research Tab */
 .research-input-area {
   display: flex;
   gap: 10px;
@@ -541,7 +541,7 @@ h1 {
   overflow-y: auto;
 }
 
-/* Audio Tab (New) */
+/* Audio Tab */
 .audio-input-area {
   display: flex;
   flex-direction: column;
@@ -574,7 +574,7 @@ h1 {
   margin-top: 10px;
 }
 
-/* Software Factory Tab (New) */
+/* Software Factory Tab */
 .code-editor {
   width: 100%;
   padding: 15px;
@@ -633,7 +633,7 @@ h1 {
       <a href="login-signup.html" style="color: #ffb300; text-decoration: none;">Login / Signup</a> to access all features
     </div>
     
-    <!-- Tab Navigation - Expanded for Phase 6 -->
+    <!-- Tab Navigation -->
     <div class="tab-nav" id="tabNav" style="display: none;">
       <button class="tab-btn active" onclick="switchTab('chat')">💬 Chat</button>
       <button class="tab-btn" onclick="switchTab('image')">🎨 Image Gen</button>
@@ -646,11 +646,11 @@ h1 {
       <button class="tab-btn" onclick="switchTab('software')">🏭 Software</button>
     </div>
     
-    <!-- Chat Tab -->
+    <!-- Chat Tab - Updated with correct IDs -->
     <div id="chatTab" class="tab-content active">
-      <div class="chat-box" id="chatBox"></div>
+      <div class="chat-box" id="chat"></div>
       <div class="input-area">
-        <input type="text" id="prompt" placeholder="Ask CephasGM AI anything..." autocomplete="off">
+        <input type="text" id="userInput" placeholder="Ask CephasGM AI anything..." autocomplete="off">
         <button class="voice-btn" id="voiceBtn" onclick="toggleVoice()">🎤</button>
         <button onclick="sendMessage()" id="sendBtn">Send</button>
         <button onclick="clearChat()" style="background: #dc3545;">🗑️</button>
@@ -756,7 +756,7 @@ h1 {
       <div class="memory-list" id="memoryList"></div>
     </div>
     
-    <!-- Research Tab (New) -->
+    <!-- Research Tab -->
     <div id="researchTab" class="tab-content">
       <h2>🔬 Research Lab</h2>
       <p>Deep research with multiple sources</p>
@@ -772,7 +772,7 @@ h1 {
       <div class="research-results" id="researchResults"></div>
     </div>
     
-    <!-- Audio Tab (New) -->
+    <!-- Audio Tab -->
     <div id="audioTab" class="tab-content">
       <h2>🔊 Audio Studio</h2>
       <p>Generate speech from text</p>
@@ -791,7 +791,7 @@ h1 {
       </div>
     </div>
     
-    <!-- Software Factory Tab (New) -->
+    <!-- Software Factory Tab -->
     <div id="softwareTab" class="tab-content">
       <h2>🏭 Software Factory</h2>
       <p>Write, run, and debug code</p>
@@ -906,101 +906,6 @@ function switchTab(tabName) {
   });
   
   event.target.classList.add('active');
-}
-
-// ============================================
-// Chat Functions
-// ============================================
-async function sendMessage() {
-  const input = document.getElementById('prompt');
-  const message = input.value.trim();
-  if (!message) return;
-
-  addMessage('You', message, 'user-message');
-  input.value = '';
-
-  const typingId = showTypingIndicator();
-
-  try {
-    let response;
-    
-    if (API_BASE) {
-      // Use Phase 6 API
-      response = await fetch(`${API_BASE}/task`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ task: message })
-      });
-      const data = await response.json();
-      addMessage('CephasAI', data.result || 'No response', 'ai-message');
-      
-      // Save to memory
-      if (window.saveMemory) {
-        saveMemory(message, data.result);
-      }
-    } else {
-      // Fallback to Phase 2
-      if (window.askAI) {
-        const result = await askAI(message);
-        addMessage('CephasAI', result.reply || 'No response', 'ai-message');
-      } else {
-        addMessage('CephasAI', 'AI service unavailable', 'ai-message');
-      }
-    }
-  } catch (error) {
-    addMessage('CephasAI', `Error: ${error.message}`, 'ai-message');
-  } finally {
-    removeTypingIndicator(typingId);
-  }
-}
-
-function addMessage(sender, text, className) {
-  const chatBox = document.getElementById('chatBox');
-  const messageDiv = document.createElement('div');
-  messageDiv.className = `message ${className}`;
-  
-  const timestamp = new Date().toLocaleTimeString();
-  
-  messageDiv.innerHTML = `
-    <div class="message-header">
-      <strong>${sender}:</strong>
-      <span class="timestamp">${timestamp}</span>
-    </div>
-    <div class="message-content">${text}</div>
-  `;
-  
-  chatBox.appendChild(messageDiv);
-  chatBox.scrollTop = chatBox.scrollHeight;
-}
-
-function showTypingIndicator() {
-  const id = 'typing-' + Date.now();
-  const chatBox = document.getElementById('chatBox');
-  const div = document.createElement('div');
-  div.id = id;
-  div.className = 'message ai-message';
-  div.innerHTML = `
-    <div class="message-header">
-      <strong>CephasAI:</strong>
-    </div>
-    <div class="message-content">
-      <span class="dot">.</span><span class="dot">.</span><span class="dot">.</span>
-    </div>
-  `;
-  chatBox.appendChild(div);
-  chatBox.scrollTop = chatBox.scrollHeight;
-  return id;
-}
-
-function removeTypingIndicator(id) {
-  const indicator = document.getElementById(id);
-  if (indicator) indicator.remove();
-}
-
-function clearChat() {
-  if (confirm('Clear all chat messages?')) {
-    document.getElementById('chatBox').innerHTML = '';
-  }
 }
 
 // ============================================
@@ -1169,7 +1074,7 @@ function initVoice() {
     recognition.onresult = (event) => {
       const transcript = event.results[0][0].transcript;
       document.getElementById('voiceOutput').value = transcript;
-      document.getElementById('prompt').value = transcript;
+      document.getElementById('userInput').value = transcript;
     };
     
     recognition.onerror = (event) => {
@@ -1311,7 +1216,7 @@ async function loadMemories() {
     }
     
     memoryList.innerHTML = memories.map(m => `
-      <div class="memory-item" onclick="document.getElementById('prompt').value = '${(m.prompt || m.metadata?.prompt || '').replace(/'/g, "\\'")}'">
+      <div class="memory-item" onclick="document.getElementById('userInput').value = '${(m.prompt || m.metadata?.prompt || '').replace(/'/g, "\\'")}'">
         <div class="memory-prompt">Q: ${m.prompt || m.metadata?.prompt || 'Memory'}</div>
         <div class="memory-response">A: ${(m.response || m.metadata?.response || '').substring(0, 100)}...</div>
         <div class="memory-time">${new Date(m.timestamp || m.metadata?.timestamp).toLocaleString()}</div>
@@ -1370,7 +1275,7 @@ function clearLocalMemory() {
 }
 
 // ============================================
-// Research Functions (New)
+// Research Functions
 // ============================================
 async function conductResearch() {
   const topic = document.getElementById('researchTopic').value.trim();
@@ -1408,7 +1313,7 @@ async function conductResearch() {
 }
 
 // ============================================
-// Audio Functions (New)
+// Audio Functions
 // ============================================
 async function generateAudio() {
   const text = document.getElementById('audioText').value.trim();
@@ -1462,7 +1367,7 @@ async function generateAudio() {
 }
 
 // ============================================
-// Software Factory Functions (New)
+// Software Factory Functions
 // ============================================
 async function runCode() {
   const code = document.getElementById('codeInput').value.trim();
@@ -1546,8 +1451,6 @@ window.onload = function() {
 
 // Make functions globally available
 window.switchTab = switchTab;
-window.sendMessage = sendMessage;
-window.clearChat = clearChat;
 window.generateImage = generateImage;
 window.uploadFile = uploadFile;
 window.startVoice = startVoice;
