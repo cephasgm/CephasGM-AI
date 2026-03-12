@@ -812,20 +812,28 @@ h1 {
   </div>
 </div>
 
-<!-- Load Firebase -->
+<!-- Load Firebase FIRST (external dependencies) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 
-<!-- Load Phase 6 modules -->
-<script src="ai.js"></script>
+<!-- ============================================ -->
+<!-- Load configuration FIRST (internal scripts) -->
+<!-- ============================================ -->
+<script src="config.js"></script>
+
+<!-- Load core modules in order -->
 <script src="app.js"></script>
+<script src="voice.js"></script>
+<script src="memory.js"></script>
+<script src="ai.js"></script>
+<script src="agents.js"></script>
 <script src="image.js"></script>
 <script src="upload.js"></script>
-<script src="voice.js"></script>
-<script src="agents.js"></script>
-<script src="memory.js" type="module"></script>
 
+<!-- ============================================ -->
+<!-- Main Application Script (everything below)   -->
+<!-- ============================================ -->
 <script>
 // ============================================
 // Global Variables
@@ -872,9 +880,9 @@ async function checkAPI() {
 }
 
 // ============================================
-// Firebase Configuration
+// Firebase Configuration (using config.js values)
 // ============================================
-const firebaseConfig = {
+const firebaseConfig = window.CEPHASGM_CONFIG?.FIREBASE || {
   apiKey: "AIzaSyAukJQx3pEqXoyFR9tyfeLckJaBIgYtGFA",
   authDomain: "cephasgm-ai.firebaseapp.com",
   projectId: "cephasgm-ai",
@@ -888,7 +896,7 @@ firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 
 // ============================================
-// Chat Functions - ADDED
+// Chat Functions
 // ============================================
 async function sendMessage() {
   const input = document.getElementById('userInput');
@@ -915,9 +923,10 @@ async function sendMessage() {
       });
       const data = await res.json();
       response = data.output || data.response || JSON.stringify(data);
-    } else if (window.chatEngine) {
-      // Use local Phase 2/3 functions
-      response = await window.chatEngine(message);
+    } else if (window.AIModule?.askAI) {
+      // Use AI module
+      const result = await window.AIModule.askAI(message);
+      response = result.content;
     } else {
       // Simulated response
       const responses = [
@@ -982,6 +991,11 @@ function saveToMemory(prompt, response) {
   const memories = JSON.parse(localStorage.getItem('chatMemories') || '[]');
   memories.unshift(memory);
   localStorage.setItem('chatMemories', JSON.stringify(memories.slice(0, 50))); // Keep last 50
+  
+  // Also try to save via memory module
+  if (window.MemoryModule?.saveMemory) {
+    window.MemoryModule.saveMemory(prompt, response).catch(() => {});
+  }
 }
 
 // ============================================
@@ -1002,7 +1016,7 @@ auth.onAuthStateChanged(user => {
     tabNav.style.display = 'flex';
     
     // Load initial data
-    loadMemories();
+    if (typeof loadMemories === 'function') loadMemories();
     loadChatHistory();
   } else {
     userInfo.style.display = 'none';
@@ -1050,7 +1064,9 @@ function switchTab(tabName) {
   });
   
   // Find and activate the clicked button
-  event.target.classList.add('active');
+  if (event && event.target) {
+    event.target.classList.add('active');
+  }
 }
 
 // ============================================
@@ -1076,16 +1092,19 @@ async function generateImage() {
         body: JSON.stringify({ prompt })
       });
       result = await response.json();
+    } else if (window.ImageModule?.generateImage) {
+      result = await window.ImageModule.generateImage(prompt);
     } else if (window.generateImage) {
       result = await window.generateImage(prompt);
     }
 
     const imageResult = document.getElementById('imageResult');
-    if (result.url) {
+    if (result && (result.url || result.imageUrl)) {
+      const imageUrl = result.url || result.imageUrl;
       imageResult.innerHTML = `
-        <img src="${result.url}" alt="${prompt}">
+        <img src="${imageUrl}" alt="${prompt}">
         <div class="image-actions">
-          <button onclick="window.open('${result.url}')">View Full Size</button>
+          <button onclick="window.open('${imageUrl}')">View Full Size</button>
           <button onclick="generateImage()">Regenerate</button>
         </div>
       `;
@@ -1153,6 +1172,8 @@ async function uploadFile() {
         body: formData
       });
       result = await response.json();
+    } else if (window.UploadModule?.uploadFile) {
+      result = await window.UploadModule.uploadFile(file);
     } else if (window.uploadFile) {
       result = await window.uploadFile(file);
     }
@@ -1285,6 +1306,8 @@ async function runAgent(task, type = 'auto') {
         })
       });
       result = await response.json();
+    } else if (window.AgentsModule?.runAgent) {
+      result = await window.AgentsModule.runAgent(task, type);
     } else if (window.runAgent) {
       result = await window.runAgent(task, type);
     } else {
