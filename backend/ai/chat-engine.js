@@ -1,5 +1,5 @@
 /**
- * AI Chat Engine - Core chat functionality with multiple model support
+ * AI Chat Engine - Core chat functionality with Ollama Cloud
  */
 const fetch = require('node-fetch');
 const config = require('../config');
@@ -7,13 +7,45 @@ const config = require('../config');
 class ChatEngine {
   constructor() {
     this.models = {
-      'gpt-4': { provider: 'openai', context: 8192 },
-      'gpt-3.5-turbo': { provider: 'openai', context: 4096 },
-      'claude': { provider: 'anthropic', context: 100000 },
-      'llama3': { provider: 'local', context: 8192 }
+      'llama3': { 
+        provider: 'ollama', 
+        model: 'llama3:8b',
+        description: 'Meta Llama 3 8B - Good general purpose'
+      },
+      'llama3.2': { 
+        provider: 'ollama', 
+        model: 'llama3.2:3b',
+        description: 'Latest Llama 3.2 3B - Fast and efficient'
+      },
+      'mistral': { 
+        provider: 'ollama', 
+        model: 'mistral:7b',
+        description: 'Mistral 7B - Excellent performance'
+      },
+      'phi3': { 
+        provider: 'ollama', 
+        model: 'phi3:3.8b',
+        description: 'Phi-3 Mini - Small but powerful'
+      },
+      'codellama': { 
+        provider: 'ollama', 
+        model: 'codellama:7b',
+        description: 'Code Llama - Specialized for code'
+      },
+      'neural-chat': { 
+        provider: 'ollama', 
+        model: 'neural-chat:7b',
+        description: 'Neural Chat - Optimized for conversations'
+      }
     };
     
     this.conversationHistory = new Map();
+    this.ollamaApiKey = process.env.OLLAMA_API_KEY;
+    this.ollamaHost = 'https://ollama.com';
+    
+    console.log('🤖 Ollama Cloud initialized');
+    console.log(`   API Key: ${this.ollamaApiKey ? '✅ Configured' : '❌ Missing'}`);
+    console.log(`   Available models: ${Object.keys(this.models).length}`);
   }
 
   /**
@@ -22,44 +54,38 @@ class ChatEngine {
   async chat(prompt, options = {}) {
     try {
       const {
-        model = 'gpt-3.5-turbo',
+        model = 'llama3.2',
         temperature = 0.7,
-        maxTokens = 500,
+        maxTokens = 2000,
         sessionId = 'default',
-        systemPrompt = 'You are CephasGM AI, an African-inspired artificial intelligence assistant.'
+        systemPrompt = 'You are CephasGM AI, an African-inspired artificial intelligence assistant helping users with technology, innovation, and African perspectives.'
       } = options;
 
-      // Validate input
       if (!prompt || typeof prompt !== 'string') {
         throw new Error('Prompt must be a non-empty string');
       }
 
-      console.log(`Chat request [${model}]: "${prompt.substring(0, 50)}..."`);
+      if (!this.ollamaApiKey) {
+        throw new Error('OLLAMA_API_KEY not configured in environment variables');
+      }
+
+      console.log(`💬 Chat request [${model}]: "${prompt.substring(0, 50)}..."`);
 
       // Get conversation history
       let history = this.getHistory(sessionId);
       
-      // Prepare messages
+      // Prepare messages array
       const messages = [
         { role: 'system', content: systemPrompt },
         ...history,
         { role: 'user', content: prompt }
       ];
 
-      // Route to appropriate model
-      let response;
-      const modelConfig = this.models[model] || this.models['gpt-3.5-turbo'];
+      // Get model configuration
+      const modelConfig = this.models[model] || this.models['llama3.2'];
 
-      switch (modelConfig.provider) {
-        case 'openai':
-          response = await this.callOpenAI(messages, model, temperature, maxTokens);
-          break;
-        case 'local':
-          response = await this.callLocalModel(prompt, model);
-          break;
-        default:
-          response = await this.callOpenAI(messages, 'gpt-3.5-turbo', temperature, maxTokens);
-      }
+      // Call Ollama Cloud
+      const response = await this.callOllamaCloud(modelConfig.model, messages, temperature, maxTokens);
 
       // Update history
       this.updateHistory(sessionId, prompt, response.content);
@@ -68,107 +94,120 @@ class ChatEngine {
         success: true,
         content: response.content,
         model: model,
+        provider: 'ollama-cloud',
+        modelUsed: modelConfig.model,
         usage: response.usage || { prompt_tokens: 0, completion_tokens: 0 },
         timestamp: new Date().toISOString()
       };
 
     } catch (error) {
       console.error('Chat engine error:', error);
+      
+      // Fallback response with helpful message
       return {
-        success: false,
+        success: true,
+        content: this.getFallbackResponse(prompt, error.message),
+        model: options.model || 'llama3.2',
+        provider: 'fallback',
         error: error.message,
-        content: 'I apologize, but I encountered an error. Please try again.',
-        fallback: true
+        timestamp: new Date().toISOString()
       };
     }
   }
 
   /**
-   * Call OpenAI API
+   * Call Ollama Cloud API
    */
-  async callOpenAI(messages, model, temperature, maxTokens) {
-    const apiKey = config.openaiApiKey;
-    
-    if (!apiKey || apiKey === 'YOUR_OPENAI_API_KEY') {
-      // Demo mode - return mock response
-      return {
-        content: this.getMockResponse(messages[messages.length - 1].content),
-        usage: { prompt_tokens: 50, completion_tokens: 100 }
-      };
-    }
-
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: model,
-        messages: messages,
-        temperature: temperature,
-        max_tokens: maxTokens
-      })
-    });
-
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`OpenAI API error: ${error}`);
-    }
-
-    const data = await response.json();
-    
-    return {
-      content: data.choices[0].message.content,
-      usage: data.usage
-    };
-  }
-
-  /**
-   * Call local model (Ollama)
-   */
-  async callLocalModel(prompt, model) {
+  async callOllamaCloud(model, messages, temperature, maxTokens) {
     try {
-      const response = await fetch('http://localhost:11434/api/generate', {
+      console.log(`🌐 Calling Ollama Cloud with model: ${model}`);
+
+      const response = await fetch('https://ollama.com/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.ollamaApiKey}`
+        },
         body: JSON.stringify({
-          model: model.replace('llama3', 'llama3'),
-          prompt: prompt,
-          stream: false
+          model: model,
+          messages: messages,
+          stream: false,
+          options: {
+            temperature: temperature,
+            num_predict: maxTokens
+          }
         })
       });
 
       if (!response.ok) {
-        throw new Error('Local model unavailable');
+        const errorText = await response.text();
+        console.error('Ollama API error response:', errorText);
+        throw new Error(`Ollama API error (${response.status}): ${errorText}`);
       }
 
       const data = await response.json();
       
       return {
-        content: data.response,
-        usage: { prompt_tokens: 0, completion_tokens: 0 }
+        content: data.message.content,
+        usage: data.usage || { prompt_tokens: 0, completion_tokens: 0 }
       };
+
     } catch (error) {
-      console.log('Local model failed, using mock:', error.message);
-      return {
-        content: this.getMockResponse(prompt),
-        usage: { prompt_tokens: 0, completion_tokens: 0 }
-      };
+      console.error('Ollama Cloud call failed:', error);
+      throw error;
     }
   }
 
   /**
-   * Get mock response for demo
+   * Get fallback response when Ollama is unavailable
    */
-  getMockResponse(prompt) {
-    const responses = [
-      `I understand you're asking about "${prompt.substring(0, 50)}". As CephasGM AI, I'm here to help with African perspectives on technology and innovation.`,
-      `That's an interesting question about ${prompt.substring(0, 30)}. Let me share some insights from an African context.`,
-      `Great question! From my African-inspired perspective, ${prompt.substring(0, 40)} has significant potential for innovation on the continent.`,
-      `I appreciate your curiosity about ${prompt.substring(0, 40)}. This connects to broader themes of technological advancement in Africa.`
-    ];
-    return responses[Math.floor(Math.random() * responses.length)];
+  getFallbackResponse(prompt, errorMsg) {
+    const isApiKeyError = errorMsg.includes('API key') || errorMsg.includes('401');
+    
+    if (isApiKeyError) {
+      return `🔑 **API Key Issue Detected**
+
+I notice there's an issue with your Ollama API key. Here's how to fix it:
+
+1. Verify your API key at https://ollama.com/account
+2. Check that the key is correctly set in Render environment variables
+3. Ensure the key hasn't expired
+
+**Your prompt was:** "${prompt.substring(0, 100)}..."
+
+Once the API key is fixed, I'll be able to provide intelligent responses using Ollama's powerful models!`;
+    }
+
+    return `🌐 **Ollama Cloud Connection Issue**
+
+I'm having trouble connecting to Ollama Cloud at the moment. This could be due to:
+
+- Network connectivity issues
+- Ollama service temporarily unavailable
+- Rate limiting (free tier limits)
+
+**Your question:** "${prompt.substring(0, 100)}..."
+
+Please try again in a few moments. If the issue persists, check your Ollama Cloud dashboard at https://ollama.com for service status.`;
+  }
+
+  /**
+   * Stream chat response (for real-time applications)
+   */
+  async *stream(prompt, options = {}) {
+    const result = await this.chat(prompt, options);
+    
+    const words = result.content.split(' ');
+    for (let i = 0; i < words.length; i++) {
+      yield JSON.stringify({
+        id: Date.now(),
+        choices: [{
+          delta: { content: words[i] + (i < words.length - 1 ? ' ' : '') },
+          index: 0
+        }]
+      });
+      await this.simulateDelay(30);
+    }
   }
 
   /**
@@ -180,9 +219,7 @@ class ChatEngine {
     }
     
     const history = this.conversationHistory.get(sessionId);
-    
-    // Return last 10 messages for context
-    return history.slice(-10);
+    return history.slice(-6); // Last 6 messages (3 exchanges) for context
   }
 
   /**
@@ -196,9 +233,9 @@ class ChatEngine {
       { role: 'assistant', content: aiResponse }
     );
     
-    // Keep last 50 messages
-    if (history.length > 50) {
-      history.splice(0, history.length - 50);
+    // Keep last 20 messages (10 exchanges)
+    if (history.length > 20) {
+      history.splice(0, history.length - 20);
     }
     
     this.conversationHistory.set(sessionId, history);
@@ -209,6 +246,7 @@ class ChatEngine {
    */
   clearHistory(sessionId) {
     this.conversationHistory.delete(sessionId);
+    return { success: true, message: 'History cleared' };
   }
 
   /**
@@ -216,10 +254,53 @@ class ChatEngine {
    */
   getModels() {
     return Object.entries(this.models).map(([name, config]) => ({
-      name,
+      id: name,
+      name: name,
+      fullName: config.model,
       provider: config.provider,
-      contextSize: config.context
+      description: config.description
     }));
+  }
+
+  /**
+   * Test Ollama connection
+   */
+  async testConnection() {
+    try {
+      const response = await fetch('https://ollama.com/api/models', {
+        headers: {
+          'Authorization': `Bearer ${this.ollamaApiKey}`
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        return {
+          success: true,
+          message: '✅ Ollama Cloud connected successfully',
+          models: data.models || []
+        };
+      } else {
+        return {
+          success: false,
+          message: `❌ Connection failed: ${response.status}`,
+          error: await response.text()
+        };
+      }
+    } catch (error) {
+      return {
+        success: false,
+        message: '❌ Connection error',
+        error: error.message
+      };
+    }
+  }
+
+  /**
+   * Simulate delay for streaming
+   */
+  simulateDelay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 }
 
