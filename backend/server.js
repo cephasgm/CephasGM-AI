@@ -1,11 +1,13 @@
 /**
  * Main Server - CephasGM AI Phase 3
+ * Updated with intelligent static file serving for Render deployment
  */
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const config = require('./config');
 const path = require('path');
+const fs = require('fs');
 
 // Import AI modules
 const chatEngine = require('./ai/chat-engine');
@@ -284,25 +286,127 @@ app.get('/agents', (req, res) => {
   res.json(agents);
 });
 
-// Serve static files (for frontend)
-app.use(express.static(path.join(__dirname, '../frontend')));
+// =============================================
+// INTELLIGENT STATIC FILE SERVING
+// =============================================
+console.log('🔍 Looking for frontend files...');
 
-// Catch-all route for SPA
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '../frontend/index.html'));
-});
+// Possible locations for frontend files
+const possiblePaths = [
+  path.join(__dirname, '../frontend'),           // /backend/../frontend
+  path.join(__dirname, '..'),                     // /backend/.. (root)
+  path.join(__dirname, '../../frontend'),         // /backend/../../frontend
+  path.join(__dirname, '../public'),              // /backend/../public
+  path.join(process.cwd(), 'frontend'),           // Current working directory + frontend
+  path.join(process.cwd(), 'public')              // Current working directory + public
+];
+
+let staticPath = null;
+
+// Check each possible path for index.html
+for (const testPath of possiblePaths) {
+  const indexPath = path.join(testPath, 'index.html');
+  
+  if (fs.existsSync(indexPath)) {
+    staticPath = testPath;
+    console.log(`✅ Frontend found at: ${staticPath}`);
+    console.log(`📄 index.html exists: ${indexPath}`);
+    
+    // Also check for other common frontend files
+    const hasManifest = fs.existsSync(path.join(testPath, 'manifest.json'));
+    const hasSw = fs.existsSync(path.join(testPath, 'sw.js'));
+    const hasAssets = fs.existsSync(path.join(testPath, 'assets'));
+    
+    if (hasManifest) console.log('📱 manifest.json found');
+    if (hasSw) console.log('🔄 service worker found');
+    if (hasAssets) console.log('🎨 assets folder found');
+    
+    break;
+  }
+}
+
+if (staticPath) {
+  // Serve static files from the found location
+  app.use(express.static(staticPath));
+  
+  // Log all files being served (optional - can be removed in production)
+  console.log(`📁 Serving static files from: ${staticPath}`);
+  
+  // Catch-all route for SPA - serve index.html for any non-API route
+  app.get('*', (req, res) => {
+    // Skip API routes
+    if (req.path.startsWith('/api/') || 
+        req.path === '/health' || 
+        req.path === '/agents' ||
+        req.path === '/models' ||
+        req.path.startsWith('/memory/') ||
+        req.path.startsWith('/graph/')) {
+      return next();
+    }
+    
+    // Check if the request is for a static file that might exist
+    const requestedFile = path.join(staticPath, req.path);
+    if (fs.existsSync(requestedFile) && fs.statSync(requestedFile).isFile()) {
+      return res.sendFile(requestedFile);
+    }
+    
+    // Otherwise serve index.html for SPA routing
+    res.sendFile(path.join(staticPath, 'index.html'));
+  });
+  
+  console.log('✅ SPA catch-all route configured');
+  
+} else {
+  console.log('⚠️ No frontend files found - running in API-only mode');
+  
+  // API-only mode - return JSON for non-API routes
+  app.get('*', (req, res) => {
+    // Skip health check and API routes
+    if (req.path === '/health' || 
+        req.path === '/agents' || 
+        req.path === '/models' ||
+        req.path.startsWith('/api/') ||
+        req.path.startsWith('/memory/') ||
+        req.path.startsWith('/graph/')) {
+      return next();
+    }
+    
+    res.status(404).json({ 
+      success: false,
+      error: 'Frontend not found',
+      message: 'API server is running, but frontend files are missing.',
+      endpoints: {
+        health: '/health',
+        agents: '/agents',
+        models: '/models',
+        chat: 'POST /chat',
+        research: 'POST /research',
+        code: 'POST /code',
+        video: 'POST /video',
+        task: 'POST /task',
+        memory: '/memory/*',
+        graph: '/graph/*',
+        gpu: '/gpu/infer'
+      },
+      documentation: 'https://github.com/cephasgm/CephasGM-AI'
+    });
+  });
+  
+  console.log('ℹ️ API-only mode: All non-API routes will return JSON with endpoint list');
+}
 
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error('Unhandled error:', err);
   res.status(500).json({
+    success: false,
     error: 'Internal server error',
     message: config.isProduction() ? 'An error occurred' : err.message
   });
 });
 
 // Start server
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`
 ╔══════════════════════════════════════════════════════════╗
 ║                                                          ║
@@ -312,24 +416,45 @@ app.listen(PORT, () => {
 ║   🎯 Features: Chat, Research, Code, Video, Agents      ║
 ║   💾 Vector DB: ${config.vectorDbType.padEnd(15)}                   ║
 ║   🖥️ GPU: ${modelHost.gpuAvailable ? '✅ Available' : '❌ Not Available'}                 ║
+║   📁 Frontend: ${staticPath ? '✅ Found' : '❌ Not Found'}                 ║
+║   📊 Mode: ${staticPath ? 'Full Stack' : 'API Only'}                      ║
 ║                                                          ║
 ╚══════════════════════════════════════════════════════════╝
   `);
+  
+  if (!staticPath) {
+    console.log(`
+📝 API-ONLY MODE:
+   Your API is live at: https://cephasgm-ai.onrender.com
+   
+   Available endpoints:
+   • GET  /health     - System status
+   • GET  /agents     - List all agents
+   • GET  /models     - List available models
+   • POST /chat       - Chat with AI
+   • POST /research   - Research topics
+   • POST /code       - Execute code
+   • POST /video      - Generate video
+   • POST /task       - Route agent tasks
+   • POST /memory/*   - Vector memory operations
+   • POST /graph/*    - Knowledge graph operations
+   
+   To enable frontend, add index.html to /frontend or root directory.
+    `);
+  }
 });
 
 // Graceful shutdown
-process.on('SIGTERM', () => {
+process.on('SIGTERM', async () => {
   console.log('SIGTERM received, shutting down gracefully...');
-  modelHost.shutdown().then(() => {
-    process.exit(0);
-  });
+  await modelHost.shutdown();
+  process.exit(0);
 });
 
-process.on('SIGINT', () => {
+process.on('SIGINT', async () => {
   console.log('SIGINT received, shutting down gracefully...');
-  modelHost.shutdown().then(() => {
-    process.exit(0);
-  });
+  await modelHost.shutdown();
+  process.exit(0);
 });
 
 module.exports = app;
