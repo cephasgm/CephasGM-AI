@@ -1,10 +1,10 @@
 /**
  * Main Application - Chat Interface
- * Connected to backend API at https://cephasgm-ai-api.onrender.com
+ * Connected to backend API at https://cephasgm-ai.onrender.com
  */
 
 // API endpoint
-const API_URL = "https://cephasgm-ai-api.onrender.com";
+const API_URL = "https://cephasgm-ai.onrender.com";
 
 // DOM elements
 let chatBox, input, sendBtn, voiceBtn;
