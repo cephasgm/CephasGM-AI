@@ -1,81 +1,92 @@
 /**
  * AI Chat Interface - Core AI functionality
+ * Fixed - Uses global namespace pattern
  */
 
-async function askAI(message, history = []) {
-  if (!message || message.trim() === "") {
-    console.error("Message is required");
-    return { error: "Message is required", reply: "Please enter a message." };
-  }
+window.AIModule = window.AIModule || (function() {
+    const API_URL = window.CEPHASGM_CONFIG?.API_URL || "https://cephasgm-ai.onrender.com";
+    
+    async function askAI(message, history = []) {
+        if (!message || message.trim() === "") {
+            console.error("Message is required");
+            return { 
+                error: "Message is required", 
+                content: "Please enter a message." 
+            };
+        }
 
-  try {
-    const response = await fetch("https://us-central1-cephasgm-ai.cloudfunctions.net/chat", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ 
-        prompt: message,
-        history: history 
-      })
-    });
+        try {
+            const response = await fetch(`${API_URL}/chat`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ 
+                    prompt: message,
+                    model: "llama3.2",
+                    history: history 
+                })
+            });
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            
+            // Handle different response formats
+            return {
+                success: true,
+                content: data.content || data.response || data.text || "No response",
+                model: data.model || "llama3.2",
+                timestamp: new Date().toISOString()
+            };
+
+        } catch (error) {
+            console.error("AI Error:", error);
+            return { 
+                success: false,
+                error: "AI service unavailable",
+                content: "I'm sorry, I'm having trouble connecting. Please check your internet and try again.",
+                details: error.message
+            };
+        }
     }
 
-    const data = await response.json();
-    return data;
+    // Stream response (for typing effect)
+    async function askAIStream(message, onChunk, onComplete, history = []) {
+        try {
+            const result = await askAI(message, history);
+            
+            if (!result.success) {
+                onChunk(result.content);
+                if (onComplete) onComplete(result.content);
+                return;
+            }
 
-  } catch (error) {
-    console.error("AI Error:", error);
-    return { 
-      error: "AI service unavailable",
-      reply: "I'm sorry, I'm having trouble connecting. Please check your internet and try again.",
-      details: error.message
+            const words = result.content.split(' ');
+            
+            for (let i = 0; i < words.length; i++) {
+                await new Promise(resolve => setTimeout(resolve, 50));
+                onChunk(words[i] + (i < words.length - 1 ? ' ' : ''));
+            }
+            
+            if (onComplete) onComplete(result.content);
+
+        } catch (error) {
+            console.error("AI Stream Error:", error);
+            onChunk("Service unavailable. Please try again.");
+            if (onComplete) onComplete("");
+        }
+    }
+
+    // Public API
+    return {
+        askAI,
+        askAIStream
     };
-  }
-}
+})();
 
-// Stream response (for typing effect)
-async function askAIStream(message, onChunk, onComplete, history = []) {
-  try {
-    const response = await fetch("https://us-central1-cephasgm-ai.cloudfunctions.net/chat", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ 
-        prompt: message,
-        history: history,
-        stream: true 
-      })
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const data = await response.json();
-    
-    // Simulate streaming for now
-    const reply = data.reply || "No response";
-    const words = reply.split(' ');
-    
-    for (let i = 0; i < words.length; i++) {
-      await new Promise(resolve => setTimeout(resolve, 50));
-      onChunk(words[i] + (i < words.length - 1 ? ' ' : ''));
-    }
-    
-    if (onComplete) onComplete(reply);
-
-  } catch (error) {
-    console.error("AI Stream Error:", error);
-    onChunk("Service unavailable. Please try again.");
-    if (onComplete) onComplete("");
-  }
-}
-
-// Export for use in app.js
-window.askAI = askAI;
-window.askAIStream = askAIStream;
+// Export for global use
+window.askAI = window.AIModule.askAI;
+window.askAIStream = window.AIModule.askAIStream;
