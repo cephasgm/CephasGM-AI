@@ -1,6 +1,10 @@
 /**
  * Main Application - Chat Interface
+ * Connected to backend API at https://cephasgm-ai-api.onrender.com
  */
+
+// API endpoint
+const API_URL = "https://cephasgm-ai-api.onrender.com";
 
 // DOM elements
 let chatBox, input, sendBtn, voiceBtn;
@@ -8,7 +12,7 @@ let chatBox, input, sendBtn, voiceBtn;
 // Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', function() {
   chatBox = document.getElementById("chat");
-  input = document.getElementById("prompt");
+  input = document.getElementById("userInput");
   sendBtn = document.getElementById("sendBtn");
   voiceBtn = document.getElementById("voiceBtn");
 
@@ -32,64 +36,76 @@ document.addEventListener('DOMContentLoaded', function() {
   loadChatHistory();
 });
 
-// Send message to AI
+// Send message to AI via backend API
 async function sendMessage() {
   if (!input) return;
   
-  const prompt = input.value.trim();
-  if (!prompt) return;
+  const message = input.value.trim();
+  if (!message) return;
 
   // Add user message to chat
-  addMessage("You", prompt);
+  addMessage("You", message);
   input.value = "";
 
   // Show typing indicator
   const typingId = showTypingIndicator();
 
   try {
-    // Call AI
-    const result = await window.askAI(prompt);
+    // Call backend API
+    const response = await fetch(`${API_URL}/ai/chat`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ prompt: message })
+    });
+
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status}`);
+    }
+
+    const data = await response.json();
     
     // Remove typing indicator
     removeTypingIndicator(typingId);
     
     // Add AI response
-    addMessage("CephasAI", result.reply || "No response received");
+    addMessage("CephasGM AI", data.response || "No response received");
     
     // Save to memory if available
     if (window.saveMemory) {
-      window.saveMemory(prompt, result.reply);
+      window.saveMemory(message, data.response);
     }
     
   } catch (error) {
     removeTypingIndicator(typingId);
-    addMessage("CephasAI", "Sorry, I encountered an error. Please try again.");
+    addMessage("CephasGM AI", "Sorry, I encountered an error. Please try again.");
     console.error("Send message error:", error);
   }
 }
 
 // Add message to chat box
-function addMessage(user, text) {
+function addMessage(sender, text) {
   if (!chatBox) return;
   
-  const div = document.createElement("div");
-  div.className = `message ${user === "You" ? "user-message" : "ai-message"}`;
+  const msg = document.createElement("div");
+  msg.className = `message ${sender === "You" ? "user-message" : "ai-message"}`;
   
   const timestamp = new Date().toLocaleTimeString();
   
-  div.innerHTML = `
+  msg.innerHTML = `
     <div class="message-header">
-      <strong>${user}:</strong>
+      <b>${sender}:</b>
       <span class="timestamp">${timestamp}</span>
     </div>
     <div class="message-content">${text}</div>
   `;
   
-  chatBox.appendChild(div);
+  chatBox.appendChild(msg);
   chatBox.scrollTop = chatBox.scrollHeight;
   
   // Save to localStorage
-  saveChatToStorage(user, text, timestamp);
+  saveChatToStorage(sender, text, timestamp);
 }
 
 // Show typing indicator
@@ -100,12 +116,10 @@ function showTypingIndicator() {
   div.className = "message ai-message typing-indicator";
   div.innerHTML = `
     <div class="message-header">
-      <strong>CephasAI:</strong>
+      <b>CephasGM AI:</b>
     </div>
     <div class="message-content">
-      <span class="dot"></span>
-      <span class="dot"></span>
-      <span class="dot"></span>
+      <span class="dot">.</span><span class="dot">.</span><span class="dot">.</span>
     </div>
   `;
   chatBox.appendChild(div);
@@ -122,10 +136,10 @@ function removeTypingIndicator(id) {
 }
 
 // Save chat to localStorage
-function saveChatToStorage(user, text, timestamp) {
+function saveChatToStorage(sender, text, timestamp) {
   try {
     const history = JSON.parse(localStorage.getItem('chatHistory') || '[]');
-    history.push({ user, text, timestamp });
+    history.push({ sender, text, timestamp });
     
     // Keep only last 50 messages
     if (history.length > 50) {
@@ -143,23 +157,27 @@ function loadChatHistory() {
   try {
     const history = JSON.parse(localStorage.getItem('chatHistory') || '[]');
     
-    // Clear existing messages except welcome
-    if (chatBox && history.length === 0) {
-      addMessage("CephasAI", "Hello! I'm CephasGM AI. How can I help you today?");
-    } else {
-      history.forEach(msg => {
-        const div = document.createElement("div");
-        div.className = `message ${msg.user === "You" ? "user-message" : "ai-message"}`;
-        div.innerHTML = `
-          <div class="message-header">
-            <strong>${msg.user}:</strong>
-            <span class="timestamp">${msg.timestamp}</span>
-          </div>
-          <div class="message-content">${msg.text}</div>
-        `;
-        chatBox.appendChild(div);
-      });
-      chatBox.scrollTop = chatBox.scrollHeight;
+    // Clear existing messages
+    if (chatBox) {
+      chatBox.innerHTML = '';
+      
+      if (history.length === 0) {
+        addMessage("CephasGM AI", "Hello! I'm CephasGM AI. How can I help you today?");
+      } else {
+        history.forEach(msg => {
+          const msgDiv = document.createElement("div");
+          msgDiv.className = `message ${msg.sender === "You" ? "user-message" : "ai-message"}`;
+          msgDiv.innerHTML = `
+            <div class="message-header">
+              <b>${msg.sender}:</b>
+              <span class="timestamp">${msg.timestamp}</span>
+            </div>
+            <div class="message-content">${msg.text}</div>
+          `;
+          chatBox.appendChild(msgDiv);
+        });
+        chatBox.scrollTop = chatBox.scrollHeight;
+      }
     }
   } catch (error) {
     console.error("Error loading chat history:", error);
@@ -172,7 +190,7 @@ function clearChat() {
     localStorage.removeItem('chatHistory');
     if (chatBox) {
       chatBox.innerHTML = '';
-      addMessage("CephasAI", "Chat history cleared. How can I help you?");
+      addMessage("CephasGM AI", "Chat history cleared. How can I help you?");
     }
   }
 }
