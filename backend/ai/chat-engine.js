@@ -14,7 +14,7 @@ class ChatEngine {
       },
       'llama3.2': { 
         provider: 'ollama', 
-        model: 'llama3.2:3b',
+        model: 'llama3.2',
         description: 'Latest Llama 3.2 3B - Fast and efficient'
       },
       'mistral': { 
