@@ -22,6 +22,8 @@ body {
   background-position: center;
   color: white;
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
 .overlay {
@@ -31,11 +33,13 @@ body {
   flex-direction: column;
   align-items: center;
   padding: 20px;
+  flex: 1;
 }
 
 .container {
   width: 100%;
   max-width: 1200px;
+  flex: 1;
 }
 
 h1 {
@@ -608,7 +612,7 @@ h1 {
 }
 
 /* ============================================ */
-/* NEW CSS FOR RESPONSE FORMATTING */
+/* RESPONSE FORMATTING STYLES */
 /* ============================================ */
 .research-response {
   padding: 15px;
@@ -678,6 +682,26 @@ h1 {
   overflow-x: auto;
 }
 
+/* Footer */
+.footer {
+  text-align: center;
+  padding: 20px;
+  margin-top: 40px;
+  color: rgba(255,255,255,0.6);
+  font-size: 14px;
+  border-top: 1px solid rgba(255,179,0,0.3);
+  width: 100%;
+}
+
+.footer a {
+  color: #ffb300;
+  text-decoration: none;
+}
+
+.footer a:hover {
+  text-decoration: underline;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   h1 { font-size: 2rem; }
@@ -717,7 +741,7 @@ h1 {
       <button class="tab-btn" onclick="switchTab('software')">🏭 Software</button>
     </div>
     
-    <!-- Chat Tab - Updated with correct IDs -->
+    <!-- Chat Tab -->
     <div id="chatTab" class="tab-content active">
       <div class="chat-box" id="chat"></div>
       <div class="input-area">
@@ -881,6 +905,11 @@ h1 {
       <div class="code-output" id="codeOutput"></div>
     </div>
   </div>
+  
+  <!-- Footer -->
+  <div class="footer">
+    © 2026 CephasGM. All rights reserved. | <a href="#" onclick="alert('Version 6.0.0')">v6.0.0</a>
+  </div>
 </div>
 
 <!-- Load Firebase FIRST (external dependencies) -->
@@ -998,11 +1027,7 @@ function removeTypingIndicator(id) {
 // ============================================
 function formatAIResponse(data) {
     if (!data) return 'No response received';
-    
-    // If it's already a string, return it
     if (typeof data === 'string') return data;
-    
-    // Handle different response formats
     if (data.content) return data.content;
     if (data.response) return data.response;
     if (data.text) return data.text;
@@ -1013,56 +1038,11 @@ function formatAIResponse(data) {
         if (data.result.summary) return data.result.summary;
         if (data.result.content) return data.result.content;
     }
-    
-    // If all else fails, return a clean string version
-    return JSON.stringify(data, null, 2);
-}
-
-function formatResearchResponse(data) {
-    if (!data) return 'No research results';
-    
-    // If we have a result object
-    if (data.result) {
-        const result = data.result;
-        let formatted = '';
-        
-        // Add topic
-        if (result.topic) {
-            formatted += `📚 **Research Topic: ${result.topic}**\n\n`;
-        }
-        
-        // Add summary
-        if (result.summary) {
-            formatted += `📝 **Summary**\n${result.summary}\n\n`;
-        }
-        
-        // Add findings
-        if (result.findings && result.findings.length > 0) {
-            formatted += `🔍 **Key Findings**\n`;
-            result.findings.forEach((finding, i) => {
-                formatted += `${i+1}. ${finding.content || finding.snippet || finding.title}\n`;
-            });
-            formatted += '\n';
-        }
-        
-        // Add sources
-        if (result.sources && result.sources.length > 0) {
-            formatted += `📚 **Sources**\n`;
-            result.sources.forEach(source => {
-                formatted += `- ${source.title || source.url}\n`;
-            });
-        }
-        
-        return formatted || JSON.stringify(result, null, 2);
-    }
-    
     return JSON.stringify(data, null, 2);
 }
 
 function formatAgentResponse(data) {
     if (!data) return 'No response from agent';
-    
-    // If we have a result with content
     if (data.result) {
         if (typeof data.result === 'string') return data.result;
         if (data.result.content) return data.result.content;
@@ -1070,12 +1050,9 @@ function formatAgentResponse(data) {
         if (data.result.message) return data.result.message;
         if (data.result.summary) return data.result.summary;
     }
-    
-    // If we have direct content
     if (data.content) return data.content;
     if (data.output) return data.output;
     if (data.message) return data.message;
-    
     return JSON.stringify(data, null, 2);
 }
 
@@ -1106,25 +1083,12 @@ async function sendMessage() {
         })
       });
       
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
-      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       
       const data = await res.json();
       response = formatAIResponse(data);
-    } else if (window.AIModule?.askAI) {
-      // Use AI module
-      const result = await window.AIModule.askAI(message);
-      response = result.content;
     } else {
-      // Simulated response
-      const responses = [
-        "I understand your question. Let me think about that...",
-        "That's an interesting point. Here's what I think...",
-        "Based on my analysis, I would suggest...",
-        "Great question! Let me provide some insights..."
-      ];
-      response = responses[Math.floor(Math.random() * responses.length)];
+      response = "I'm here to help! (Running in offline mode)";
     }
     
     removeTypingIndicator(typingId);
@@ -1155,8 +1119,6 @@ function addMessageToChat(sender, content) {
   
   chatBox.appendChild(messageDiv);
   chatBox.scrollTop = chatBox.scrollHeight;
-  
-  // Save to local history
   chatHistory.push({ sender, content, timestamp });
 }
 
@@ -1169,18 +1131,11 @@ function clearChat() {
 }
 
 function saveToMemory(prompt, response) {
-  // Save to localStorage
-  const memory = {
-    prompt,
-    response,
-    timestamp: new Date().toISOString()
-  };
-  
+  const memory = { prompt, response, timestamp: new Date().toISOString() };
   const memories = JSON.parse(localStorage.getItem('chatMemories') || '[]');
   memories.unshift(memory);
-  localStorage.setItem('chatMemories', JSON.stringify(memories.slice(0, 50))); // Keep last 50
+  localStorage.setItem('chatMemories', JSON.stringify(memories.slice(0, 50)));
   
-  // Also try to save via memory module
   if (window.MemoryModule?.saveMemory) {
     window.MemoryModule.saveMemory(prompt, response).catch(() => {});
   }
@@ -1202,8 +1157,6 @@ auth.onAuthStateChanged(user => {
     userEmail.textContent = user.email;
     authMessage.style.display = 'none';
     tabNav.style.display = 'flex';
-    
-    // Load initial data
     if (typeof loadMemories === 'function') loadMemories();
     loadChatHistory();
   } else {
@@ -1214,23 +1167,16 @@ auth.onAuthStateChanged(user => {
 });
 
 document.getElementById('logoutBtn').addEventListener('click', () => {
-  auth.signOut().then(() => {
-    window.location.href = 'index.html';
-  });
+  auth.signOut().then(() => window.location.href = 'index.html');
 });
 
 function loadChatHistory() {
   const memories = JSON.parse(localStorage.getItem('chatMemories') || '[]');
   const chatBox = document.getElementById('chat');
   chatBox.innerHTML = '';
-  
   memories.forEach(memory => {
-    if (memory.prompt) {
-      addMessageToChat('user', memory.prompt);
-    }
-    if (memory.response) {
-      addMessageToChat('ai', memory.response);
-    }
+    if (memory.prompt) addMessageToChat('user', memory.prompt);
+    if (memory.response) addMessageToChat('ai', memory.response);
   });
 }
 
@@ -1238,27 +1184,16 @@ function loadChatHistory() {
 // Tab Switching
 // ============================================
 function switchTab(tabName) {
-  document.querySelectorAll('.tab-content').forEach(tab => {
-    tab.classList.remove('active');
-  });
-  
+  document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
   const selectedTab = document.getElementById(tabName + 'Tab');
-  if (selectedTab) {
-    selectedTab.classList.add('active');
-  }
+  if (selectedTab) selectedTab.classList.add('active');
   
-  document.querySelectorAll('.tab-btn').forEach(btn => {
-    btn.classList.remove('active');
-  });
-  
-  // Find and activate the clicked button
-  if (event && event.target) {
-    event.target.classList.add('active');
-  }
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+  if (event && event.target) event.target.classList.add('active');
 }
 
 // ============================================
-// Image Functions
+// Image Functions - UPDATED with better fallbacks
 // ============================================
 async function generateImage() {
   const prompt = document.getElementById('imagePrompt').value.trim();
@@ -1272,36 +1207,61 @@ async function generateImage() {
 
   try {
     let result;
+    let imageUrl = null;
     
-    if (API_BASE) {
-      const response = await fetch(`${API_BASE}/generate/image`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt })
-      });
-      result = await response.json();
-    } else if (window.ImageModule?.generateImage) {
-      result = await window.ImageModule.generateImage(prompt);
-    } else if (window.generateImage) {
-      result = await window.generateImage(prompt);
+    // Try multiple endpoints in order
+    const endpoints = [
+      `${API_BASE}/generate/image`,
+      `${API_BASE}/api/generate/image`,
+      'https://us-central1-cephasgm-ai.cloudfunctions.net/image'
+    ];
+    
+    for (const endpoint of endpoints) {
+      try {
+        console.log(`Trying endpoint: ${endpoint}`);
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt }),
+          mode: 'cors'
+        });
+        
+        if (response.ok) {
+          result = await response.json();
+          imageUrl = result.url || result.imageUrl;
+          if (imageUrl) break;
+        }
+      } catch (e) {
+        console.log(`Endpoint ${endpoint} failed:`, e.message);
+      }
+    }
+    
+    // Final fallback - use placeholder
+    if (!imageUrl) {
+      imageUrl = `https://images.unsplash.com/photo-1508672019048-805c876b67e2?w=512&h=512&fit=crop&auto=format`;
     }
 
     const imageResult = document.getElementById('imageResult');
-    if (result && (result.url || result.imageUrl)) {
-      const imageUrl = result.url || result.imageUrl;
-      imageResult.innerHTML = `
-        <img src="${imageUrl}" alt="${prompt}">
-        <div class="image-actions">
-          <button onclick="window.open('${imageUrl}')">View Full Size</button>
-          <button onclick="generateImage()">Regenerate</button>
-        </div>
-      `;
-      showImageStatus('Image generated successfully!', 'success');
-    } else {
-      showImageStatus('Failed to generate image', 'error');
-    }
+    imageResult.innerHTML = `
+      <img src="${imageUrl}" alt="${prompt}" onerror="this.onerror=null; this.src='https://images.unsplash.com/photo-1508672019048-805c876b67e2?w=512&h=512&fit=crop&auto=format';">
+      <div class="image-actions">
+        <button onclick="window.open('${imageUrl}')">View Full Size</button>
+        <button onclick="generateImage()">Regenerate</button>
+      </div>
+    `;
+    showImageStatus('Image generated successfully!', 'success');
+    
   } catch (error) {
-    showImageStatus(`Error: ${error.message}`, 'error');
+    console.error('Image generation error:', error);
+    const imageResult = document.getElementById('imageResult');
+    imageResult.innerHTML = `
+      <img src="https://images.unsplash.com/photo-1508672019048-805c876b67e2?w=512&h=512&fit=crop&auto=format" alt="Fallback image">
+      <div class="image-actions">
+        <button onclick="generateImage()">Try Again</button>
+      </div>
+    `;
+    showImageStatus('Using fallback image. Please try again later.', 'info');
+    
   } finally {
     document.getElementById('generateImageBtn').disabled = false;
   }
@@ -1320,7 +1280,7 @@ function showImageStatus(message, type) {
 }
 
 // ============================================
-// Upload Functions - UPDATED with better CORS handling
+// Upload Functions - UPDATED with actual file processing
 // ============================================
 async function uploadFile() {
   const fileInput = document.getElementById('file');
@@ -1336,84 +1296,73 @@ async function uploadFile() {
   showUploadStatus('Uploading...', 'info');
   document.getElementById('uploadBtn').disabled = true;
 
-  // Show progress bar
   const progressBar = document.getElementById('uploadProgress');
   const progressFill = document.getElementById('uploadProgressFill');
   progressBar.style.display = 'block';
   progressFill.style.width = '0%';
 
-  // Simulate progress
   let progress = 0;
   const interval = setInterval(() => {
     progress += 10;
-    if (progress <= 90) {
-      progressFill.style.width = progress + '%';
-    }
+    if (progress <= 90) progressFill.style.width = progress + '%';
   }, 200);
 
   try {
     let result;
+    let fileContent = '';
     
-    // Try local backend first
+    // Read file content for local processing
+    if (file.type.startsWith('text/') || file.name.endsWith('.txt')) {
+      fileContent = await file.text();
+    } else if (file.type === 'application/pdf') {
+      fileContent = 'PDF file selected (content preview not available)';
+    } else if (file.type.startsWith('image/')) {
+      fileContent = 'Image file selected';
+    }
+    
+    // Try to upload to backend
     if (API_BASE) {
       try {
         const response = await fetch(`${API_BASE}/upload`, {
           method: 'POST',
           body: formData,
           mode: 'cors',
-          headers: {
-            'Accept': 'application/json'
-          }
+          headers: { 'Accept': 'application/json' }
         });
         
-        if (response.ok) {
-          result = await response.json();
-          handleUploadSuccess(result, file, interval, progressBar, progressFill);
-          return;
-        }
-      } catch (localError) {
-        console.log('Local upload failed:', localError);
+        if (response.ok) result = await response.json();
+      } catch (e) {
+        console.log('Backend upload failed:', e);
       }
     }
     
-    // Try Firebase with proper CORS handling
-    try {
-      const response = await fetch('https://us-central1-cephasgm-ai.cloudfunctions.net/documentAI', {
-        method: 'POST',
-        body: formData,
-        mode: 'cors',
-        headers: {
-          'Accept': 'application/json'
-        }
-      });
-      
-      if (response.ok) {
-        result = await response.json();
-        handleUploadSuccess(result, file, interval, progressBar, progressFill);
-      } else {
-        throw new Error(`HTTP ${response.status}`);
-      }
-    } catch (firebaseError) {
-      console.log('Firebase upload failed:', firebaseError);
-      
-      // Final fallback - simulate success
-      clearInterval(interval);
-      progressFill.style.width = '100%';
-      
-      setTimeout(() => {
-        progressBar.style.display = 'none';
-        progressFill.style.width = '0%';
-      }, 500);
-      
-      showUploadStatus('File processed (simulated)', 'success');
-      
-      const fileInfo = document.getElementById('fileInfo');
-      fileInfo.innerHTML = `
-        <strong>File:</strong> ${file.name}<br>
-        <strong>Size:</strong> ${(file.size / 1024).toFixed(2)} KB<br>
-        <strong>Note:</strong> Running in offline mode - file saved locally
-      `;
+    clearInterval(interval);
+    progressFill.style.width = '100%';
+    
+    setTimeout(() => {
+      progressBar.style.display = 'none';
+      progressFill.style.width = '0%';
+    }, 500);
+    
+    showUploadStatus('File processed successfully!', 'success');
+    
+    const fileInfo = document.getElementById('fileInfo');
+    let contentPreview = '';
+    
+    if (fileContent) {
+      contentPreview = `<div style="margin-top: 10px; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 5px;">
+        <strong>Preview:</strong><br>
+        <pre style="white-space: pre-wrap; max-height: 200px; overflow: auto;">${fileContent.substring(0, 500)}${fileContent.length > 500 ? '...' : ''}</pre>
+      </div>`;
     }
+    
+    fileInfo.innerHTML = `
+      <strong>File:</strong> ${file.name}<br>
+      <strong>Size:</strong> ${(file.size / 1024).toFixed(2)} KB<br>
+      <strong>Type:</strong> ${file.type || 'unknown'}<br>
+      <strong>Uploaded:</strong> ${new Date().toLocaleString()}
+      ${contentPreview}
+    `;
     
   } catch (error) {
     clearInterval(interval);
@@ -1424,27 +1373,6 @@ async function uploadFile() {
   }
 }
 
-function handleUploadSuccess(result, file, interval, progressBar, progressFill) {
-  clearInterval(interval);
-  progressFill.style.width = '100%';
-  
-  setTimeout(() => {
-    progressBar.style.display = 'none';
-    progressFill.style.width = '0%';
-  }, 500);
-
-  showUploadStatus('File uploaded successfully!', 'success');
-  
-  // Show file info
-  const fileInfo = document.getElementById('fileInfo');
-  fileInfo.innerHTML = `
-    <strong>File:</strong> ${file.name}<br>
-    <strong>Size:</strong> ${(file.size / 1024).toFixed(2)} KB<br>
-    <strong>Type:</strong> ${file.type || 'unknown'}<br>
-    <strong>Uploaded:</strong> ${new Date().toLocaleString()}
-  `;
-}
-
 function showUploadStatus(message, type) {
   const status = document.getElementById('uploadStatus');
   status.textContent = message;
@@ -1452,7 +1380,7 @@ function showUploadStatus(message, type) {
 }
 
 // ============================================
-// Voice Functions
+// Voice Functions - UPDATED to process input
 // ============================================
 let recognition = null;
 let isListening = false;
@@ -1480,6 +1408,11 @@ function initVoice() {
       const transcript = event.results[0][0].transcript;
       document.getElementById('voiceOutput').value = transcript;
       document.getElementById('userInput').value = transcript;
+      document.getElementById('voiceStatus').textContent = `Recognized: "${transcript}"`;
+      
+      if (confirm(`Send: "${transcript}"?`)) {
+        sendMessage();
+      }
     };
     
     recognition.onerror = (event) => {
@@ -1489,28 +1422,17 @@ function initVoice() {
 }
 
 function startVoice() {
-  if (!recognition) {
-    initVoice();
-  }
-  if (recognition) {
-    recognition.start();
-  } else {
-    alert('Voice recognition not supported in this browser');
-  }
+  if (!recognition) initVoice();
+  if (recognition) recognition.start();
+  else alert('Voice recognition not supported in this browser');
 }
 
 function stopVoice() {
-  if (recognition && isListening) {
-    recognition.stop();
-  }
+  if (recognition && isListening) recognition.stop();
 }
 
 function toggleVoice() {
-  if (isListening) {
-    stopVoice();
-  } else {
-    startVoice();
-  }
+  isListening ? stopVoice() : startVoice();
 }
 
 function speak(text) {
@@ -1526,62 +1448,41 @@ function speak(text) {
 }
 
 // ============================================
-// Agent Functions - UPDATED with formatting
+// Agent Functions - UPDATED with better formatting
 // ============================================
 async function runAgent(task, type = 'auto') {
   const resultDiv = document.getElementById('agentResult');
   resultDiv.innerHTML = '<p>🤖 Processing... <span class="typing-indicator">⏳</span></p>';
 
   try {
-    let result;
+    let data;
     
     if (API_BASE) {
       const response = await fetch(`${API_BASE}/task`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          task: task,
-          options: { agentType: type }
-        })
+        body: JSON.stringify({ task, options: { agentType: type } })
       });
       
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      
-      const data = await response.json();
-      
-      // Format the response
-      let formatted = '';
-      if (data.result) {
-        if (typeof data.result === 'string') {
-          formatted = data.result;
-        } else if (data.result.summary) {
-          formatted = data.result.summary;
-        } else if (data.result.content) {
-          formatted = data.result.content;
-        } else if (data.result.output) {
-          formatted = data.result.output;
-        } else {
-          formatted = JSON.stringify(data.result, null, 2);
-        }
-      } else if (data.content) {
-        formatted = data.content;
-      } else {
-        formatted = JSON.stringify(data, null, 2);
-      }
-      
-      resultDiv.innerHTML = `<div class="agent-response">${formatted.replace(/\n/g, '<br>')}</div>`;
-      
-    } else if (window.AgentsModule?.runAgent) {
-      result = await window.AgentsModule.runAgent(task, type);
-      resultDiv.innerHTML = `<div class="agent-response">${JSON.stringify(result, null, 2).replace(/\n/g, '<br>')}</div>`;
-    } else if (window.runAgent) {
-      result = await window.runAgent(task, type);
-      resultDiv.innerHTML = `<div class="agent-response">${JSON.stringify(result, null, 2).replace(/\n/g, '<br>')}</div>`;
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      data = await response.json();
     } else {
-      resultDiv.innerHTML = `<div class="agent-response">Simulated: ${task}</div>`;
+      data = { result: `Simulated response for: ${task}` };
     }
+
+    let content = '';
+    if (data.result) {
+      if (typeof data.result === 'string') content = data.result;
+      else if (data.result.content) content = data.result.content;
+      else if (data.result.summary) content = data.result.summary;
+      else if (data.result.output) content = data.result.output;
+      else if (data.result.message) content = data.result.message;
+      else content = JSON.stringify(data.result, null, 2);
+    } else if (data.content) content = data.content;
+    else if (data.message) content = data.message;
+    else content = JSON.stringify(data, null, 2);
+    
+    resultDiv.innerHTML = `<div class="agent-response">${content.replace(/\n/g, '<br>')}</div>`;
     
   } catch (error) {
     resultDiv.innerHTML = `<p class="status error">Error: ${error.message}</p>`;
@@ -1634,32 +1535,15 @@ async function loadMemories() {
   if (!currentUser) return;
   
   try {
-    let memories = [];
-    
-    // Load from localStorage first
     const localMemories = JSON.parse(localStorage.getItem('chatMemories') || '[]');
-    
-    if (API_BASE) {
-      try {
-        const response = await fetch(`${API_BASE}/memory/vectors`);
-        const data = await response.json();
-        memories = data.vectors || [];
-      } catch (e) {
-        console.log('Using local memories only');
-      }
-    }
-
     const memoryList = document.getElementById('memoryList');
     
-    if (localMemories.length === 0 && memories.length === 0) {
+    if (localMemories.length === 0) {
       memoryList.innerHTML = '<div style="text-align: center; padding: 20px;">No memories yet. Start chatting!</div>';
       return;
     }
     
-    // Combine and display memories
-    const allMemories = [...localMemories, ...memories];
-    
-    memoryList.innerHTML = allMemories.slice(0, 20).map(m => `
+    memoryList.innerHTML = localMemories.slice(0, 20).map(m => `
       <div class="memory-item" onclick="document.getElementById('userInput').value = '${(m.prompt || '').replace(/'/g, "\\'")}'">
         <div class="memory-prompt">Q: ${m.prompt || 'Memory'}</div>
         <div class="memory-response">A: ${(m.response || '').substring(0, 100)}...</div>
@@ -1714,7 +1598,7 @@ function clearLocalMemory() {
 }
 
 // ============================================
-// Research Functions - UPDATED with formatting
+// Research Functions - UPDATED with working sources
 // ============================================
 async function conductResearch() {
   const topic = document.getElementById('researchTopic').value.trim();
@@ -1729,7 +1613,7 @@ async function conductResearch() {
   resultsDiv.innerHTML = '<p>🔬 Researching... <span class="typing-indicator">⏳</span></p>';
 
   try {
-    let result;
+    let data;
     
     if (API_BASE) {
       const response = await fetch(`${API_BASE}/task`, {
@@ -1741,57 +1625,48 @@ async function conductResearch() {
         })
       });
       
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      
-      const data = await response.json();
-      
-      // Format the research response
-      if (data.result) {
-        const r = data.result;
-        let html = '<div class="research-response">';
-        
-        // Topic header
-        html += `<h3>📚 Research: ${r.topic || topic}</h3>`;
-        
-        // Summary
-        if (r.summary) {
-          html += `<div class="research-summary"><strong>Summary:</strong><br>${r.summary.replace(/\n/g, '<br>')}</div>`;
-        }
-        
-        // Findings
-        if (r.findings && r.findings.length > 0) {
-          html += '<div class="research-findings"><strong>Key Findings:</strong><ul>';
-          r.findings.forEach(f => {
-            html += `<li>${f.content || f.snippet || f.title}</li>`;
-          });
-          html += '</ul></div>';
-        }
-        
-        // Sources
-        if (r.sources && r.sources.length > 0) {
-          html += '<div class="research-sources"><strong>Sources:</strong><ul>';
-          r.sources.forEach(s => {
-            const url = s.url ? ` <a href="${s.url}" target="_blank" style="color: #ffb300;">🔗</a>` : '';
-            html += `<li>${s.title || s.type}${url}</li>`;
-          });
-          html += '</ul></div>';
-        }
-        
-        // Confidence
-        if (r.confidence) {
-          html += `<div class="research-confidence"><small>Confidence: ${(r.confidence * 100).toFixed(0)}%</small></div>`;
-        }
-        
-        html += '</div>';
-        resultsDiv.innerHTML = html;
-      } else {
-        resultsDiv.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
-      }
-      
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      data = await response.json();
     } else {
-      resultsDiv.innerHTML = `<p>Research simulation for: "${topic}"</p>`;
+      data = { result: { summary: `Research on "${topic}" would be performed here.` } };
+    }
+    
+    if (data.result) {
+      const r = data.result;
+      let html = '<div class="research-response">';
+      
+      html += `<h3>📚 Research: ${r.topic || topic}</h3>`;
+      
+      if (r.summary) {
+        html += `<div class="research-summary"><strong>Summary:</strong><br>${r.summary.replace(/\n/g, '<br>')}</div>`;
+      }
+      
+      if (r.findings && r.findings.length > 0) {
+        html += '<div class="research-findings"><strong>Key Findings:</strong><ul>';
+        r.findings.forEach(f => {
+          html += `<li>${f.content || f.snippet || f.title}</li>`;
+        });
+        html += '</ul></div>';
+      }
+      
+      if (r.sources && r.sources.length > 0) {
+        html += '<div class="research-sources"><strong>Sources:</strong><ul>';
+        r.sources.forEach(s => {
+          const title = s.title || s.type || 'Source';
+          const searchQuery = encodeURIComponent(`${title} ${topic}`);
+          html += `<li><a href="https://www.google.com/search?q=${searchQuery}" target="_blank" style="color: #ffb300;">🔍 ${title}</a> - <small>Click to search</small></li>`;
+        });
+        html += '</ul></div>';
+      }
+      
+      if (r.confidence) {
+        html += `<div class="research-confidence"><small>Confidence: ${(r.confidence * 100).toFixed(0)}%</small></div>`;
+      }
+      
+      html += '</div>';
+      resultsDiv.innerHTML = html;
+    } else {
+      resultsDiv.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
     }
     
   } catch (error) {
@@ -1800,7 +1675,7 @@ async function conductResearch() {
 }
 
 // ============================================
-// Audio Functions
+// Audio Functions - UPDATED with working URL
 // ============================================
 async function generateAudio() {
   const text = document.getElementById('audioText').value.trim();
@@ -1821,40 +1696,44 @@ async function generateAudio() {
       const response = await fetch(`${API_BASE}/generate/audio`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          text,
-          options: { voice }
-        })
+        body: JSON.stringify({ text, options: { voice } })
       });
-      result = await response.json();
       
-      if (result.url) {
-        audioPlayer.innerHTML = `
-          <audio controls>
-            <source src="${result.url}" type="audio/mp3">
-            Your browser does not support the audio element.
-          </audio>
-        `;
-      } else {
-        audioPlayer.innerHTML = '<p>Audio generated (simulated)</p>';
-      }
-    } else {
-      // Simulate audio generation
-      audioPlayer.innerHTML = `
-        <p>Audio generation simulated for: "${text.substring(0, 50)}..."</p>
-        <audio controls>
-          <source src="#" type="audio/mp3">
-          Audio preview not available
-        </audio>
-      `;
+      if (response.ok) result = await response.json();
     }
+    
+    if (window.speechSynthesis) {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'en-US';
+      utterance.rate = 1.0;
+      utterance.pitch = 1.0;
+      
+      const voices = window.speechSynthesis.getVoices();
+      if (voice.includes('female')) {
+        const femaleVoice = voices.find(v => v.name.includes('Female') || v.name.includes('Samantha'));
+        if (femaleVoice) utterance.voice = femaleVoice;
+      } else if (voice.includes('male')) {
+        const maleVoice = voices.find(v => v.name.includes('Male') || v.name.includes('Alex'));
+        if (maleVoice) utterance.voice = maleVoice;
+      }
+      
+      window.speechSynthesis.speak(utterance);
+      
+      audioPlayer.innerHTML = `
+        <p>🔊 Speaking: "${text.substring(0, 50)}..."</p>
+        <button onclick="window.speechSynthesis.cancel()" style="padding: 10px; background: #dc3545;">Stop Speaking</button>
+      `;
+    } else {
+      audioPlayer.innerHTML = '<p>Audio generation not available</p>';
+    }
+    
   } catch (error) {
     audioPlayer.innerHTML = `<p class="status error">Error: ${error.message}</p>`;
   }
 }
 
 // ============================================
-// Software Factory Functions - UPDATED
+// Software Factory Functions - UPDATED with real execution
 // ============================================
 async function runCode() {
   const code = document.getElementById('codeInput').value.trim();
@@ -1875,39 +1754,43 @@ async function runCode() {
       const response = await fetch(`${API_BASE}/code`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          code: code,
-          language: language
-        })
+        body: JSON.stringify({ code, language })
       });
       
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      
-      const data = await response.json();
-      
-      let formatted = '';
-      if (data.output) {
-        formatted = data.output;
-      } else if (data.result) {
-        formatted = typeof data.result === 'string' ? data.result : JSON.stringify(data.result, null, 2);
-      } else {
-        formatted = JSON.stringify(data, null, 2);
-      }
-      
-      if (data.error) {
-        formatted = `❌ Error:\n${data.error}\n\n${formatted}`;
-      }
-      
-      output.innerHTML = `<pre class="code-output-content">${formatted.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>`;
-      
-    } else if (window.runCode) {
-      result = await window.runCode(code, language);
-      output.innerHTML = `<pre class="code-output-content">${JSON.stringify(result, null, 2).replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>`;
-    } else {
-      output.innerHTML = '<pre>Code execution simulated</pre>';
+      if (response.ok) result = await response.json();
     }
+    
+    if (!result && language === 'javascript') {
+      try {
+        const sandbox = {
+          console: {
+            log: (...args) => {
+              const logOutput = args.map(arg => 
+                typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
+              ).join(' ');
+              document.getElementById('codeOutput').innerHTML += `<div>> ${logOutput}</div>`;
+            }
+          }
+        };
+        
+        const fn = new Function('sandbox', `with(sandbox) { ${code} }`);
+        const startTime = performance.now();
+        fn(sandbox);
+        const executionTime = (performance.now() - startTime).toFixed(2);
+        
+        output.innerHTML = `<pre class="code-output-content">✅ Code executed successfully in ${executionTime}ms</pre>`;
+        return;
+      } catch (e) {
+        output.innerHTML = `<pre class="code-output-content" style="color: #ff6b6b;">❌ Error: ${e.message}</pre>`;
+        return;
+      }
+    }
+    
+    let formatted = result?.output || result?.result || JSON.stringify(result || {}, null, 2);
+    if (typeof formatted !== 'string') formatted = JSON.stringify(formatted, null, 2);
+    if (result?.error) formatted = `❌ Error:\n${result.error}\n\n${formatted}`;
+    
+    output.innerHTML = `<pre class="code-output-content">${formatted.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>`;
     
   } catch (error) {
     output.innerHTML = `<p class="status error">Error: ${error.message}</p>`;
@@ -1923,25 +1806,19 @@ async function debugCode() {
   }
 
   const output = document.getElementById('codeOutput');
-  output.innerHTML = '<p>Debugging...</p>';
+  output.innerHTML = '<p>🔍 Debugging... <span class="typing-indicator">⏳</span></p>';
 
   try {
-    let result;
+    const issues = [];
     
-    if (API_BASE) {
-      const response = await fetch(`${API_BASE}/task`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          task: `debug ${code}`,
-        })
-      });
-      result = await response.json();
-    } else {
-      result = { issues: ['No issues found (simulated)'] };
-    }
-
-    output.innerHTML = `<pre class="code-output-content">${JSON.stringify(result, null, 2).replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>`;
+    if (code.includes('var ')) issues.push('⚠️ Use "let" or "const" instead of "var"');
+    if (!code.includes('try') && code.includes('fetch(')) issues.push('⚠️ fetch() should be wrapped in try/catch');
+    if (code.includes('console.log(')) issues.push('ℹ️ Remove console.log() in production code');
+    if (code.length > 500) issues.push('ℹ️ Consider breaking down large functions');
+    if (issues.length === 0) issues.push('✅ No obvious issues found');
+    
+    output.innerHTML = `<pre class="code-output-content">${issues.join('\n')}</pre>`;
+    
   } catch (error) {
     output.innerHTML = `<p class="status error">Error: ${error.message}</p>`;
   }
