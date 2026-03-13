@@ -1,0 +1,14 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Allow public read access for now (you can restrict later)
+    match /{document=**} {
+      allow read, write: if true;
+    }
+    
+    // Or if you want authenticated only:
+    // match /{document=**} {
+    //   allow read, write: if request.auth != null;
+    // }
+  }
+}
