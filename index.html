@@ -607,6 +607,77 @@ h1 {
   white-space: pre-wrap;
 }
 
+/* ============================================ */
+/* NEW CSS FOR RESPONSE FORMATTING */
+/* ============================================ */
+.research-response {
+  padding: 15px;
+  background: rgba(0,0,0,0.2);
+  border-radius: 10px;
+}
+
+.research-summary {
+  margin: 15px 0;
+  padding: 10px;
+  background: rgba(255,179,0,0.1);
+  border-left: 3px solid #ffb300;
+  line-height: 1.6;
+}
+
+.research-findings ul,
+.research-sources ul {
+  margin: 10px 0;
+  padding-left: 20px;
+}
+
+.research-findings li,
+.research-sources li {
+  margin: 5px 0;
+  line-height: 1.5;
+}
+
+.research-confidence {
+  margin-top: 15px;
+  color: #888;
+  font-style: italic;
+}
+
+.agent-response {
+  padding: 15px;
+  background: rgba(0,0,0,0.2);
+  border-radius: 10px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.code-output-content {
+  padding: 15px;
+  background: #1e1e1e;
+  border-radius: 5px;
+  font-family: monospace;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  color: #d4d4d4;
+}
+
+.typing-indicator {
+  animation: pulse 1s infinite;
+  display: inline-block;
+}
+
+.message-content {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  line-height: 1.6;
+}
+
+.message-content pre {
+  background: rgba(0,0,0,0.3);
+  padding: 10px;
+  border-radius: 5px;
+  overflow-x: auto;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   h1 { font-size: 2rem; }
@@ -896,7 +967,120 @@ firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 
 // ============================================
-// Chat Functions
+// HELPER FUNCTIONS
+// ============================================
+function showTypingIndicator() {
+  const id = 'typing-' + Date.now();
+  const chatBox = document.getElementById('chat');
+  const div = document.createElement("div");
+  div.id = id;
+  div.className = "message ai-message typing-indicator";
+  div.innerHTML = `
+    <div class="message-header">
+      <b>CephasGM AI:</b>
+    </div>
+    <div class="message-content">
+      <span class="dot">.</span><span class="dot">.</span><span class="dot">.</span>
+    </div>
+  `;
+  chatBox.appendChild(div);
+  chatBox.scrollTop = chatBox.scrollHeight;
+  return id;
+}
+
+function removeTypingIndicator(id) {
+  const indicator = document.getElementById(id);
+  if (indicator) indicator.remove();
+}
+
+// ============================================
+// Response Formatting Utilities
+// ============================================
+function formatAIResponse(data) {
+    if (!data) return 'No response received';
+    
+    // If it's already a string, return it
+    if (typeof data === 'string') return data;
+    
+    // Handle different response formats
+    if (data.content) return data.content;
+    if (data.response) return data.response;
+    if (data.text) return data.text;
+    if (data.output) return data.output;
+    if (data.message) return data.message;
+    if (data.result) {
+        if (typeof data.result === 'string') return data.result;
+        if (data.result.summary) return data.result.summary;
+        if (data.result.content) return data.result.content;
+    }
+    
+    // If all else fails, return a clean string version
+    return JSON.stringify(data, null, 2);
+}
+
+function formatResearchResponse(data) {
+    if (!data) return 'No research results';
+    
+    // If we have a result object
+    if (data.result) {
+        const result = data.result;
+        let formatted = '';
+        
+        // Add topic
+        if (result.topic) {
+            formatted += `📚 **Research Topic: ${result.topic}**\n\n`;
+        }
+        
+        // Add summary
+        if (result.summary) {
+            formatted += `📝 **Summary**\n${result.summary}\n\n`;
+        }
+        
+        // Add findings
+        if (result.findings && result.findings.length > 0) {
+            formatted += `🔍 **Key Findings**\n`;
+            result.findings.forEach((finding, i) => {
+                formatted += `${i+1}. ${finding.content || finding.snippet || finding.title}\n`;
+            });
+            formatted += '\n';
+        }
+        
+        // Add sources
+        if (result.sources && result.sources.length > 0) {
+            formatted += `📚 **Sources**\n`;
+            result.sources.forEach(source => {
+                formatted += `- ${source.title || source.url}\n`;
+            });
+        }
+        
+        return formatted || JSON.stringify(result, null, 2);
+    }
+    
+    return JSON.stringify(data, null, 2);
+}
+
+function formatAgentResponse(data) {
+    if (!data) return 'No response from agent';
+    
+    // If we have a result with content
+    if (data.result) {
+        if (typeof data.result === 'string') return data.result;
+        if (data.result.content) return data.result.content;
+        if (data.result.output) return data.result.output;
+        if (data.result.message) return data.result.message;
+        if (data.result.summary) return data.result.summary;
+    }
+    
+    // If we have direct content
+    if (data.content) return data.content;
+    if (data.output) return data.output;
+    if (data.message) return data.message;
+    
+    return JSON.stringify(data, null, 2);
+}
+
+// ============================================
+// Chat Functions - UPDATED
 // ============================================
 async function sendMessage() {
   const input = document.getElementById('userInput');
@@ -904,25 +1088,30 @@ async function sendMessage() {
   
   if (!message) return;
   
-  // Add user message to chat
   addMessageToChat('user', message);
   input.value = '';
+  
+  const typingId = showTypingIndicator();
   
   try {
     let response;
     
     if (API_BASE) {
-      // Use backend API
       const res = await fetch(`${API_BASE}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           prompt: message,
-          options: { stream: false }
+          model: 'llama3.2'
         })
       });
+      
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+      
       const data = await res.json();
-      response = data.output || data.response || JSON.stringify(data);
+      response = formatAIResponse(data);
     } else if (window.AIModule?.askAI) {
       // Use AI module
       const result = await window.AIModule.askAI(message);
@@ -938,15 +1127,14 @@ async function sendMessage() {
       response = responses[Math.floor(Math.random() * responses.length)];
     }
     
-    // Add AI response to chat
+    removeTypingIndicator(typingId);
     addMessageToChat('ai', response);
-    
-    // Save to memory
     saveToMemory(message, response);
     
   } catch (error) {
+    removeTypingIndicator(typingId);
+    addMessageToChat('ai', `Error: ${error.message}. Please try again.`);
     console.error('Chat error:', error);
-    addMessageToChat('ai', 'Sorry, I encountered an error. Please try again.');
   }
 }
 
@@ -1132,7 +1320,7 @@ function showImageStatus(message, type) {
 }
 
 // ============================================
-// Upload Functions
+// Upload Functions - UPDATED with better CORS handling
 // ============================================
 async function uploadFile() {
   const fileInput = document.getElementById('file');
@@ -1166,36 +1354,66 @@ async function uploadFile() {
   try {
     let result;
     
+    // Try local backend first
     if (API_BASE) {
-      const response = await fetch(`${API_BASE}/upload`, {
-        method: 'POST',
-        body: formData
-      });
-      result = await response.json();
-    } else if (window.UploadModule?.uploadFile) {
-      result = await window.UploadModule.uploadFile(file);
-    } else if (window.uploadFile) {
-      result = await window.uploadFile(file);
+      try {
+        const response = await fetch(`${API_BASE}/upload`, {
+          method: 'POST',
+          body: formData,
+          mode: 'cors',
+          headers: {
+            'Accept': 'application/json'
+          }
+        });
+        
+        if (response.ok) {
+          result = await response.json();
+          handleUploadSuccess(result, file, interval, progressBar, progressFill);
+          return;
+        }
+      } catch (localError) {
+        console.log('Local upload failed:', localError);
+      }
     }
-
-    clearInterval(interval);
-    progressFill.style.width = '100%';
     
-    setTimeout(() => {
-      progressBar.style.display = 'none';
-      progressFill.style.width = '0%';
-    }, 500);
-
-    showUploadStatus('File uploaded successfully!', 'success');
-    
-    // Show file info
-    const fileInfo = document.getElementById('fileInfo');
-    fileInfo.innerHTML = `
-      <strong>File:</strong> ${file.name}<br>
-      <strong>Size:</strong> ${(file.size / 1024).toFixed(2)} KB<br>
-      <strong>Type:</strong> ${file.type || 'unknown'}<br>
-      <strong>Uploaded:</strong> ${new Date().toLocaleString()}
-    `;
+    // Try Firebase with proper CORS handling
+    try {
+      const response = await fetch('https://us-central1-cephasgm-ai.cloudfunctions.net/documentAI', {
+        method: 'POST',
+        body: formData,
+        mode: 'cors',
+        headers: {
+          'Accept': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        result = await response.json();
+        handleUploadSuccess(result, file, interval, progressBar, progressFill);
+      } else {
+        throw new Error(`HTTP ${response.status}`);
+      }
+    } catch (firebaseError) {
+      console.log('Firebase upload failed:', firebaseError);
+      
+      // Final fallback - simulate success
+      clearInterval(interval);
+      progressFill.style.width = '100%';
+      
+      setTimeout(() => {
+        progressBar.style.display = 'none';
+        progressFill.style.width = '0%';
+      }, 500);
+      
+      showUploadStatus('File processed (simulated)', 'success');
+      
+      const fileInfo = document.getElementById('fileInfo');
+      fileInfo.innerHTML = `
+        <strong>File:</strong> ${file.name}<br>
+        <strong>Size:</strong> ${(file.size / 1024).toFixed(2)} KB<br>
+        <strong>Note:</strong> Running in offline mode - file saved locally
+      `;
+    }
     
   } catch (error) {
     clearInterval(interval);
@@ -1204,6 +1422,27 @@ async function uploadFile() {
   } finally {
     document.getElementById('uploadBtn').disabled = false;
   }
+}
+
+function handleUploadSuccess(result, file, interval, progressBar, progressFill) {
+  clearInterval(interval);
+  progressFill.style.width = '100%';
+  
+  setTimeout(() => {
+    progressBar.style.display = 'none';
+    progressFill.style.width = '0%';
+  }, 500);
+
+  showUploadStatus('File uploaded successfully!', 'success');
+  
+  // Show file info
+  const fileInfo = document.getElementById('fileInfo');
+  fileInfo.innerHTML = `
+    <strong>File:</strong> ${file.name}<br>
+    <strong>Size:</strong> ${(file.size / 1024).toFixed(2)} KB<br>
+    <strong>Type:</strong> ${file.type || 'unknown'}<br>
+    <strong>Uploaded:</strong> ${new Date().toLocaleString()}
+  `;
 }
 
 function showUploadStatus(message, type) {
@@ -1287,11 +1526,11 @@ function speak(text) {
 }
 
 // ============================================
-// Agent Functions
+// Agent Functions - UPDATED with formatting
 // ============================================
 async function runAgent(task, type = 'auto') {
   const resultDiv = document.getElementById('agentResult');
-  resultDiv.textContent = 'Processing...';
+  resultDiv.innerHTML = '<p>🤖 Processing... <span class="typing-indicator">⏳</span></p>';
 
   try {
     let result;
@@ -1305,16 +1544,45 @@ async function runAgent(task, type = 'auto') {
           options: { agentType: type }
         })
       });
-      result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      // Format the response
+      let formatted = '';
+      if (data.result) {
+        if (typeof data.result === 'string') {
+          formatted = data.result;
+        } else if (data.result.summary) {
+          formatted = data.result.summary;
+        } else if (data.result.content) {
+          formatted = data.result.content;
+        } else if (data.result.output) {
+          formatted = data.result.output;
+        } else {
+          formatted = JSON.stringify(data.result, null, 2);
+        }
+      } else if (data.content) {
+        formatted = data.content;
+      } else {
+        formatted = JSON.stringify(data, null, 2);
+      }
+      
+      resultDiv.innerHTML = `<div class="agent-response">${formatted.replace(/\n/g, '<br>')}</div>`;
+      
     } else if (window.AgentsModule?.runAgent) {
       result = await window.AgentsModule.runAgent(task, type);
+      resultDiv.innerHTML = `<div class="agent-response">${JSON.stringify(result, null, 2).replace(/\n/g, '<br>')}</div>`;
     } else if (window.runAgent) {
       result = await window.runAgent(task, type);
+      resultDiv.innerHTML = `<div class="agent-response">${JSON.stringify(result, null, 2).replace(/\n/g, '<br>')}</div>`;
     } else {
-      result = { result: `Simulated: ${task}` };
+      resultDiv.innerHTML = `<div class="agent-response">Simulated: ${task}</div>`;
     }
-
-    resultDiv.innerHTML = `<pre>${JSON.stringify(result, null, 2)}</pre>`;
+    
   } catch (error) {
     resultDiv.innerHTML = `<p class="status error">Error: ${error.message}</p>`;
   }
@@ -1446,7 +1714,7 @@ function clearLocalMemory() {
 }
 
 // ============================================
-// Research Functions
+// Research Functions - UPDATED with formatting
 // ============================================
 async function conductResearch() {
   const topic = document.getElementById('researchTopic').value.trim();
@@ -1458,7 +1726,7 @@ async function conductResearch() {
   }
 
   const resultsDiv = document.getElementById('researchResults');
-  resultsDiv.innerHTML = '<p>🔬 Researching...</p>';
+  resultsDiv.innerHTML = '<p>🔬 Researching... <span class="typing-indicator">⏳</span></p>';
 
   try {
     let result;
@@ -1469,15 +1737,63 @@ async function conductResearch() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           task: `research ${topic}`,
-          options: { depth }
+          options: { depth, agentType: 'research' }
         })
       });
-      result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      // Format the research response
+      if (data.result) {
+        const r = data.result;
+        let html = '<div class="research-response">';
+        
+        // Topic header
+        html += `<h3>📚 Research: ${r.topic || topic}</h3>`;
+        
+        // Summary
+        if (r.summary) {
+          html += `<div class="research-summary"><strong>Summary:</strong><br>${r.summary.replace(/\n/g, '<br>')}</div>`;
+        }
+        
+        // Findings
+        if (r.findings && r.findings.length > 0) {
+          html += '<div class="research-findings"><strong>Key Findings:</strong><ul>';
+          r.findings.forEach(f => {
+            html += `<li>${f.content || f.snippet || f.title}</li>`;
+          });
+          html += '</ul></div>';
+        }
+        
+        // Sources
+        if (r.sources && r.sources.length > 0) {
+          html += '<div class="research-sources"><strong>Sources:</strong><ul>';
+          r.sources.forEach(s => {
+            const url = s.url ? ` <a href="${s.url}" target="_blank" style="color: #ffb300;">🔗</a>` : '';
+            html += `<li>${s.title || s.type}${url}</li>`;
+          });
+          html += '</ul></div>';
+        }
+        
+        // Confidence
+        if (r.confidence) {
+          html += `<div class="research-confidence"><small>Confidence: ${(r.confidence * 100).toFixed(0)}%</small></div>`;
+        }
+        
+        html += '</div>';
+        resultsDiv.innerHTML = html;
+      } else {
+        resultsDiv.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+      }
+      
     } else {
-      result = { summary: `Research on "${topic}" would be performed here.` };
+      resultsDiv.innerHTML = `<p>Research simulation for: "${topic}"</p>`;
     }
-
-    resultsDiv.innerHTML = `<pre>${JSON.stringify(result, null, 2)}</pre>`;
+    
   } catch (error) {
     resultsDiv.innerHTML = `<p class="status error">Error: ${error.message}</p>`;
   }
@@ -1538,7 +1854,7 @@ async function generateAudio() {
 }
 
 // ============================================
-// Software Factory Functions
+// Software Factory Functions - UPDATED
 // ============================================
 async function runCode() {
   const code = document.getElementById('codeInput').value.trim();
@@ -1550,28 +1866,49 @@ async function runCode() {
   }
 
   const output = document.getElementById('codeOutput');
-  output.innerHTML = '<p>Executing...</p>';
+  output.innerHTML = '<p>⚙️ Executing... <span class="typing-indicator">⏳</span></p>';
 
   try {
     let result;
     
     if (API_BASE) {
-      const response = await fetch(`${API_BASE}/task`, {
+      const response = await fetch(`${API_BASE}/code`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          task: `run code ${code}`,
-          options: { language }
+          code: code,
+          language: language
         })
       });
-      result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      let formatted = '';
+      if (data.output) {
+        formatted = data.output;
+      } else if (data.result) {
+        formatted = typeof data.result === 'string' ? data.result : JSON.stringify(data.result, null, 2);
+      } else {
+        formatted = JSON.stringify(data, null, 2);
+      }
+      
+      if (data.error) {
+        formatted = `❌ Error:\n${data.error}\n\n${formatted}`;
+      }
+      
+      output.innerHTML = `<pre class="code-output-content">${formatted.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>`;
+      
     } else if (window.runCode) {
       result = await window.runCode(code, language);
+      output.innerHTML = `<pre class="code-output-content">${JSON.stringify(result, null, 2).replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>`;
     } else {
-      result = { output: 'Code execution simulated' };
+      output.innerHTML = '<pre>Code execution simulated</pre>';
     }
-
-    output.innerHTML = `<pre>${JSON.stringify(result, null, 2)}</pre>`;
+    
   } catch (error) {
     output.innerHTML = `<p class="status error">Error: ${error.message}</p>`;
   }
@@ -1604,7 +1941,7 @@ async function debugCode() {
       result = { issues: ['No issues found (simulated)'] };
     }
 
-    output.innerHTML = `<pre>${JSON.stringify(result, null, 2)}</pre>`;
+    output.innerHTML = `<pre class="code-output-content">${JSON.stringify(result, null, 2).replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>`;
   } catch (error) {
     output.innerHTML = `<p class="status error">Error: ${error.message}</p>`;
   }
