@@ -57,7 +57,8 @@
     "express-session": "^1.17.3",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
-    "helmet-csp": "^3.3.0"
+    "helmet-csp": "^3.3.0",
+    "@supabase/supabase-js": "^2.39.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.1",
