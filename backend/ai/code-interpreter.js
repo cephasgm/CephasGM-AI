@@ -1,6 +1,6 @@
 /**
  * Code Interpreter - Safely executes code with AI assistance
- * Now integrated with Ollama Cloud for code generation and analysis
+ * Integrates OpenAI and Ollama for code generation and analysis
  */
 const vm = require('vm');
 const { exec } = require('child_process');
@@ -8,6 +8,7 @@ const util = require('util');
 const fs = require('fs').promises;
 const path = require('path');
 const os = require('os');
+const fetch = require('node-fetch');
 
 const execPromise = util.promisify(exec);
 
@@ -24,10 +25,12 @@ class CodeInterpreter {
     
     this.sandboxDir = path.join(os.tmpdir(), 'cephasgm-code-sandbox');
     this.ollamaApiKey = process.env.OLLAMA_API_KEY;
+    this.openaiApiKey = process.env.OPENAI_API_KEY;
     this.initSandbox();
     
-    console.log('💻 Code interpreter initialized with Ollama Cloud');
-    console.log(`   API Key: ${this.ollamaApiKey ? '✅ Configured' : '❌ Missing'}`);
+    console.log('💻 Code interpreter initialized');
+    console.log(`   OpenAI: ${this.openaiApiKey ? '✅ Configured' : '❌ Missing'}`);
+    console.log(`   Ollama: ${this.ollamaApiKey ? '✅ Configured' : '❌ Missing'}`);
   }
 
   /**
@@ -90,12 +93,12 @@ class CodeInterpreter {
       }
 
       // Analyze code with AI if requested
-      if (analyze && this.ollamaApiKey) {
+      if (analyze && (this.openaiApiKey || this.ollamaApiKey)) {
         aiAnalysis = await this.analyzeCode(code, language, result);
       }
 
       // Improve code with AI if requested
-      if (improve && this.ollamaApiKey && !result.error) {
+      if (improve && (this.openaiApiKey || this.ollamaApiKey) && !result.error) {
         const improved = await this.improveCode(code, language, result);
         if (improved.success) {
           result.improvedCode = improved.code;
@@ -135,47 +138,25 @@ class CodeInterpreter {
         maxTokens = 1000
       } = options;
 
-      if (!this.ollamaApiKey) {
-        throw new Error('OLLAMA_API_KEY not configured');
-      }
-
       console.log(`🤖 Generating ${language} code from: "${prompt.substring(0, 50)}..."`);
 
-      const systemPrompt = `You are an expert ${language} developer. Generate clean, efficient, and well-commented code. Include error handling and best practices.`;
-
-      const userPrompt = `Generate ${language} code${framework ? ` using ${framework}` : ''} for the following: ${prompt}`;
-
-      const response = await fetch('https://ollama.com/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.ollamaApiKey}`
-        },
-        body: JSON.stringify({
-          model: 'codellama:7b',
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userPrompt }
-          ],
-          options: {
-            temperature: 0.3,
-            num_predict: maxTokens
-          }
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error(`Ollama API error: ${await response.text()}`);
+      let result;
+      
+      // Prefer OpenAI for code generation, fallback to Ollama
+      if (this.openaiApiKey) {
+        result = await this.generateWithOpenAI(prompt, language, framework, maxTokens);
+      } else if (this.ollamaApiKey) {
+        result = await this.generateWithOllama(prompt, language, framework, maxTokens);
+      } else {
+        throw new Error('No API key configured for code generation');
       }
 
-      const data = await response.json();
-      
       return {
         success: true,
         language: language,
         framework: framework,
-        code: data.message.content,
-        provider: 'ollama-cloud',
+        code: result.code,
+        provider: result.provider,
         timestamp: new Date().toISOString()
       };
 
@@ -190,31 +171,117 @@ class CodeInterpreter {
   }
 
   /**
+   * Generate code using OpenAI
+   */
+  async generateWithOpenAI(prompt, language, framework, maxTokens) {
+    const systemPrompt = `You are an expert ${language} developer. Generate clean, efficient, and well-commented code. Include error handling and best practices.`;
+
+    const userPrompt = `Generate ${language} code${framework ? ` using ${framework}` : ''} for the following: ${prompt}`;
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.openaiApiKey}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-3.5-turbo',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+        temperature: 0.3,
+        max_tokens: maxTokens
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`OpenAI API error: ${await response.text()}`);
+    }
+
+    const data = await response.json();
+    return {
+      code: data.choices[0].message.content,
+      provider: 'openai'
+    };
+  }
+
+  /**
+   * Generate code using Ollama (CodeLlama)
+   */
+  async generateWithOllama(prompt, language, framework, maxTokens) {
+    const systemPrompt = `You are an expert ${language} developer. Generate clean, efficient, and well-commented code. Include error handling and best practices.`;
+
+    const userPrompt = `Generate ${language} code${framework ? ` using ${framework}` : ''} for the following: ${prompt}`;
+
+    const response = await fetch('https://ollama.com/api/chat', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.ollamaApiKey}`
+      },
+      body: JSON.stringify({
+        model: 'codellama:7b',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+        options: {
+          temperature: 0.3,
+          num_predict: maxTokens
+        }
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Ollama API error: ${await response.text()}`);
+    }
+
+    const data = await response.json();
+    return {
+      code: data.message.content,
+      provider: 'ollama'
+    };
+  }
+
+  /**
    * Analyze code for issues and improvements
    */
   async analyzeCode(code, language, executionResult) {
     try {
-      const response = await fetch('https://ollama.com/api/chat', {
+      const provider = this.openaiApiKey ? 'openai' : 'ollama';
+      const model = provider === 'openai' ? 'gpt-3.5-turbo' : 'codellama:7b';
+      const apiKey = provider === 'openai' ? this.openaiApiKey : this.ollamaApiKey;
+      const apiUrl = provider === 'openai' 
+        ? 'https://api.openai.com/v1/chat/completions'
+        : 'https://ollama.com/api/chat';
+
+      const messages = [
+        { role: 'system', content: 'You are a senior code reviewer. Analyze the code for bugs, security issues, performance problems, and style improvements.' },
+        { role: 'user', content: `Analyze this ${language} code:\n\n${code}\n\nExecution output: ${executionResult.output || 'none'}\nExecution error: ${executionResult.error || 'none'}` }
+      ];
+
+      const requestBody = provider === 'openai'
+        ? { model, messages, temperature: 0.2 }
+        : { model, messages, options: { temperature: 0.2 } };
+
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.ollamaApiKey}`
+          'Authorization': `Bearer ${apiKey}`
         },
-        body: JSON.stringify({
-          model: 'codellama:7b',
-          messages: [
-            { role: 'system', content: 'You are a senior code reviewer. Analyze the code for bugs, security issues, performance problems, and style improvements.' },
-            { role: 'user', content: `Analyze this ${language} code:\n\n${code}\n\nExecution output: ${executionResult.output || 'none'}\nExecution error: ${executionResult.error || 'none'}` }
-          ],
-          options: { temperature: 0.2 }
-        })
+        body: JSON.stringify(requestBody)
       });
 
       if (!response.ok) return null;
 
       const data = await response.json();
+      const analysis = provider === 'openai' ? data.choices[0].message.content : data.message.content;
+
       return {
-        analysis: data.message.content,
+        analysis,
+        provider,
         timestamp: new Date().toISOString()
       };
 
@@ -229,36 +296,48 @@ class CodeInterpreter {
    */
   async improveCode(code, language, executionResult) {
     try {
-      const response = await fetch('https://ollama.com/api/chat', {
+      const provider = this.openaiApiKey ? 'openai' : 'ollama';
+      const model = provider === 'openai' ? 'gpt-3.5-turbo' : 'codellama:7b';
+      const apiKey = provider === 'openai' ? this.openaiApiKey : this.ollamaApiKey;
+      const apiUrl = provider === 'openai' 
+        ? 'https://api.openai.com/v1/chat/completions'
+        : 'https://ollama.com/api/chat';
+
+      const messages = [
+        { role: 'system', content: 'You are a senior developer. Improve the provided code while maintaining its functionality.' },
+        { role: 'user', content: `Improve this ${language} code. Fix any issues and optimize it:\n\n${code}` }
+      ];
+
+      const requestBody = provider === 'openai'
+        ? { model, messages, temperature: 0.3 }
+        : { model, messages, options: { temperature: 0.3 } };
+
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.ollamaApiKey}`
+          'Authorization': `Bearer ${apiKey}`
         },
-        body: JSON.stringify({
-          model: 'codellama:7b',
-          messages: [
-            { role: 'system', content: 'You are a senior developer. Improve the provided code while maintaining its functionality.' },
-            { role: 'user', content: `Improve this ${language} code. Fix any issues and optimize it:\n\n${code}` }
-          ],
-          options: { temperature: 0.3 }
-        })
+        body: JSON.stringify(requestBody)
       });
 
       if (!response.ok) return { success: false };
 
       const data = await response.json();
-      
+      const improvedCode = provider === 'openai' ? data.choices[0].message.content : data.message.content;
+
       return {
         success: true,
-        code: data.message.content,
-        notes: 'Code improved by AI'
+        code: improvedCode,
+        notes: `Code improved by AI (${provider})`
       };
 
     } catch (error) {
       return { success: false };
     }
   }
+
+  // ... (rest of the file: runJavaScript, runPython, etc., unchanged from your original)
 
   /**
    * Run JavaScript code in sandbox
@@ -450,10 +529,10 @@ class CodeInterpreter {
    */
   getFallbackCode(prompt, language) {
     return `// Generated code for: ${prompt}
-// Note: This is a fallback response. Ollama Cloud API key required for AI-generated code.
+// Note: This is a fallback response. API key required for AI-generated code.
 
 function example() {
-  console.log("Please configure your Ollama API key to generate real code");
+  console.log("Please configure your OpenAI or Ollama API key to generate real code");
   return {
     success: false,
     message: "API key required",
