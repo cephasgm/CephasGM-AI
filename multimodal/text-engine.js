@@ -1,6 +1,6 @@
 /**
  * Multimodal Text Engine - Text generation and processing
- * Now fully integrated with Ollama Cloud for all text operations
+ * Integrates OpenAI and Ollama Cloud
  */
 const fetch = require('node-fetch');
 const EventEmitter = require('events');
@@ -10,11 +10,31 @@ class TextEngine extends EventEmitter {
     super();
     
     this.models = {
+      // OpenAI models
+      'gpt-4': { 
+        provider: 'openai', 
+        model: 'gpt-4',
+        context: 8192,
+        description: 'OpenAI GPT-4 - Most powerful'
+      },
+      'gpt-4-turbo': { 
+        provider: 'openai', 
+        model: 'gpt-4-turbo-preview',
+        context: 128000,
+        description: 'OpenAI GPT-4 Turbo - Fast and powerful'
+      },
+      'gpt-3.5-turbo': { 
+        provider: 'openai', 
+        model: 'gpt-3.5-turbo',
+        context: 16385,
+        description: 'OpenAI GPT-3.5 Turbo - Fast, efficient'
+      },
+      // Ollama models (fallback)
       'llama3.2': { 
         provider: 'ollama', 
         model: 'llama3.2:3b',
         context: 8192,
-        description: 'Meta Llama 3.2 3B - Fast, efficient, great for general use'
+        description: 'Meta Llama 3.2 3B - Fast, efficient'
       },
       'llama3': { 
         provider: 'ollama', 
@@ -26,7 +46,7 @@ class TextEngine extends EventEmitter {
         provider: 'ollama', 
         model: 'mistral:7b',
         context: 8192,
-        description: 'Mistral 7B - Excellent performance and reasoning'
+        description: 'Mistral 7B - Excellent performance'
       },
       'phi3': { 
         provider: 'ollama', 
@@ -34,23 +54,11 @@ class TextEngine extends EventEmitter {
         context: 4096,
         description: 'Phi-3 Mini - Small but powerful'
       },
-      'neural-chat': { 
-        provider: 'ollama', 
-        model: 'neural-chat:7b',
-        context: 8192,
-        description: 'Neural Chat - Optimized for conversations'
-      },
       'codellama': { 
         provider: 'ollama', 
         model: 'codellama:7b',
         context: 16384,
         description: 'Code Llama - Specialized for programming'
-      },
-      'dolphin-mixtral': { 
-        provider: 'ollama', 
-        model: 'dolphin-mixtral:8x7b',
-        context: 32768,
-        description: 'Dolphin Mixtral - Uncensored, creative'
       }
     };
     
@@ -63,9 +71,11 @@ class TextEngine extends EventEmitter {
     };
     
     this.ollamaApiKey = process.env.OLLAMA_API_KEY;
+    this.openaiApiKey = process.env.OPENAI_API_KEY;
     
-    console.log('📝 Text engine initialized with Ollama Cloud');
-    console.log(`   API Key: ${this.ollamaApiKey ? '✅ Configured' : '❌ Missing'}`);
+    console.log('📝 Text engine initialized');
+    console.log(`   OpenAI: ${this.openaiApiKey ? '✅ Configured' : '❌ Missing'}`);
+    console.log(`   Ollama: ${this.ollamaApiKey ? '✅ Configured' : '❌ Missing'}`);
     console.log(`   Models: ${Object.keys(this.models).length}`);
   }
 
@@ -74,7 +84,7 @@ class TextEngine extends EventEmitter {
    */
   async generate(prompt, options = {}) {
     const {
-      model = 'llama3.2',
+      model = 'gpt-3.5-turbo',
       temperature = 0.7,
       maxTokens = 1000,
       systemPrompt = 'You are CephasGM AI, an African-inspired artificial intelligence assistant helping users with technology, innovation, and African perspectives.',
@@ -101,9 +111,12 @@ class TextEngine extends EventEmitter {
 
     try {
       let result;
+      const modelConfig = this.models[model] || this.models['gpt-3.5-turbo'];
 
-      if (this.ollamaApiKey) {
-        result = await this.callOllamaCloud(prompt, model, temperature, maxTokens, systemPrompt, format);
+      if (modelConfig.provider === 'openai' && this.openaiApiKey) {
+        result = await this.callOpenAI(prompt, modelConfig.model, temperature, maxTokens, systemPrompt, format);
+      } else if (this.ollamaApiKey) {
+        result = await this.callOllama(prompt, model, temperature, maxTokens, systemPrompt, format);
       } else {
         result = await this.simulateGeneration(prompt, model);
       }
@@ -120,7 +133,7 @@ class TextEngine extends EventEmitter {
         requestId,
         text: result.text,
         model,
-        provider: this.ollamaApiKey ? 'ollama-cloud' : 'simulated',
+        provider: result.provider || 'unknown',
         usage: result.usage || { promptTokens: 50, completionTokens: 50, totalTokens: 100 },
         latency,
         timestamp: new Date().toISOString()
@@ -155,10 +168,53 @@ class TextEngine extends EventEmitter {
   }
 
   /**
+   * Call OpenAI API
+   */
+  async callOpenAI(prompt, model, temperature, maxTokens, systemPrompt, format) {
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: prompt }
+    ];
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.openaiApiKey}`
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        temperature,
+        max_tokens: maxTokens,
+        ...(format === 'json' ? { response_format: { type: 'json_object' } } : {})
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`OpenAI API error (${response.status}): ${errorText}`);
+    }
+
+    const data = await response.json();
+
+    return {
+      text: data.choices[0].message.content,
+      usage: {
+        promptTokens: data.usage.prompt_tokens,
+        completionTokens: data.usage.completion_tokens,
+        totalTokens: data.usage.total_tokens
+      },
+      provider: 'openai'
+    };
+  }
+
+  /**
    * Call Ollama Cloud API
    */
-  async callOllamaCloud(prompt, model, temperature, maxTokens, systemPrompt, format) {
-    const modelConfig = this.models[model] || this.models['llama3.2'];
+  async callOllama(prompt, modelKey, temperature, maxTokens, systemPrompt, format) {
+    const modelConfig = this.models[modelKey];
+    const model = modelConfig?.model || 'llama3.2:3b';
     
     const messages = [
       { role: 'system', content: systemPrompt },
@@ -166,7 +222,7 @@ class TextEngine extends EventEmitter {
     ];
 
     const requestBody = {
-      model: modelConfig.model,
+      model: model,
       messages: messages,
       stream: false,
       options: {
@@ -175,7 +231,6 @@ class TextEngine extends EventEmitter {
       }
     };
 
-    // Add JSON format if requested
     if (format === 'json') {
       requestBody.format = 'json';
     }
@@ -199,10 +254,11 @@ class TextEngine extends EventEmitter {
     return {
       text: data.message.content,
       usage: {
-        promptTokens: prompt.length / 4,
-        completionTokens: data.message.content.length / 4,
-        totalTokens: (prompt.length + data.message.content.length) / 4
-      }
+        promptTokens: Math.round(prompt.length / 4),
+        completionTokens: Math.round(data.message.content.length / 4),
+        totalTokens: Math.round((prompt.length + data.message.content.length) / 4)
+      },
+      provider: 'ollama'
     };
   }
 
@@ -272,7 +328,7 @@ class TextEngine extends EventEmitter {
     const prompt = `Summarize the following text in ${maxLength} words or less, capturing the key points:\n\n${text}`;
     
     const result = await this.generate(prompt, {
-      model: 'llama3.2',
+      model: 'gpt-3.5-turbo',
       temperature: 0.5,
       maxTokens: maxLength * 2,
       ...options
@@ -296,7 +352,7 @@ class TextEngine extends EventEmitter {
     const prompt = `Translate the following text to ${targetLanguage}. Maintain the original meaning, tone, and style:\n\n${text}`;
     
     const result = await this.generate(prompt, {
-      model: 'llama3.2',
+      model: 'gpt-3.5-turbo',
       temperature: 0.3,
       ...options
     });
@@ -318,7 +374,7 @@ class TextEngine extends EventEmitter {
     const prompt = `Analyze the sentiment of this text. Return a JSON with: sentiment (positive/negative/neutral), confidence (0-1), and key emotional words:\n\n${text}`;
     
     const result = await this.generate(prompt, {
-      model: 'llama3.2',
+      model: 'gpt-3.5-turbo',
       temperature: 0.2,
       format: 'json'
     });
@@ -355,7 +411,7 @@ class TextEngine extends EventEmitter {
     const prompt = `Extract the following information from the text: ${infoTypes.join(', ')}.\n\nReturn as a structured JSON object.\n\nText: ${text}`;
     
     const result = await this.generate(prompt, {
-      model: 'llama3.2',
+      model: 'gpt-3.5-turbo',
       temperature: 0.2,
       format: 'json'
     });
@@ -395,7 +451,7 @@ class TextEngine extends EventEmitter {
     };
 
     const result = await this.generate(prompt, {
-      model: 'llama3.2',
+      model: 'gpt-3.5-turbo',
       temperature: 0.8,
       systemPrompt: systemPrompts[genre] || systemPrompts.story,
       ...options
@@ -417,7 +473,7 @@ class TextEngine extends EventEmitter {
     const prompt = `Answer the question based on the provided context. Include relevant quotes from the context as sources.\n\nContext: ${context}\n\nQuestion: ${question}`;
     
     const result = await this.generate(prompt, {
-      model: 'llama3.2',
+      model: 'gpt-3.5-turbo',
       temperature: 0.4,
       maxTokens: 800
     });
@@ -438,11 +494,11 @@ class TextEngine extends EventEmitter {
     await this.simulateDelay(1000);
 
     const responses = [
-      `Based on your request about "${prompt.substring(0, 50)}", I can provide the following insights...\n\nThis is simulated text generation. To get real AI-generated content, add your Ollama Cloud API key to the environment variables.`,
+      `Based on your request about "${prompt.substring(0, 50)}", I can provide the following insights...\n\nThis is simulated text generation. To get real AI-generated content, add your OpenAI or Ollama API key to the environment variables.`,
       
-      `I understand you're asking about "${prompt.substring(0, 40)}". This relates to several important concepts in AI and technology.\n\nCurrently running in demo mode. Configure OLLAMA_API_KEY to get production-quality responses from models like ${model}.`,
+      `I understand you're asking about "${prompt.substring(0, 40)}". This relates to several important concepts in AI and technology.\n\nCurrently running in demo mode. Configure API keys to get production-quality responses.`,
       
-      `Thanks for your question. With Ollama Cloud configured, I could provide a detailed response using the ${model} model. For now, this is a placeholder response.\n\nTo enable full capabilities:\n1. Get an API key from ollama.com\n2. Add it to your Render environment\n3. Redeploy the application`
+      `Thanks for your question. With an API key configured, I could provide a detailed response using advanced models. For now, this is a placeholder.\n\nTo enable full capabilities:\n1. Get an API key from OpenAI or Ollama\n2. Add it to your Render environment\n3. Redeploy the application`
     ];
 
     return {
@@ -451,7 +507,8 @@ class TextEngine extends EventEmitter {
         promptTokens: Math.round(prompt.length / 4),
         completionTokens: 150,
         totalTokens: Math.round(prompt.length / 4) + 150
-      }
+      },
+      provider: 'simulated'
     };
   }
 
@@ -462,15 +519,15 @@ class TextEngine extends EventEmitter {
     if (isApiKeyError) {
       return `🔑 **API Key Required**
 
-To use the text generation engine with full AI capabilities, please configure your Ollama Cloud API key:
+To use the text generation engine with full AI capabilities, please configure your OpenAI or Ollama API key:
 
-1. Get your API key from https://ollama.com/account
-2. Add it to your Render environment variables as OLLAMA_API_KEY
+1. Get your API key from https://platform.openai.com/api-keys or https://ollama.com/account
+2. Add it to your Render environment variables as OPENAI_API_KEY or OLLAMA_API_KEY
 3. Redeploy the application
 
 **Your prompt was:** "${prompt.substring(0, 100)}..."
 
-Once configured, you'll have access to multiple models including Llama 3.2, Mistral, and CodeLlama.`;
+Once configured, you'll have access to multiple powerful models.`;
     }
 
     return `I apologize, but I encountered an error processing your request about "${prompt.substring(0, 100)}". Please try again or check your API configuration.`;
@@ -479,7 +536,7 @@ Once configured, you'll have access to multiple models including Llama 3.2, Mist
   /**
    * Compare responses from different models
    */
-  async compareModels(prompt, models = ['llama3.2', 'mistral', 'phi3']) {
+  async compareModels(prompt, models = ['gpt-3.5-turbo', 'llama3.2', 'mistral']) {
     const results = [];
 
     for (const model of models) {
@@ -488,7 +545,8 @@ Once configured, you'll have access to multiple models including Llama 3.2, Mist
         model,
         response: result.text,
         latency: result.latency,
-        success: result.success
+        success: result.success,
+        provider: result.provider
       });
     }
 
@@ -510,7 +568,9 @@ Once configured, you'll have access to multiple models including Llama 3.2, Mist
       provider: info.provider,
       modelName: info.model,
       contextSize: info.context,
-      description: info.description
+      description: info.description,
+      available: (info.provider === 'openai' && this.openaiApiKey) || 
+                 (info.provider === 'ollama' && this.ollamaApiKey) || false
     }));
   }
 
@@ -525,7 +585,10 @@ Once configured, you'll have access to multiple models including Llama 3.2, Mist
         : '0ms',
       cacheSize: this.cache.size,
       modelsAvailable: Object.keys(this.models).length,
-      apiKeyConfigured: !!this.ollamaApiKey
+      apiKeyConfigured: {
+        openai: !!this.openaiApiKey,
+        ollama: !!this.ollamaApiKey
+      }
     };
   }
 
