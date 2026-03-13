@@ -1,6 +1,6 @@
 /**
  * Multimodal Video Engine - Video generation and processing with AI
- * Now integrated with Ollama Cloud for script generation, scene planning, and analysis
+ * Currently simulated – integrate with RunwayML or Replicate when keys are available
  */
 const EventEmitter = require('events');
 const fs = require('fs').promises;
@@ -35,6 +35,12 @@ class VideoEngine extends EventEmitter {
         models: ['haiper-1'],
         apiUrl: 'https://api.haiper.ai/v1/video',
         pricePerSecond: 0.02
+      },
+      'replicate': {
+        name: 'Replicate',
+        models: ['stability-ai/stable-video-diffusion'],
+        apiUrl: 'https://api.replicate.com/v1/predictions',
+        pricePerSecond: 0.02
       }
     };
     
@@ -50,11 +56,14 @@ class VideoEngine extends EventEmitter {
     this.generated = [];
     this.outputDir = path.join(__dirname, '../generated-videos');
     this.ollamaApiKey = process.env.OLLAMA_API_KEY;
+    this.replicateApiToken = process.env.REPLICATE_API_TOKEN;
+    this.runwayApiKey = process.env.RUNWAYML_KEY;
     
     this.initOutputDir();
     
-    console.log('🎬 Video engine initialized with Ollama Cloud');
-    console.log(`   API Key: ${this.ollamaApiKey ? '✅ Configured' : '❌ Missing'}`);
+    console.log('🎬 Video engine initialized');
+    console.log(`   Replicate: ${this.replicateApiToken ? '✅ Configured' : '❌ Missing'}`);
+    console.log(`   RunwayML: ${this.runwayApiKey ? '✅ Configured' : '❌ Missing'}`);
     console.log(`   Providers: ${Object.keys(this.providers).length}`);
     console.log(`   Resolutions: ${this.resolutions.length}`);
   }
@@ -109,7 +118,8 @@ class VideoEngine extends EventEmitter {
         }
       }
 
-      // Generate video (simulated)
+      // Generate video – currently simulated
+      // To use a real API, add the appropriate branch here (e.g., Replicate, RunwayML)
       const result = await this.generateVideo(enhancedPrompt, provider, model, duration, resolution, fps);
 
       const videoData = {
@@ -662,7 +672,11 @@ class VideoEngine extends EventEmitter {
       generatedCount: this.generated.length,
       lastGenerated: this.generated[this.generated.length - 1]?.timestamp,
       providers: Object.keys(this.providers),
-      apiKeyConfigured: !!this.ollamaApiKey
+      apiKeyConfigured: {
+        replicate: !!this.replicateApiToken,
+        runway: !!this.runwayApiKey,
+        ollama: !!this.ollamaApiKey
+      }
     };
   }
 
