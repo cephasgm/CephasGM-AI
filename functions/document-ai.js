@@ -1,6 +1,10 @@
 const functions = require("firebase-functions");
 const pdfParse = require("pdf-parse");
 const Busboy = require("busboy");
+const fetch = require('node-fetch');
+
+const openaiApiKey = process.env.OPENAI_API_KEY;
+const ollamaApiKey = process.env.OLLAMA_API_KEY;
 
 /**
  * Document AI - Analyze PDFs and documents
@@ -78,7 +82,7 @@ exports.documentAI = functions.https.onRequest(async (req, res) => {
             pageCount: pdfData.numpages,
             info: pdfData.info,
             metadata: pdfData.metadata,
-            text: pdfData.text.substring(0, 2000) + (pdfData.text.length > 2000 ? "..." : ""),
+            text: pdfData.text.substring(0, 5000) + (pdfData.text.length > 5000 ? "..." : ""),
             wordCount: pdfData.text.split(/\s+/).length,
             characterCount: pdfData.text.length
           };
@@ -88,7 +92,7 @@ exports.documentAI = functions.https.onRequest(async (req, res) => {
           result = {
             type: "text",
             fileName: fileName,
-            text: text.substring(0, 2000) + (text.length > 2000 ? "..." : ""),
+            text: text.substring(0, 5000) + (text.length > 5000 ? "..." : ""),
             wordCount: text.split(/\s+/).length,
             characterCount: text.length,
             lineCount: text.split('\n').length
@@ -104,10 +108,10 @@ exports.documentAI = functions.https.onRequest(async (req, res) => {
           };
         }
 
-        // Generate summary if requested
+        // Generate AI summary if text is available and summary requested
         let summary = "";
-        if (fields.summary === "true" && result.text) {
-          summary = result.text.substring(0, 500) + "...";
+        if (fields.summary !== "false" && result.text && result.text.length > 100) {
+          summary = await generateSummary(result.text, result.type);
         }
 
         res.json({
@@ -137,3 +141,71 @@ exports.documentAI = functions.https.onRequest(async (req, res) => {
     });
   }
 });
+
+/**
+ * Generate summary using OpenAI or Ollama
+ */
+async function generateSummary(text, docType) {
+  const prompt = `Summarize the following ${docType} document in 3-5 sentences, highlighting the main points:\n\n${text}`;
+
+  // Prefer OpenAI
+  if (openaiApiKey) {
+    try {
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${openaiApiKey}`
+        },
+        body: JSON.stringify({
+          model: 'gpt-3.5-turbo',
+          messages: [
+            { role: 'system', content: 'You are a helpful assistant that summarizes documents.' },
+            { role: 'user', content: prompt }
+          ],
+          temperature: 0.5,
+          max_tokens: 200
+        })
+      });
+      if (response.ok) {
+        const data = await response.json();
+        return data.choices[0].message.content;
+      }
+    } catch (e) {
+      console.warn('OpenAI summary failed, falling back to Ollama', e);
+    }
+  }
+
+  // Fallback to Ollama
+  if (ollamaApiKey) {
+    try {
+      const response = await fetch('https://ollama.com/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${ollamaApiKey}`
+        },
+        body: JSON.stringify({
+          model: 'llama3.2:3b',
+          messages: [
+            { role: 'system', content: 'You are a helpful assistant that summarizes documents.' },
+            { role: 'user', content: prompt }
+          ],
+          options: {
+            temperature: 0.5,
+            num_predict: 200
+          }
+        })
+      });
+      if (response.ok) {
+        const data = await response.json();
+        return data.message.content;
+      }
+    } catch (e) {
+      console.warn('Ollama summary failed', e);
+    }
+  }
+
+  // Last resort: simple truncation
+  return text.substring(0, 300) + "...";
+}
