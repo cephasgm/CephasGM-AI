@@ -1,6 +1,6 @@
 /**
  * Model Host - Manages AI model hosting and inference with Ollama Cloud
- * Updated to use Ollama Cloud API for all model operations
+ * Updated to use correct Ollama Cloud API endpoints
  */
 const EventEmitter = require('events');
 const { checkGpuAvailability } = require('../utils/gpu-check');
@@ -71,7 +71,7 @@ class ModelHost extends EventEmitter {
     this.modelProcesses = new Map();
     this.gpuAvailable = false;
     this.ollamaApiKey = process.env.OLLAMA_API_KEY;
-    this.ollamaHost = 'https://ollama.com';
+    this.ollamaHost = 'https://api.ollama.com'; // Correct API base
     
     // Initialize
     this.initialize();
@@ -106,23 +106,26 @@ class ModelHost extends EventEmitter {
   }
 
   /**
-   * Test Ollama Cloud connection
+   * Test Ollama Cloud connection using correct endpoint
    */
   async testConnection() {
     try {
-      const response = await fetch('https://ollama.com/api/models', {
+      const endpoint = `${this.ollamaHost}/api/tags`;
+      const response = await fetch(endpoint, {
         headers: {
-          'Authorization': `Bearer ${this.ollamaApiKey}`
+          'Authorization': `Bearer ${this.ollamaApiKey}`,
+          'Accept': 'application/json'
         }
       });
       
       if (response.ok) {
         console.log('✅ Ollama Cloud connection verified');
       } else {
-        console.log('⚠️  Ollama Cloud connection failed - check API key');
+        const errorText = await response.text();
+        console.log(`⚠️ Ollama Cloud connection failed: ${response.status} - ${errorText}`);
       }
     } catch (error) {
-      console.log('⚠️  Ollama Cloud connection error:', error.message);
+      console.log('⚠️ Ollama Cloud connection error:', error.message);
     }
   }
 
@@ -176,24 +179,27 @@ class ModelHost extends EventEmitter {
   }
 
   /**
-   * Verify cloud model availability
+   * Verify cloud model availability using /api/tags
    */
   async verifyCloudModel(modelName) {
     try {
-      const response = await fetch('https://ollama.com/api/models', {
+      const endpoint = `${this.ollamaHost}/api/tags`;
+      const response = await fetch(endpoint, {
         headers: {
-          'Authorization': `Bearer ${this.ollamaApiKey}`
+          'Authorization': `Bearer ${this.ollamaApiKey}`,
+          'Accept': 'application/json'
         }
       });
       
       if (response.ok) {
         const data = await response.json();
-        return data.models?.some(m => m.name === modelName) || true;
+        // data.models is an array of objects with 'name' property
+        return data.models?.some(m => m.name === modelName) || false;
       }
     } catch (error) {
       // Ignore verification errors
     }
-    return true; // Assume available
+    return true; // Assume available if verification fails
   }
 
   /**
@@ -273,7 +279,7 @@ class ModelHost extends EventEmitter {
   }
 
   /**
-   * Cloud inference with Ollama
+   * Cloud inference with Ollama (using api.ollama.com)
    */
   async cloudInference(model, input, options) {
     const startTime = Date.now();
@@ -294,7 +300,7 @@ class ModelHost extends EventEmitter {
         { role: 'user', content: input }
       ];
 
-      const response = await fetch('https://ollama.com/api/chat', {
+      const response = await fetch(`${this.ollamaHost}/api/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -331,7 +337,7 @@ class ModelHost extends EventEmitter {
   }
 
   /**
-   * Embedding inference for vector search
+   * Embedding inference for vector search (using api.ollama.com)
    */
   async embeddingInference(model, input, options) {
     const startTime = Date.now();
@@ -341,7 +347,7 @@ class ModelHost extends EventEmitter {
     }
 
     try {
-      const response = await fetch('https://ollama.com/api/embeddings', {
+      const response = await fetch(`${this.ollamaHost}/api/embeddings`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
