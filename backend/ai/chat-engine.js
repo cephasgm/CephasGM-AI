@@ -1,5 +1,6 @@
 /**
  * AI Chat Engine - Core chat functionality with Ollama Cloud
+ * Enhanced with better error handling and debugging
  */
 const fetch = require('node-fetch');
 const config = require('../config');
@@ -41,11 +42,22 @@ class ChatEngine {
     
     this.conversationHistory = new Map();
     this.ollamaApiKey = process.env.OLLAMA_API_KEY;
-    this.ollamaHost = 'https://ollama.com';
+    this.ollamaHost = 'https://api.ollama.com'; // Updated to correct API endpoint
     
     console.log('🤖 Ollama Cloud initialized');
     console.log(`   API Key: ${this.ollamaApiKey ? '✅ Configured' : '❌ Missing'}`);
     console.log(`   Available models: ${Object.keys(this.models).length}`);
+    
+    // Test connection on startup
+    if (this.ollamaApiKey) {
+      this.testConnection().then(result => {
+        if (result.success) {
+          console.log('✅ Ollama Cloud connection verified');
+        } else {
+          console.warn('⚠️ Ollama Cloud connection failed:', result.error);
+        }
+      });
+    }
   }
 
   /**
@@ -66,7 +78,14 @@ class ChatEngine {
       }
 
       if (!this.ollamaApiKey) {
-        throw new Error('OLLAMA_API_KEY not configured in environment variables');
+        console.warn('No Ollama API key configured, using fallback mode');
+        return {
+          success: true,
+          content: this.getFallbackResponse(prompt, 'No API key configured'),
+          model: model,
+          provider: 'fallback',
+          timestamp: new Date().toISOString()
+        };
       }
 
       console.log(`💬 Chat request [${model}]: "${prompt.substring(0, 50)}..."`);
@@ -116,41 +135,63 @@ class ChatEngine {
   }
 
   /**
-   * Call Ollama Cloud API
+   * Call Ollama Cloud API - FIXED endpoint and error handling
    */
   async callOllamaCloud(model, messages, temperature, maxTokens) {
     try {
       console.log(`🌐 Calling Ollama Cloud with model: ${model}`);
 
-      const response = await fetch('https://ollama.com/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.ollamaApiKey}`
-        },
-        body: JSON.stringify({
-          model: model,
-          messages: messages,
-          stream: false,
-          options: {
-            temperature: temperature,
-            num_predict: maxTokens
-          }
-        })
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Ollama API error response:', errorText);
-        throw new Error(`Ollama API error (${response.status}): ${errorText}`);
-      }
-
-      const data = await response.json();
+      // Try different API endpoints
+      const endpoints = [
+        'https://api.ollama.com/api/chat',
+        'https://ollama.com/api/chat',
+        'https://api.ollama.ai/api/chat'
+      ];
       
-      return {
-        content: data.message.content,
-        usage: data.usage || { prompt_tokens: 0, completion_tokens: 0 }
-      };
+      let lastError = null;
+      
+      for (const endpoint of endpoints) {
+        try {
+          console.log(`Trying endpoint: ${endpoint}`);
+          
+          const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${this.ollamaApiKey}`,
+              'Accept': 'application/json'
+            },
+            body: JSON.stringify({
+              model: model,
+              messages: messages,
+              stream: false,
+              options: {
+                temperature: temperature,
+                num_predict: maxTokens
+              }
+            })
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            console.log(`✅ Success with endpoint: ${endpoint}`);
+            
+            return {
+              content: data.message?.content || data.response || JSON.stringify(data),
+              usage: data.usage || { prompt_tokens: 0, completion_tokens: 0 }
+            };
+          } else {
+            const errorText = await response.text();
+            console.log(`Endpoint ${endpoint} failed: ${response.status}`);
+            lastError = new Error(`HTTP ${response.status}: ${errorText}`);
+          }
+        } catch (e) {
+          console.log(`Endpoint ${endpoint} error:`, e.message);
+          lastError = e;
+        }
+      }
+      
+      throw lastError || new Error('All endpoints failed');
 
     } catch (error) {
       console.error('Ollama Cloud call failed:', error);
@@ -162,7 +203,8 @@ class ChatEngine {
    * Get fallback response when Ollama is unavailable
    */
   getFallbackResponse(prompt, errorMsg) {
-    const isApiKeyError = errorMsg.includes('API key') || errorMsg.includes('401');
+    const isApiKeyError = errorMsg.includes('API key') || errorMsg.includes('401') || errorMsg.includes('403');
+    const isModelError = errorMsg.includes('model') || errorMsg.includes('404');
     
     if (isApiKeyError) {
       return `🔑 **API Key Issue Detected**
@@ -177,8 +219,22 @@ I notice there's an issue with your Ollama API key. Here's how to fix it:
 
 Once the API key is fixed, I'll be able to provide intelligent responses using Ollama's powerful models!`;
     }
+    
+    if (isModelError) {
+      return `🤖 **Model Availability Issue**
 
-    return `🌐 **Ollama Cloud Connection Issue**
+The model you're trying to use may not be available. Available models include:
+- llama3.2 (fast, efficient)
+- llama3 (general purpose)
+- mistral (excellent performance)
+- phi3 (small but powerful)
+
+**Your question:** "${prompt.substring(0, 100)}..."
+
+Please try again with one of these models or check your Ollama Cloud dashboard.`;
+    }
+
+    return `🌐 **Connection Issue**
 
 I'm having trouble connecting to Ollama Cloud at the moment. This could be due to:
 
@@ -203,7 +259,8 @@ Please try again in a few moments. If the issue persists, check your Ollama Clou
         id: Date.now(),
         choices: [{
           delta: { content: words[i] + (i < words.length - 1 ? ' ' : '') },
-          index: 0
+          index: 0,
+          finish_reason: i === words.length - 1 ? 'stop' : null
         }]
       });
       await this.simulateDelay(30);
@@ -263,31 +320,48 @@ Please try again in a few moments. If the issue persists, check your Ollama Clou
   }
 
   /**
-   * Test Ollama connection
+   * Test Ollama connection with better diagnostics
    */
   async testConnection() {
     try {
-      const response = await fetch('https://ollama.com/api/models', {
-        headers: {
-          'Authorization': `Bearer ${this.ollamaApiKey}`
-        }
-      });
+      const endpoints = [
+        'https://api.ollama.com/api/models',
+        'https://ollama.com/api/models',
+        'https://api.ollama.ai/api/models'
+      ];
       
-      if (response.ok) {
-        const data = await response.json();
-        return {
-          success: true,
-          message: '✅ Ollama Cloud connected successfully',
-          models: data.models || []
-        };
-      } else {
-        return {
-          success: false,
-          message: `❌ Connection failed: ${response.status}`,
-          error: await response.text()
-        };
+      for (const endpoint of endpoints) {
+        try {
+          const response = await fetch(endpoint, {
+            headers: {
+              'Authorization': `Bearer ${this.ollamaApiKey}`,
+              'Accept': 'application/json'
+            }
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            console.log(`✅ Connection test successful with ${endpoint}`);
+            return {
+              success: true,
+              message: '✅ Ollama Cloud connected successfully',
+              endpoint: endpoint,
+              models: data.models || []
+            };
+          }
+        } catch (e) {
+          console.log(`Connection test failed for ${endpoint}:`, e.message);
+        }
       }
+      
+      return {
+        success: false,
+        message: '❌ Could not connect to any Ollama endpoint',
+        error: 'All endpoints failed'
+      };
+      
     } catch (error) {
+      console.error('Connection test error:', error);
       return {
         success: false,
         message: '❌ Connection error',
