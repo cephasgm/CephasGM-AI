@@ -1,273 +1,205 @@
 /**
- * Vector Database - Store and search vector embeddings
- * Supports multiple backends and similarity search
+ * Vector Database - Store and search vector embeddings using Supabase (pgvector)
  */
+const { createClient } = require('@supabase/supabase-js');
 const EventEmitter = require('events');
-const fs = require('fs').promises;
-const path = require('path');
+
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+    console.error('Missing SUPABASE_URL or SUPABASE_KEY environment variables');
+    process.exit(1);
+}
+
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 class VectorDatabase extends EventEmitter {
-  constructor() {
-    super();
-    
-    this.vectors = [];
-    this.index = new Map();
-    this.storagePath = path.join(__dirname, '../vectors.json');
-    
-    this.load();
-    
-    console.log('🧠 Vector database initialized');
-  }
-
-  /**
-   * Add vector to database
-   */
-  add(vector, metadata = {}) {
-    const id = this.generateId();
-
-    const entry = {
-      id,
-      vector: vector.values || vector,
-      metadata: {
-        ...metadata,
-        addedAt: new Date().toISOString()
-      }
-    };
-
-    this.vectors.push(entry);
-    this.index.set(id, this.vectors.length - 1);
-
-    this.emit('vectorAdded', { id, size: this.vectors.length });
-
-    this.save();
-
-    return {
-      success: true,
-      id,
-      position: this.vectors.length - 1
-    };
-  }
-
-  /**
-   * Add multiple vectors
-   */
-  addMany(vectors) {
-    const results = [];
-
-    for (const v of vectors) {
-      results.push(this.add(v.vector, v.metadata));
+    constructor() {
+        super();
+        this.tableName = 'vectors';
+        console.log('🧠 Vector database initialized (Supabase)');
     }
 
-    return results;
-  }
-
-  /**
-   * Search for similar vectors
-   */
-  search(query, limit = 10, threshold = 0.5) {
-    const queryVector = query.values || query;
-
-    const results = this.vectors
-      .map(item => ({
-        id: item.id,
-        score: this.cosineSimilarity(queryVector, item.vector),
-        metadata: item.metadata
-      }))
-      .filter(item => item.score >= threshold)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, limit);
-
-    return {
-      success: true,
-      count: results.length,
-      results
-    };
-  }
-
-  /**
-   * Get vector by ID
-   */
-  get(id) {
-    const position = this.index.get(id);
-    
-    if (position === undefined) {
-      return null;
+    /**
+     * Generate a unique ID
+     */
+    generateId() {
+        return `vec_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     }
 
-    return this.vectors[position];
-  }
+    /**
+     * Add a vector to the database
+     */
+    async add(vector, metadata = {}) {
+        const id = this.generateId();
+        const vectorArray = vector.values || vector; // ensure it's an array
 
-  /**
-   * Update vector
-   */
-  update(id, vector, metadata = {}) {
-    const position = this.index.get(id);
-    
-    if (position === undefined) {
-      return { success: false, error: 'Vector not found' };
+        const { data, error } = await supabase
+            .from(this.tableName)
+            .insert([{
+                id,
+                vector: vectorArray,
+                metadata
+            }])
+            .select()
+            .single();
+
+        if (error) {
+            console.error('Error adding vector:', error);
+            return { success: false, error: error.message };
+        }
+
+        this.emit('vectorAdded', { id });
+        return { success: true, id };
     }
 
-    this.vectors[position] = {
-      id,
-      vector: vector.values || vector,
-      metadata: {
-        ...this.vectors[position].metadata,
-        ...metadata,
-        updatedAt: new Date().toISOString()
-      }
-    };
-
-    this.save();
-
-    return {
-      success: true,
-      id
-    };
-  }
-
-  /**
-   * Delete vector
-   */
-  delete(id) {
-    const position = this.index.get(id);
-    
-    if (position === undefined) {
-      return { success: false, error: 'Vector not found' };
+    /**
+     * Add multiple vectors
+     */
+    async addMany(vectors) {
+        const results = [];
+        for (const v of vectors) {
+            const res = await this.add(v.vector, v.metadata);
+            results.push(res);
+        }
+        return results;
     }
 
-    this.vectors.splice(position, 1);
-    this.index.delete(id);
+    /**
+     * Search for similar vectors using cosine distance
+     */
+    async search(query, limit = 10, threshold = 0.5) {
+        const queryVector = query.values || query;
 
-    // Rebuild index
-    this.rebuildIndex();
+        // Use pgvector's <=> operator for cosine distance
+        const { data, error } = await supabase.rpc('match_vectors', {
+            query_vector: queryVector,
+            match_threshold: threshold,
+            match_count: limit
+        });
 
-    this.save();
+        if (error) {
+            console.error('Error searching vectors:', error);
+            return { success: false, error: error.message };
+        }
 
-    return {
-      success: true,
-      id
-    };
-  }
+        // Convert distance to similarity score (1 - distance)
+        const results = (data || []).map(item => ({
+            id: item.id,
+            score: 1 - item.distance,
+            metadata: item.metadata
+        }));
 
-  /**
-   * Calculate cosine similarity
-   */
-  cosineSimilarity(vecA, vecB) {
-    if (!vecA || !vecB || vecA.length !== vecB.length) {
-      return 0;
+        return {
+            success: true,
+            count: results.length,
+            results
+        };
     }
 
-    let dotProduct = 0;
-    let magA = 0;
-    let magB = 0;
+    /**
+     * Get vector by ID
+     */
+    async get(id) {
+        const { data, error } = await supabase
+            .from(this.tableName)
+            .select('*')
+            .eq('id', id)
+            .single();
 
-    for (let i = 0; i < vecA.length; i++) {
-      dotProduct += vecA[i] * vecB[i];
-      magA += vecA[i] * vecA[i];
-      magB += vecB[i] * vecB[i];
+        if (error) return null;
+        return data;
     }
 
-    magA = Math.sqrt(magA);
-    magB = Math.sqrt(magB);
+    /**
+     * Update vector metadata
+     */
+    async update(id, vector, metadata = {}) {
+        const updates = {};
+        if (vector) updates.vector = vector.values || vector;
+        if (metadata) updates.metadata = metadata;
 
-    if (magA === 0 || magB === 0) return 0;
+        const { data, error } = await supabase
+            .from(this.tableName)
+            .update(updates)
+            .eq('id', id)
+            .select()
+            .single();
 
-    return dotProduct / (magA * magB);
-  }
-
-  /**
-   * Rebuild index
-   */
-  rebuildIndex() {
-    this.index.clear();
-    this.vectors.forEach((item, idx) => {
-      this.index.set(item.id, idx);
-    });
-  }
-
-  /**
-   * Get database statistics
-   */
-  getStats() {
-    return {
-      totalVectors: this.vectors.length,
-      dimensions: this.vectors[0]?.vector.length || 0,
-      indexSize: this.index.size
-    };
-  }
-
-  /**
-   * List all vectors (with pagination)
-   */
-  list(limit = 100, offset = 0) {
-    const vectors = this.vectors
-      .slice(offset, offset + limit)
-      .map(v => ({
-        id: v.id,
-        metadata: v.metadata
-      }));
-
-    return {
-      success: true,
-      total: this.vectors.length,
-      offset,
-      limit,
-      vectors
-    };
-  }
-
-  /**
-   * Clear database
-   */
-  clear() {
-    this.vectors = [];
-    this.index.clear();
-    this.save();
-
-    return { success: true };
-  }
-
-  /**
-   * Save to disk
-   */
-  async save() {
-    try {
-      const data = {
-        vectors: this.vectors,
-        index: Array.from(this.index.entries())
-      };
-      
-      await fs.writeFile(this.storagePath, JSON.stringify(data, null, 2));
-      
-    } catch (error) {
-      console.error('Failed to save vectors:', error);
+        if (error) {
+            return { success: false, error: error.message };
+        }
+        return { success: true, id: data.id };
     }
-  }
 
-  /**
-   * Load from disk
-   */
-  async load() {
-    try {
-      const data = await fs.readFile(this.storagePath, 'utf8');
-      const parsed = JSON.parse(data);
-      
-      this.vectors = parsed.vectors || [];
-      this.index = new Map(parsed.index || []);
-      
-      console.log(`📦 Loaded ${this.vectors.length} vectors from storage`);
-      
-    } catch {
-      console.log('No existing vectors found, starting fresh');
+    /**
+     * Delete a vector
+     */
+    async delete(id) {
+        const { error } = await supabase
+            .from(this.tableName)
+            .delete()
+            .eq('id', id);
+
+        if (error) {
+            return { success: false, error: error.message };
+        }
+        return { success: true, id };
     }
-  }
 
-  /**
-   * Generate unique ID
-   */
-  generateId() {
-    return `vec_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  }
+    /**
+     * List vectors with pagination
+     */
+    async list(limit = 100, offset = 0) {
+        const { data, error, count } = await supabase
+            .from(this.tableName)
+            .select('id, metadata, created_at', { count: 'exact' })
+            .range(offset, offset + limit - 1)
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            return { success: false, error: error.message };
+        }
+
+        return {
+            success: true,
+            total: count,
+            offset,
+            limit,
+            vectors: data
+        };
+    }
+
+    /**
+     * Get database statistics
+     */
+    async getStats() {
+        const { count, error } = await supabase
+            .from(this.tableName)
+            .select('*', { count: 'exact', head: true });
+
+        return {
+            totalVectors: count || 0,
+            dimensions: null, // can be queried if needed
+            indexSize: count || 0
+        };
+    }
+
+    /**
+     * Clear all vectors (use with caution!)
+     */
+    async clear() {
+        const { error } = await supabase
+            .from(this.tableName)
+            .delete()
+            .neq('id', ''); // delete all
+
+        if (error) {
+            return { success: false, error: error.message };
+        }
+        return { success: true };
+    }
 }
 
 module.exports = new VectorDatabase();
