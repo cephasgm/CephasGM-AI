@@ -3,6 +3,7 @@
  * Breaks down complex tasks into subtasks and coordinates other agents
  */
 const Agent = require("../core/agent-runtime");
+const fetch = require('node-fetch');
 
 class PlannerAgent extends Agent {
   constructor() {
@@ -13,6 +14,8 @@ class PlannerAgent extends Agent {
     
     this.subAgents = [];
     this.planHistory = [];
+    this.openaiApiKey = process.env.OPENAI_API_KEY;
+    this.ollamaApiKey = process.env.OLLAMA_API_KEY;
   }
 
   /**
@@ -41,7 +44,7 @@ class PlannerAgent extends Agent {
     
     console.log(`📋 Planner agent creating plan for: "${task.substring(0, 50)}..."`);
     
-    // Decompose task into steps
+    // Decompose task into steps using AI
     const plan = await this.createPlan(task);
     
     // Execute plan (if sub-agents are available)
@@ -64,13 +67,85 @@ class PlannerAgent extends Agent {
   }
 
   /**
-   * Create execution plan
+   * Create execution plan using AI
    */
   async createPlan(task) {
+    // Use AI to break down task if API keys are available
+    if (this.openaiApiKey || this.ollamaApiKey) {
+      try {
+        const prompt = `Break down the following complex task into a series of simple steps. For each step, specify which type of agent should handle it (research, coding, automation, or general). Return the result as a JSON array of objects with properties: agent, description, action.\n\nTask: ${task}`;
+
+        let planText;
+        if (this.openaiApiKey) {
+          const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${this.openaiApiKey}`
+            },
+            body: JSON.stringify({
+              model: 'gpt-3.5-turbo',
+              messages: [
+                { role: 'system', content: 'You are a task planning assistant. Always return valid JSON.' },
+                { role: 'user', content: prompt }
+              ],
+              temperature: 0.3,
+              max_tokens: 800
+            })
+          });
+          if (response.ok) {
+            const data = await response.json();
+            planText = data.choices[0].message.content;
+          }
+        } else if (this.ollamaApiKey) {
+          const response = await fetch('https://ollama.com/api/chat', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${this.ollamaApiKey}`
+            },
+            body: JSON.stringify({
+              model: 'llama3.2:3b',
+              messages: [
+                { role: 'system', content: 'You are a task planning assistant. Always return valid JSON.' },
+                { role: 'user', content: prompt }
+              ],
+              options: {
+                temperature: 0.3,
+                num_predict: 800
+              }
+            })
+          });
+          if (response.ok) {
+            const data = await response.json();
+            planText = data.message.content;
+          }
+        }
+
+        if (planText) {
+          // Try to parse JSON
+          const jsonMatch = planText.match(/\[[\s\S]*\]/);
+          if (jsonMatch) {
+            const steps = JSON.parse(jsonMatch[0]);
+            if (Array.isArray(steps) && steps.length > 0) {
+              return {
+                task,
+                steps: steps.map((s, idx) => ({ id: idx + 1, ...s })),
+                estimatedTime: steps.length * 2000,
+                parallelizable: steps.length > 1 && steps.every(s => !s.dependsOn)
+              };
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('AI planning failed, using fallback', e);
+      }
+    }
+
+    // Fallback to simple rule-based planning
     const taskLower = task.toLowerCase();
     const steps = [];
     
-    // Parse task and create steps
     if (taskLower.includes('research') || taskLower.includes('find')) {
       steps.push({
         id: 1,
@@ -98,7 +173,6 @@ class PlannerAgent extends Agent {
       });
     }
     
-    // If no specific steps detected, create generic plan
     if (steps.length === 0) {
       steps.push({
         id: 1,
