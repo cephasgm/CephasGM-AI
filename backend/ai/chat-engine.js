@@ -324,8 +324,8 @@ Please try again in a few moments. If the issue persists, check your Ollama Clou
    */
   async testConnection() {
     try {
-      // Use only the correct endpoint to avoid unnecessary warnings
-      const endpoint = 'https://api.ollama.com/api/models';
+      // Use the correct endpoint for listing models (Ollama API uses /api/tags)
+      const endpoint = 'https://api.ollama.com/api/tags';
       
       const response = await fetch(endpoint, {
         headers: {
