@@ -2,6 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
 export default defineConfig({
+  base: '/app/', // <-- ADDED: ensures assets are served from /app
   plugins: [react()],
   server: {
     proxy: {
