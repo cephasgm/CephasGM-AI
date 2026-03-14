@@ -683,7 +683,7 @@ h1 {
 }
 
 /* ============================================ */
-/* STREAMING CURSOR STYLES (NEW) */
+/* STREAMING CURSOR STYLES */
 /* ============================================ */
 .streaming-content {
   border-right: 2px solid #ffb300;
@@ -784,13 +784,13 @@ h1 {
       <p>Upload PDF, text files, or images for analysis</p>
       <div class="upload-area">
         <div class="file-input" onclick="document.getElementById('file').click()">
-          <input type="file" id="file" accept=".pdf,.txt,.doc,.docx,.jpg,.png,.mp3,.mp4">
-          <div class="file-label">📄 Click to select a file or drag and drop</div>
+          <input type="file" id="file" multiple accept=".pdf,.txt,.doc,.docx,.jpg,.png,.mp3,.mp4">
+          <div class="file-label">📄 Click to select files (multiple allowed)</div>
         </div>
         <div class="progress-bar" id="uploadProgress">
           <div class="progress-bar-fill" id="uploadProgressFill"></div>
         </div>
-        <button class="upload-btn" onclick="uploadFile()" id="uploadBtn">Upload File</button>
+        <button class="upload-btn" onclick="uploadFiles()" id="uploadBtn">Upload Files</button>
         <div class="status" id="uploadStatus"></div>
         <div class="file-info" id="fileInfo"></div>
       </div>
@@ -957,13 +957,12 @@ let API_BASE = ''; // Will be set based on availability
 let chatHistory = [];
 
 // ============================================
-// API Configuration - FIXED for Render
+// API Configuration
 // ============================================
 const RENDER_URL = 'https://cephasgm-ai.onrender.com';
 const LOCAL_URL = 'http://localhost:6000';
 
 async function checkAPI() {
-  // Try Render URL first (production)
   try {
     const response = await fetch(`${RENDER_URL}/health`, { 
       method: 'GET',
@@ -979,7 +978,6 @@ async function checkAPI() {
     console.log('Render API not available, trying local...');
   }
 
-  // Fallback to localhost (development)
   try {
     const response = await fetch(`${LOCAL_URL}/health`);
     if (response.ok) {
@@ -1005,7 +1003,6 @@ const firebaseConfig = window.CEPHASGM_CONFIG?.FIREBASE || {
   appId: "1:304163647028:web:2920b2cfb9be4049806461"
 };
 
-// Initialize Firebase
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 
@@ -1036,38 +1033,35 @@ function removeTypingIndicator(id) {
   if (indicator) indicator.remove();
 }
 
-// ============================================
-// Response Formatting Utilities
-// ============================================
 function formatAIResponse(data) {
-    if (!data) return 'No response received';
-    if (typeof data === 'string') return data;
-    if (data.content) return data.content;
-    if (data.response) return data.response;
-    if (data.text) return data.text;
-    if (data.output) return data.output;
-    if (data.message) return data.message;
-    if (data.result) {
-        if (typeof data.result === 'string') return data.result;
-        if (data.result.summary) return data.result.summary;
-        if (data.result.content) return data.result.content;
-    }
-    return JSON.stringify(data, null, 2);
+  if (!data) return 'No response received';
+  if (typeof data === 'string') return data;
+  if (data.content) return data.content;
+  if (data.response) return data.response;
+  if (data.text) return data.text;
+  if (data.output) return data.output;
+  if (data.message) return data.message;
+  if (data.result) {
+    if (typeof data.result === 'string') return data.result;
+    if (data.result.summary) return data.result.summary;
+    if (data.result.content) return data.result.content;
+  }
+  return JSON.stringify(data, null, 2);
 }
 
 function formatAgentResponse(data) {
-    if (!data) return 'No response from agent';
-    if (data.result) {
-        if (typeof data.result === 'string') return data.result;
-        if (data.result.content) return data.result.content;
-        if (data.result.output) return data.result.output;
-        if (data.result.message) return data.result.message;
-        if (data.result.summary) return data.result.summary;
-    }
-    if (data.content) return data.content;
-    if (data.output) return data.output;
-    if (data.message) return data.message;
-    return JSON.stringify(data, null, 2);
+  if (!data) return 'No response from agent';
+  if (data.result) {
+    if (typeof data.result === 'string') return data.result;
+    if (data.result.content) return data.result.content;
+    if (data.result.output) return data.result.output;
+    if (data.result.message) return data.result.message;
+    if (data.result.summary) return data.result.summary;
+  }
+  if (data.content) return data.content;
+  if (data.output) return data.output;
+  if (data.message) return data.message;
+  return JSON.stringify(data, null, 2);
 }
 
 // ============================================
@@ -1076,39 +1070,27 @@ function formatAgentResponse(data) {
 async function sendMessage() {
   const input = document.getElementById('userInput');
   const message = input.value.trim();
-  
   if (!message) return;
-  
   addMessageToChat('user', message);
   input.value = '';
-  
   const typingId = showTypingIndicator();
-  
   try {
     let response;
-    
     if (API_BASE) {
       const res = await fetch(`${API_BASE}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          prompt: message,
-          model: 'gpt-3.5-turbo' // or 'llama3.2' – choose default
-        })
+        body: JSON.stringify({ prompt: message, model: 'gpt-3.5-turbo' })
       });
-      
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      
       const data = await res.json();
       response = formatAIResponse(data);
     } else {
       response = "I'm here to help! (Running in offline mode)";
     }
-    
     removeTypingIndicator(typingId);
     addMessageToChat('ai', response);
     saveToMemory(message, response);
-    
   } catch (error) {
     removeTypingIndicator(typingId);
     addMessageToChat('ai', `Error: ${error.message}. Please try again.`);
@@ -1116,41 +1098,26 @@ async function sendMessage() {
   }
 }
 
-// ============================================
-// Streaming Chat Functions (NEW)
-// ============================================
+// Streaming chat function
 async function streamMessage() {
   const input = document.getElementById('userInput');
   const message = input.value.trim();
-  
   if (!message) return;
-  
   addMessageToChat('user', message);
   input.value = '';
-  
   const messageId = 'msg-' + Date.now();
   const typingId = showTypingIndicator();
-  
   try {
-    // Call the streaming endpoint
     const response = await fetch(`${API_BASE}/chat/stream`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        prompt: message,
-        model: 'gpt-3.5-turbo' // or 'llama3.2' – choose default
-      })
+      body: JSON.stringify({ prompt: message, model: 'gpt-3.5-turbo' })
     });
-    
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    
     removeTypingIndicator(typingId);
-    
-    // Create a container for the streaming response
     const aiMessageDiv = document.createElement('div');
     aiMessageDiv.className = 'message ai-message';
     aiMessageDiv.id = messageId;
-    
     const timestamp = new Date().toLocaleTimeString();
     aiMessageDiv.innerHTML = `
       <div class="message-header">
@@ -1159,23 +1126,16 @@ async function streamMessage() {
       </div>
       <div class="message-content streaming-content" id="${messageId}-content"></div>
     `;
-    
     document.getElementById('chat').appendChild(aiMessageDiv);
-    
     const contentDiv = document.getElementById(`${messageId}-content`);
-    
-    // Read the stream
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let fullResponse = '';
-    
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      
       const chunk = decoder.decode(value);
       const lines = chunk.split('\n');
-      
       for (const line of lines) {
         if (line.startsWith('data: ')) {
           try {
@@ -1183,7 +1143,6 @@ async function streamMessage() {
             if (data.choices && data.choices[0].delta.content) {
               fullResponse += data.choices[0].delta.content;
               contentDiv.innerHTML = fullResponse.replace(/\n/g, '<br>');
-              // Auto-scroll
               document.getElementById('chat').scrollTop = document.getElementById('chat').scrollHeight;
             }
           } catch (e) {
@@ -1192,9 +1151,7 @@ async function streamMessage() {
         }
       }
     }
-    
     saveToMemory(message, fullResponse);
-    
   } catch (error) {
     removeTypingIndicator(typingId);
     addMessageToChat('ai', `Error: ${error.message}. Please try again.`);
@@ -1206,9 +1163,7 @@ function addMessageToChat(sender, content) {
   const chatBox = document.getElementById('chat');
   const messageDiv = document.createElement('div');
   messageDiv.className = `message ${sender}-message`;
-  
   const timestamp = new Date().toLocaleTimeString();
-  
   messageDiv.innerHTML = `
     <div class="message-header">
       <span>${sender === 'user' ? 'You' : 'CephasGM AI'}</span>
@@ -1216,7 +1171,6 @@ function addMessageToChat(sender, content) {
     </div>
     <div class="message-content">${content}</div>
   `;
-  
   chatBox.appendChild(messageDiv);
   chatBox.scrollTop = chatBox.scrollHeight;
   chatHistory.push({ sender, content, timestamp });
@@ -1235,7 +1189,6 @@ function saveToMemory(prompt, response) {
   const memories = JSON.parse(localStorage.getItem('chatMemories') || '[]');
   memories.unshift(memory);
   localStorage.setItem('chatMemories', JSON.stringify(memories.slice(0, 50)));
-  
   if (window.MemoryModule?.saveMemory) {
     window.MemoryModule.saveMemory(prompt, response).catch(() => {});
   }
@@ -1246,12 +1199,10 @@ function saveToMemory(prompt, response) {
 // ============================================
 auth.onAuthStateChanged(user => {
   currentUser = user;
-  
   const userInfo = document.getElementById('userInfo');
   const userEmail = document.getElementById('userEmail');
   const authMessage = document.getElementById('authMessage');
   const tabNav = document.getElementById('tabNav');
-  
   if (user) {
     userInfo.style.display = 'flex';
     userEmail.textContent = user.email;
@@ -1287,13 +1238,12 @@ function switchTab(tabName) {
   document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
   const selectedTab = document.getElementById(tabName + 'Tab');
   if (selectedTab) selectedTab.classList.add('active');
-  
   document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
   if (event && event.target) event.target.classList.add('active');
 }
 
 // ============================================
-// Image Functions - UPDATED with better fallbacks
+// Image Generation
 // ============================================
 async function generateImage() {
   const prompt = document.getElementById('imagePrompt').value.trim();
@@ -1301,21 +1251,15 @@ async function generateImage() {
     showImageStatus('Please enter a prompt', 'error');
     return;
   }
-
   showImageStatus('Generating image...', 'info');
   document.getElementById('generateImageBtn').disabled = true;
-
   try {
-    let result;
-    let imageUrl = null;
-    
-    // Try multiple endpoints in order
+    let result, imageUrl = null;
     const endpoints = [
       `${API_BASE}/generate/image`,
       `${API_BASE}/api/generate/image`,
       'https://us-central1-cephasgm-ai.cloudfunctions.net/image'
     ];
-    
     for (const endpoint of endpoints) {
       try {
         console.log(`Trying endpoint: ${endpoint}`);
@@ -1325,7 +1269,6 @@ async function generateImage() {
           body: JSON.stringify({ prompt }),
           mode: 'cors'
         });
-        
         if (response.ok) {
           result = await response.json();
           imageUrl = result.url || result.imageUrl;
@@ -1335,12 +1278,9 @@ async function generateImage() {
         console.log(`Endpoint ${endpoint} failed:`, e.message);
       }
     }
-    
-    // Final fallback - use placeholder
     if (!imageUrl) {
       imageUrl = `https://images.unsplash.com/photo-1508672019048-805c876b67e2?w=512&h=512&fit=crop&auto=format`;
     }
-
     const imageResult = document.getElementById('imageResult');
     imageResult.innerHTML = `
       <img src="${imageUrl}" alt="${prompt}" onerror="this.onerror=null; this.src='https://images.unsplash.com/photo-1508672019048-805c876b67e2?w=512&h=512&fit=crop&auto=format';">
@@ -1350,7 +1290,6 @@ async function generateImage() {
       </div>
     `;
     showImageStatus('Image generated successfully!', 'success');
-    
   } catch (error) {
     console.error('Image generation error:', error);
     const imageResult = document.getElementById('imageResult');
@@ -1361,7 +1300,6 @@ async function generateImage() {
       </div>
     `;
     showImageStatus('Using fallback image. Please try again later.', 'info');
-    
   } finally {
     document.getElementById('generateImageBtn').disabled = false;
   }
@@ -1380,107 +1318,153 @@ function showImageStatus(message, type) {
 }
 
 // ============================================
-// Upload Functions - UPDATED with actual file processing
+// Upload Functions (multi-file, AI interpretation)
 // ============================================
-async function uploadFile() {
+async function uploadFiles() {
   const fileInput = document.getElementById('file');
   if (!fileInput.files || fileInput.files.length === 0) {
-    showUploadStatus('Please select a file', 'error');
+    showUploadStatus('Please select at least one file', 'error');
     return;
   }
-
-  const file = fileInput.files[0];
-  const formData = new FormData();
-  formData.append('file', file);
-
-  showUploadStatus('Uploading...', 'info');
+  const files = fileInput.files;
+  showUploadStatus(`Uploading ${files.length} file(s)...`, 'info');
   document.getElementById('uploadBtn').disabled = true;
-
   const progressBar = document.getElementById('uploadProgress');
   const progressFill = document.getElementById('uploadProgressFill');
   progressBar.style.display = 'block';
   progressFill.style.width = '0%';
-
-  let progress = 0;
-  const interval = setInterval(() => {
-    progress += 10;
-    if (progress <= 90) progressFill.style.width = progress + '%';
-  }, 200);
-
-  try {
-    let result;
-    let fileContent = '';
-    
-    // Read file content for local processing
-    if (file.type.startsWith('text/') || file.name.endsWith('.txt')) {
-      fileContent = await file.text();
-    } else if (file.type === 'application/pdf') {
-      fileContent = 'PDF file selected (content preview not available)';
-    } else if (file.type.startsWith('image/')) {
-      fileContent = 'Image file selected';
+  const results = [];
+  let completed = 0;
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    try {
+      const result = await processSingleFile(file);
+      results.push(result);
+    } catch (error) {
+      console.error(`Error processing ${file.name}:`, error);
+      results.push({ fileName: file.name, error: error.message });
     }
-    
-    // Try to upload to backend
-    if (API_BASE) {
-      try {
-        const response = await fetch(`${API_BASE}/upload`, {
-          method: 'POST',
-          body: formData,
-          mode: 'cors',
-          headers: { 'Accept': 'application/json' }
-        });
-        
-        if (response.ok) result = await response.json();
-      } catch (e) {
-        console.log('Backend upload failed:', e);
+    completed++;
+    progressFill.style.width = `${(completed / files.length) * 100}%`;
+  }
+  setTimeout(() => {
+    progressBar.style.display = 'none';
+    progressFill.style.width = '0%';
+  }, 500);
+  showUploadStatus(`Processed ${results.length} file(s)`, 'success');
+  displayUploadResults(results);
+  document.getElementById('uploadBtn').disabled = false;
+  fileInput.value = '';
+}
+
+async function processSingleFile(file) {
+  const formData = new FormData();
+  formData.append('file', file);
+  let uploadResult = null;
+  try {
+    const response = await fetch(`${API_BASE}/upload`, {
+      method: 'POST',
+      body: formData,
+      mode: 'cors',
+      headers: { 'Accept': 'application/json' }
+    });
+    if (response.ok) uploadResult = await response.json();
+  } catch (e) {
+    console.log(`Upload to backend failed for ${file.name}:`, e);
+  }
+  let fileContent = '';
+  if (file.type.startsWith('text/') || file.name.endsWith('.txt')) {
+    fileContent = await file.text();
+  } else if (file.type === 'application/pdf') {
+    fileContent = '[PDF content – analysis not implemented]';
+  } else if (file.type.startsWith('image/')) {
+    fileContent = '[Image file – analysis not implemented]';
+  }
+  let interpretation = '';
+  if (fileContent && fileContent.length > 50) {
+    try {
+      const aiResponse = await fetch(`${API_BASE}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: `Analyze this document and provide a concise summary:\n\n${fileContent.substring(0, 3000)}`,
+          model: 'gpt-3.5-turbo'
+        })
+      });
+      if (aiResponse.ok) {
+        const data = await aiResponse.json();
+        interpretation = data.content || data.response || 'No interpretation';
+      }
+    } catch (e) {
+      console.log('AI interpretation failed:', e);
+      interpretation = 'Interpretation unavailable.';
+    }
+  }
+  return {
+    fileName: file.name,
+    size: file.size,
+    type: file.type,
+    uploadResult,
+    contentPreview: fileContent.substring(0, 500) + (fileContent.length > 500 ? '...' : ''),
+    interpretation
+  };
+}
+
+function displayUploadResults(results) {
+  const fileInfo = document.getElementById('fileInfo');
+  if (!fileInfo) return;
+  let html = '<h3>Upload Results</h3>';
+  results.forEach(r => {
+    html += `<div style="margin-top: 15px; padding: 10px; background: rgba(255,255,255,0.1); border-radius: 5px;">`;
+    html += `<strong>📄 ${r.fileName}</strong> (${formatFileSize(r.size)})<br>`;
+    if (r.error) {
+      html += `<span style="color: #ff6b6b;">❌ Error: ${r.error}</span>`;
+    } else {
+      if (r.interpretation) {
+        html += `<p><em>Interpretation:</em> ${r.interpretation}</p>`;
+      }
+      if (r.contentPreview) {
+        html += `<details><summary>Preview</summary><pre style="background: #222; padding: 5px; max-height: 200px; overflow: auto;">${escapeHtml(r.contentPreview)}</pre></details>`;
       }
     }
-    
-    clearInterval(interval);
-    progressFill.style.width = '100%';
-    
-    setTimeout(() => {
-      progressBar.style.display = 'none';
-      progressFill.style.width = '0%';
-    }, 500);
-    
-    showUploadStatus('File processed successfully!', 'success');
-    
-    const fileInfo = document.getElementById('fileInfo');
-    let contentPreview = '';
-    
-    if (fileContent) {
-      contentPreview = `<div style="margin-top: 10px; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 5px;">
-        <strong>Preview:</strong><br>
-        <pre style="white-space: pre-wrap; max-height: 200px; overflow: auto;">${fileContent.substring(0, 500)}${fileContent.length > 500 ? '...' : ''}</pre>
-      </div>`;
-    }
-    
-    fileInfo.innerHTML = `
-      <strong>File:</strong> ${file.name}<br>
-      <strong>Size:</strong> ${(file.size / 1024).toFixed(2)} KB<br>
-      <strong>Type:</strong> ${file.type || 'unknown'}<br>
-      <strong>Uploaded:</strong> ${new Date().toLocaleString()}
-      ${contentPreview}
-    `;
-    
-  } catch (error) {
-    clearInterval(interval);
-    progressBar.style.display = 'none';
-    showUploadStatus(`Error: ${error.message}`, 'error');
-  } finally {
-    document.getElementById('uploadBtn').disabled = false;
-  }
+    html += `</div>`;
+  });
+  fileInfo.innerHTML = html;
 }
 
 function showUploadStatus(message, type) {
   const status = document.getElementById('uploadStatus');
+  if (!status) return;
   status.textContent = message;
   status.className = `status ${type}`;
+  if (type === 'success') {
+    setTimeout(() => {
+      status.textContent = '';
+      status.className = 'status';
+    }, 5000);
+  }
+}
+
+function formatFileSize(bytes) {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+function escapeHtml(text) {
+  return text.replace(/[&<>"]/g, function(m) {
+    if (m === '&') return '&amp;';
+    if (m === '<') return '&lt;';
+    if (m === '>') return '&gt;';
+    if (m === '"') return '&quot;';
+    return m;
+  });
 }
 
 // ============================================
-// Voice Functions - UPDATED to process input
+// Voice Functions (auto-send with streaming)
 // ============================================
 let recognition = null;
 let isListening = false;
@@ -1491,30 +1475,28 @@ function initVoice() {
     recognition.continuous = false;
     recognition.interimResults = false;
     recognition.lang = 'en-US';
-    
     recognition.onstart = () => {
       isListening = true;
       document.getElementById('voiceStatus').textContent = 'Listening... Speak now';
       document.getElementById('voiceDemoBtn').classList.add('listening');
     };
-    
     recognition.onend = () => {
       isListening = false;
       document.getElementById('voiceStatus').textContent = '';
       document.getElementById('voiceDemoBtn').classList.remove('listening');
     };
-    
     recognition.onresult = (event) => {
       const transcript = event.results[0][0].transcript;
       document.getElementById('voiceOutput').value = transcript;
       document.getElementById('userInput').value = transcript;
-      document.getElementById('voiceStatus').textContent = `Recognized: "${transcript}"`;
-      
-      if (confirm(`Send: "${transcript}"?`)) {
-        streamMessage(); // Use streaming by default
+      document.getElementById('voiceStatus').textContent = `Recognized: "${transcript}" – sending...`;
+      // Use streaming if available
+      if (typeof streamMessage === 'function') {
+        streamMessage();
+      } else if (typeof sendMessage === 'function') {
+        sendMessage();
       }
     };
-    
     recognition.onerror = (event) => {
       document.getElementById('voiceStatus').textContent = 'Error: ' + event.error;
     };
@@ -1548,28 +1530,24 @@ function speak(text) {
 }
 
 // ============================================
-// Agent Functions - UPDATED with better formatting
+// Agent Functions (simplified, use chat)
 // ============================================
 async function runAgent(task, type = 'auto') {
   const resultDiv = document.getElementById('agentResult');
   resultDiv.innerHTML = '<p>🤖 Processing... <span class="typing-indicator">⏳</span></p>';
-
   try {
     let data;
-    
     if (API_BASE) {
       const response = await fetch(`${API_BASE}/task`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ task, options: { agentType: type } })
       });
-      
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       data = await response.json();
     } else {
       data = { result: `Simulated response for: ${task}` };
     }
-
     let content = '';
     if (data.result) {
       if (typeof data.result === 'string') content = data.result;
@@ -1581,9 +1559,7 @@ async function runAgent(task, type = 'auto') {
     } else if (data.content) content = data.content;
     else if (data.message) content = data.message;
     else content = JSON.stringify(data, null, 2);
-    
     resultDiv.innerHTML = `<div class="agent-response">${content.replace(/\n/g, '<br>')}</div>`;
-    
   } catch (error) {
     resultDiv.innerHTML = `<p class="status error">Error: ${error.message}</p>`;
   }
@@ -1593,56 +1569,44 @@ async function runSearchAgent() {
   const task = document.getElementById('agentTask').value || 'search for latest AI news in Africa';
   await runAgent(task, 'search');
 }
-
 async function runSummarizeAgent() {
   const task = document.getElementById('agentTask').value || 'summarize the benefits of AI in Africa';
   await runAgent(task, 'summarize');
 }
-
 async function runTranslateAgent() {
   const task = document.getElementById('agentTask').value || 'translate hello to Swahili';
   await runAgent(task, 'translate');
 }
-
 async function runAnalyzeAgent() {
   const task = document.getElementById('agentTask').value || 'analyze the sentiment: I love CephasGM AI';
   await runAgent(task, 'analyze');
 }
-
 async function runResearchAgent() {
   const task = document.getElementById('agentTask').value || 'research artificial intelligence in Africa';
   await runAgent(task, 'research');
 }
-
 async function runCodingAgent() {
   const task = document.getElementById('agentTask').value || 'write a function to calculate fibonacci';
   await runAgent(task, 'coding');
 }
-
 async function runCustomAgent() {
   const task = document.getElementById('agentTask').value;
-  if (!task) {
-    alert('Please enter a task');
-    return;
-  }
+  if (!task) { alert('Please enter a task'); return; }
   await runAgent(task);
 }
 
 // ============================================
-// Memory Functions
+// Memory Functions (simplified)
 // ============================================
 async function loadMemories() {
   if (!currentUser) return;
-  
   try {
     const localMemories = JSON.parse(localStorage.getItem('chatMemories') || '[]');
     const memoryList = document.getElementById('memoryList');
-    
     if (localMemories.length === 0) {
       memoryList.innerHTML = '<div style="text-align: center; padding: 20px;">No memories yet. Start chatting!</div>';
       return;
     }
-    
     memoryList.innerHTML = localMemories.slice(0, 20).map(m => `
       <div class="memory-item" onclick="document.getElementById('userInput').value = '${(m.prompt || '').replace(/'/g, "\\'")}'">
         <div class="memory-prompt">Q: ${m.prompt || 'Memory'}</div>
@@ -1657,25 +1621,18 @@ async function loadMemories() {
 
 async function searchMemory() {
   const query = document.getElementById('memorySearch').value;
-  if (!query) {
-    loadMemories();
-    return;
-  }
-  
+  if (!query) { loadMemories(); return; }
   try {
     const localMemories = JSON.parse(localStorage.getItem('chatMemories') || '[]');
     const results = localMemories.filter(m => 
       (m.prompt && m.prompt.toLowerCase().includes(query.toLowerCase())) ||
       (m.response && m.response.toLowerCase().includes(query.toLowerCase()))
     );
-
     const memoryList = document.getElementById('memoryList');
-    
     if (results.length === 0) {
       memoryList.innerHTML = '<div style="text-align: center; padding: 20px;">No matching memories found.</div>';
       return;
     }
-    
     memoryList.innerHTML = results.slice(0, 20).map(m => `
       <div class="memory-item">
         <div class="memory-prompt">Q: ${m.prompt || 'Memory'}</div>
@@ -1698,57 +1655,39 @@ function clearLocalMemory() {
 }
 
 // ============================================
-// Research Functions - UPDATED with working sources
+// Research Functions (AI-powered)
 // ============================================
 async function conductResearch() {
   const topic = document.getElementById('researchTopic').value.trim();
   const depth = document.getElementById('researchDepth').value;
-  
-  if (!topic) {
-    alert('Please enter a research topic');
-    return;
-  }
-
+  if (!topic) { alert('Please enter a research topic'); return; }
   const resultsDiv = document.getElementById('researchResults');
   resultsDiv.innerHTML = '<p>🔬 Researching... <span class="typing-indicator">⏳</span></p>';
-
   try {
     let data;
-    
     if (API_BASE) {
       const response = await fetch(`${API_BASE}/task`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          task: `research ${topic}`,
-          options: { depth, agentType: 'research' }
-        })
+        body: JSON.stringify({ task: `research ${topic}`, options: { depth, agentType: 'research' } })
       });
-      
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       data = await response.json();
     } else {
       data = { result: { summary: `Research on "${topic}" would be performed here.` } };
     }
-    
     if (data.result) {
       const r = data.result;
       let html = '<div class="research-response">';
-      
       html += `<h3>📚 Research: ${r.topic || topic}</h3>`;
-      
       if (r.summary) {
         html += `<div class="research-summary"><strong>Summary:</strong><br>${r.summary.replace(/\n/g, '<br>')}</div>`;
       }
-      
       if (r.findings && r.findings.length > 0) {
         html += '<div class="research-findings"><strong>Key Findings:</strong><ul>';
-        r.findings.forEach(f => {
-          html += `<li>${f.content || f.snippet || f.title}</li>`;
-        });
+        r.findings.forEach(f => { html += `<li>${f.content || f.snippet || f.title}</li>`; });
         html += '</ul></div>';
       }
-      
       if (r.sources && r.sources.length > 0) {
         html += '<div class="research-sources"><strong>Sources:</strong><ul>';
         r.sources.forEach(s => {
@@ -1758,56 +1697,34 @@ async function conductResearch() {
         });
         html += '</ul></div>';
       }
-      
       if (r.confidence) {
         html += `<div class="research-confidence"><small>Confidence: ${(r.confidence * 100).toFixed(0)}%</small></div>`;
       }
-      
       html += '</div>';
       resultsDiv.innerHTML = html;
     } else {
       resultsDiv.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
     }
-    
   } catch (error) {
     resultsDiv.innerHTML = `<p class="status error">Error: ${error.message}</p>`;
   }
 }
 
 // ============================================
-// Audio Functions - UPDATED with working URL
+// Audio Functions
 // ============================================
 async function generateAudio() {
   const text = document.getElementById('audioText').value.trim();
   const voice = document.getElementById('audioVoice').value;
-  
-  if (!text) {
-    alert('Please enter text to convert to speech');
-    return;
-  }
-
+  if (!text) { alert('Please enter text to convert to speech'); return; }
   const audioPlayer = document.getElementById('audioPlayer');
   audioPlayer.innerHTML = '<p>Generating audio...</p>';
-
   try {
-    let result;
-    
-    if (API_BASE) {
-      const response = await fetch(`${API_BASE}/generate/audio`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, options: { voice } })
-      });
-      
-      if (response.ok) result = await response.json();
-    }
-    
     if (window.speechSynthesis) {
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = 'en-US';
       utterance.rate = 1.0;
       utterance.pitch = 1.0;
-      
       const voices = window.speechSynthesis.getVoices();
       if (voice.includes('female')) {
         const femaleVoice = voices.find(v => v.name.includes('Female') || v.name.includes('Samantha'));
@@ -1816,9 +1733,7 @@ async function generateAudio() {
         const maleVoice = voices.find(v => v.name.includes('Male') || v.name.includes('Alex'));
         if (maleVoice) utterance.voice = maleVoice;
       }
-      
       window.speechSynthesis.speak(utterance);
-      
       audioPlayer.innerHTML = `
         <p>🔊 Speaking: "${text.substring(0, 50)}..."</p>
         <button onclick="window.speechSynthesis.cancel()" style="padding: 10px; background: #dc3545;">Stop Speaking</button>
@@ -1826,58 +1741,40 @@ async function generateAudio() {
     } else {
       audioPlayer.innerHTML = '<p>Audio generation not available</p>';
     }
-    
   } catch (error) {
     audioPlayer.innerHTML = `<p class="status error">Error: ${error.message}</p>`;
   }
 }
 
 // ============================================
-// Software Factory Functions - UPDATED with real execution
+// Software Factory Functions
 // ============================================
 async function runCode() {
   const code = document.getElementById('codeInput').value.trim();
   const language = document.getElementById('codeLanguage').value;
-  
-  if (!code) {
-    alert('Please enter code to run');
-    return;
-  }
-
+  if (!code) { alert('Please enter code to run'); return; }
   const output = document.getElementById('codeOutput');
   output.innerHTML = '<p>⚙️ Executing... <span class="typing-indicator">⏳</span></p>';
-
   try {
     let result;
-    
     if (API_BASE) {
       const response = await fetch(`${API_BASE}/code`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code, language })
       });
-      
       if (response.ok) result = await response.json();
     }
-    
     if (!result && language === 'javascript') {
       try {
-        const sandbox = {
-          console: {
-            log: (...args) => {
-              const logOutput = args.map(arg => 
-                typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
-              ).join(' ');
-              document.getElementById('codeOutput').innerHTML += `<div>> ${logOutput}</div>`;
-            }
-          }
-        };
-        
+        const sandbox = { console: { log: (...args) => {
+          const logOutput = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ');
+          output.innerHTML += `<div>> ${logOutput}</div>`;
+        } } };
         const fn = new Function('sandbox', `with(sandbox) { ${code} }`);
         const startTime = performance.now();
         fn(sandbox);
         const executionTime = (performance.now() - startTime).toFixed(2);
-        
         output.innerHTML = `<pre class="code-output-content">✅ Code executed successfully in ${executionTime}ms</pre>`;
         return;
       } catch (e) {
@@ -1885,13 +1782,10 @@ async function runCode() {
         return;
       }
     }
-    
     let formatted = result?.output || result?.result || JSON.stringify(result || {}, null, 2);
     if (typeof formatted !== 'string') formatted = JSON.stringify(formatted, null, 2);
     if (result?.error) formatted = `❌ Error:\n${result.error}\n\n${formatted}`;
-    
     output.innerHTML = `<pre class="code-output-content">${formatted.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>`;
-    
   } catch (error) {
     output.innerHTML = `<p class="status error">Error: ${error.message}</p>`;
   }
@@ -1899,26 +1793,17 @@ async function runCode() {
 
 async function debugCode() {
   const code = document.getElementById('codeInput').value.trim();
-  
-  if (!code) {
-    alert('Please enter code to debug');
-    return;
-  }
-
+  if (!code) { alert('Please enter code to debug'); return; }
   const output = document.getElementById('codeOutput');
   output.innerHTML = '<p>🔍 Debugging... <span class="typing-indicator">⏳</span></p>';
-
   try {
     const issues = [];
-    
     if (code.includes('var ')) issues.push('⚠️ Use "let" or "const" instead of "var"');
     if (!code.includes('try') && code.includes('fetch(')) issues.push('⚠️ fetch() should be wrapped in try/catch');
     if (code.includes('console.log(')) issues.push('ℹ️ Remove console.log() in production code');
     if (code.length > 500) issues.push('ℹ️ Consider breaking down large functions');
     if (issues.length === 0) issues.push('✅ No obvious issues found');
-    
     output.innerHTML = `<pre class="code-output-content">${issues.join('\n')}</pre>`;
-    
   } catch (error) {
     output.innerHTML = `<p class="status error">Error: ${error.message}</p>`;
   }
@@ -1941,10 +1826,10 @@ window.onload = async function() {
 // Make functions globally available
 window.switchTab = switchTab;
 window.sendMessage = sendMessage;
-window.streamMessage = streamMessage; // <-- Expose the new streaming function
+window.streamMessage = streamMessage;
 window.clearChat = clearChat;
 window.generateImage = generateImage;
-window.uploadFile = uploadFile;
+window.uploadFiles = uploadFiles; // multi-file upload
 window.startVoice = startVoice;
 window.stopVoice = stopVoice;
 window.toggleVoice = toggleVoice;
