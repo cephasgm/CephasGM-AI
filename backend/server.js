@@ -36,14 +36,13 @@ const PORT = config.port;
 // CORS Configuration - FIXED for Firebase
 // ============================================
 app.use(cors({
-  origin: '*', // Allow all origins for Firebase compatibility
+  origin: '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
   credentials: true,
   optionsSuccessStatus: 200
 }));
 
-// Handle preflight requests for all routes
 app.options('*', cors());
 
 app.use(bodyParser.json({ limit: '50mb' }));
@@ -74,14 +73,9 @@ app.get('/health', (req, res) => {
 app.post('/chat', async (req, res) => {
   try {
     const { prompt, options } = req.body;
-    
-    if (!prompt) {
-      return res.status(400).json({ error: 'Prompt is required' });
-    }
-
+    if (!prompt) return res.status(400).json({ error: 'Prompt is required' });
     const result = await chatEngine.chat(prompt, options);
     res.json(result);
-
   } catch (error) {
     console.error('Chat error:', error);
     res.status(500).json({ error: error.message });
@@ -89,31 +83,23 @@ app.post('/chat', async (req, res) => {
 });
 
 // ============================================
-// STREAMING CHAT ENDPOINT (NEW)
+// STREAMING CHAT ENDPOINT
 // ============================================
 app.post('/chat/stream', async (req, res) => {
   try {
     const { prompt, model = 'gpt-3.5-turbo' } = req.body;
+    if (!prompt) return res.status(400).json({ error: 'Prompt is required' });
     
-    if (!prompt) {
-      return res.status(400).json({ error: 'Prompt is required' });
-    }
-    
-    // Set headers for SSE
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
     
-    // Use the stream method from chat-engine
     const stream = await chatEngine.stream(prompt, { model });
-    
     for await (const chunk of stream) {
       res.write(`data: ${JSON.stringify(chunk)}\n\n`);
     }
-    
     res.write('data: [DONE]\n\n');
     res.end();
-    
   } catch (error) {
     console.error('Stream error:', error);
     res.status(500).json({ error: error.message });
@@ -124,14 +110,9 @@ app.post('/chat/stream', async (req, res) => {
 app.post('/research', async (req, res) => {
   try {
     const { topic, options } = req.body;
-    
-    if (!topic) {
-      return res.status(400).json({ error: 'Topic is required' });
-    }
-
+    if (!topic) return res.status(400).json({ error: 'Topic is required' });
     const result = await researchAgent.execute(topic, options);
     res.json(result);
-
   } catch (error) {
     console.error('Research error:', error);
     res.status(500).json({ error: error.message });
@@ -142,14 +123,9 @@ app.post('/research', async (req, res) => {
 app.post('/code', async (req, res) => {
   try {
     const { code, options } = req.body;
-    
-    if (!code) {
-      return res.status(400).json({ error: 'Code is required' });
-    }
-
+    if (!code) return res.status(400).json({ error: 'Code is required' });
     const result = await codeInterpreter.run(code, options);
     res.json(result);
-
   } catch (error) {
     console.error('Code execution error:', error);
     res.status(500).json({ error: error.message });
@@ -160,14 +136,9 @@ app.post('/code', async (req, res) => {
 app.post('/video', async (req, res) => {
   try {
     const { prompt, options } = req.body;
-    
-    if (!prompt) {
-      return res.status(400).json({ error: 'Prompt is required' });
-    }
-
+    if (!prompt) return res.status(400).json({ error: 'Prompt is required' });
     const result = await videoGenerator.create(prompt, options);
     res.json(result);
-
   } catch (error) {
     console.error('Video generation error:', error);
     res.status(500).json({ error: error.message });
@@ -178,14 +149,9 @@ app.post('/video', async (req, res) => {
 app.post('/task', async (req, res) => {
   try {
     const { task, params } = req.body;
-    
-    if (!task) {
-      return res.status(400).json({ error: 'Task is required' });
-    }
-
+    if (!task) return res.status(400).json({ error: 'Task is required' });
     const result = await agentManager.route(task, params);
     res.json(result);
-
   } catch (error) {
     console.error('Agent routing error:', error);
     res.status(500).json({ error: error.message });
@@ -196,14 +162,9 @@ app.post('/task', async (req, res) => {
 app.post('/memory/store', async (req, res) => {
   try {
     const { vector, metadata } = req.body;
-    
-    if (!vector) {
-      return res.status(400).json({ error: 'Vector is required' });
-    }
-
+    if (!vector) return res.status(400).json({ error: 'Vector is required' });
     const result = await vectorDb.store(vector, metadata);
     res.json(result);
-
   } catch (error) {
     console.error('Vector store error:', error);
     res.status(500).json({ error: error.message });
@@ -213,52 +174,30 @@ app.post('/memory/store', async (req, res) => {
 app.post('/memory/search', async (req, res) => {
   try {
     const { vector, limit = 10, threshold = 0.5 } = req.body;
-    
-    if (!vector) {
-      return res.status(400).json({ error: 'Vector is required' });
-    }
-
+    if (!vector) return res.status(400).json({ error: 'Vector is required' });
     const results = await vectorDb.search(vector, limit, threshold);
     res.json(results);
-
   } catch (error) {
     console.error('Vector search error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// GET endpoint for memory vectors (for frontend)
 app.get('/memory/vectors', async (req, res) => {
   try {
-    // Get stats from vector DB
     const stats = vectorDb.getStats ? vectorDb.getStats() : { totalVectors: 0 };
-    
-    // Get recent vectors if available
     let vectors = [];
     try {
-      // Try to get recent memories from vector DB
-      // This depends on your implementation
       if (typeof vectorDb.getRecent === 'function') {
         vectors = await vectorDb.getRecent(20);
       }
     } catch (e) {
       console.log('Could not get recent vectors:', e.message);
     }
-    
-    res.json({
-      success: true,
-      vectors,
-      stats,
-      message: 'Vector memory endpoint'
-    });
-    
+    res.json({ success: true, vectors, stats, message: 'Vector memory endpoint' });
   } catch (error) {
     console.error('Error getting memory vectors:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: error.message,
-      vectors: []
-    });
+    res.status(500).json({ success: false, error: error.message, vectors: [] });
   }
 });
 
@@ -266,14 +205,11 @@ app.get('/memory/vectors', async (req, res) => {
 app.post('/graph/add', async (req, res) => {
   try {
     const { entity, relation, target, properties } = req.body;
-    
     if (!entity || !relation || !target) {
       return res.status(400).json({ error: 'Entity, relation, and target are required' });
     }
-
     const result = knowledgeGraph.addRelation(entity, relation, target, properties);
     res.json(result);
-
   } catch (error) {
     console.error('Graph add error:', error);
     res.status(500).json({ error: error.message });
@@ -283,14 +219,9 @@ app.post('/graph/add', async (req, res) => {
 app.get('/graph/query', async (req, res) => {
   try {
     const { entity, depth = 1 } = req.query;
-    
-    if (!entity) {
-      return res.status(400).json({ error: 'Entity is required' });
-    }
-
+    if (!entity) return res.status(400).json({ error: 'Entity is required' });
     const results = knowledgeGraph.query(entity, parseInt(depth));
     res.json(results);
-
   } catch (error) {
     console.error('Graph query error:', error);
     res.status(500).json({ error: error.message });
@@ -301,14 +232,9 @@ app.get('/graph/query', async (req, res) => {
 app.post('/gpu/infer', async (req, res) => {
   try {
     const { prompt, model = 'llama3' } = req.body;
-    
-    if (!prompt) {
-      return res.status(400).json({ error: 'Prompt is required' });
-    }
-
+    if (!prompt) return res.status(400).json({ error: 'Prompt is required' });
     const result = await localInference.run(prompt, model);
     res.json(result);
-
   } catch (error) {
     console.error('GPU inference error:', error);
     res.status(500).json({ error: error.message });
@@ -324,14 +250,9 @@ app.get('/models', (req, res) => {
 app.post('/models/load', async (req, res) => {
   try {
     const { modelName, options } = req.body;
-    
-    if (!modelName) {
-      return res.status(400).json({ error: 'Model name is required' });
-    }
-
+    if (!modelName) return res.status(400).json({ error: 'Model name is required' });
     const result = await modelHost.loadModel(modelName, options);
     res.json(result);
-
   } catch (error) {
     console.error('Model load error:', error);
     res.status(500).json({ error: error.message });
@@ -341,14 +262,9 @@ app.post('/models/load', async (req, res) => {
 app.post('/models/infer', async (req, res) => {
   try {
     const { modelName, input, options } = req.body;
-    
-    if (!modelName || !input) {
-      return res.status(400).json({ error: 'Model name and input are required' });
-    }
-
+    if (!modelName || !input) return res.status(400).json({ error: 'Model name and input are required' });
     const result = await modelHost.infer(modelName, input, options);
     res.json(result);
-
   } catch (error) {
     console.error('Model inference error:', error);
     res.status(500).json({ error: error.message });
@@ -365,43 +281,30 @@ app.get('/agents', (req, res) => {
 // ADDITIONAL ROUTES FOR FRONTEND COMPATIBILITY
 // ============================================
 
-// Image Generation Endpoint
 app.post('/generate/image', async (req, res) => {
   try {
     const { prompt } = req.body;
-    
-    if (!prompt) {
-      return res.status(400).json({ error: 'Prompt is required' });
-    }
-    
-    // Try to use image engine if available
+    if (!prompt) return res.status(400).json({ error: 'Prompt is required' });
     let result;
     try {
-      // Try to load image engine dynamically
       const imageEngine = require('./multimodal/image-engine');
       result = await imageEngine.generate(prompt);
     } catch (e) {
       console.log('Image engine not available, using fallback');
-      // Fallback to simulated response
       result = {
         url: `https://via.placeholder.com/512x512.png?text=${encodeURIComponent(prompt.substring(0, 30))}`,
         simulated: true
       };
     }
-    
     res.json(result);
-    
   } catch (error) {
     console.error('Image generation error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Upload Endpoint
 app.post('/upload', async (req, res) => {
   try {
-    // For now, return success message
-    // In production, you'd use multer or busboy to handle file uploads
     res.json({
       success: true,
       message: 'Upload endpoint ready',
@@ -414,91 +317,63 @@ app.post('/upload', async (req, res) => {
   }
 });
 
-// Audio Generation Endpoint
 app.post('/generate/audio', async (req, res) => {
   try {
     const { text, options } = req.body;
-    
-    if (!text) {
-      return res.status(400).json({ error: 'Text is required' });
-    }
-    
-    // Try to use audio engine if available
+    if (!text) return res.status(400).json({ error: 'Text is required' });
     let result;
     try {
       const audioEngine = require('./multimodal/audio-engine');
       result = await audioEngine.generate(text, options);
     } catch (e) {
       console.log('Audio engine not available, using fallback');
-      // Simulated response
       result = {
         url: `https://storage.cephasgm.ai/audio/simulated.mp3`,
         duration: text.length / 15,
         simulated: true
       };
     }
-    
     res.json(result);
-    
   } catch (error) {
     console.error('Audio generation error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Enhanced task routing with better agent handling
 app.post('/task/enhanced', async (req, res) => {
   try {
     const { task, options = {} } = req.body;
-    
-    if (!task) {
-      return res.status(400).json({ error: 'Task is required' });
-    }
-    
+    if (!task) return res.status(400).json({ error: 'Task is required' });
     const agentType = options.agentType || 'auto';
     const startTime = Date.now();
-    
     let result;
-    
-    // Route to appropriate agent based on task content
     try {
       const taskLower = task.toLowerCase();
-      
       if (agentType === 'search' || taskLower.includes('search') || taskLower.includes('find')) {
-        // Use research agent for searches
         const researchAgent = require('../agents/research-agent');
         result = await researchAgent.execute(task);
-      } 
-      else if (agentType === 'coding' || taskLower.includes('code') || taskLower.includes('function') || taskLower.includes('program')) {
-        // Use code interpreter for coding tasks
+      } else if (agentType === 'coding' || taskLower.includes('code') || taskLower.includes('function') || taskLower.includes('program')) {
         const codeInterpreter = require('./ai/code-interpreter');
         result = await codeInterpreter.run(task);
-      } 
-      else if (agentType === 'translate' || taskLower.includes('translate')) {
-        // Use text engine for translation
+      } else if (agentType === 'translate' || taskLower.includes('translate')) {
         try {
           const textEngine = require('./multimodal/text-engine');
           result = await textEngine.translate(task.replace(/translate/i, '').trim(), 'english');
         } catch (e) {
           result = { message: `Translation simulation: ${task}` };
         }
-      }
-      else if (agentType === 'summarize' || taskLower.includes('summarize')) {
-        // Use text engine for summarization
+      } else if (agentType === 'summarize' || taskLower.includes('summarize')) {
         try {
           const textEngine = require('./multimodal/text-engine');
           result = await textEngine.summarize(task.replace(/summarize/i, '').trim());
         } catch (e) {
           result = { summary: `Summary simulation for: ${task}` };
         }
-      }
-      else {
-        // Default to agent manager
+      } else {
         result = await agentManager.route(task, options);
       }
     } catch (e) {
       console.error('Agent routing error:', e);
-      // Fallback response
       result = {
         success: true,
         message: `Task processed: ${task}`,
@@ -506,18 +381,8 @@ app.post('/task/enhanced', async (req, res) => {
         timestamp: new Date().toISOString()
       };
     }
-    
     const executionTime = Date.now() - startTime;
-    
-    res.json({
-      success: true,
-      agent: agentType,
-      task,
-      result,
-      executionTime: `${executionTime}ms`,
-      timestamp: new Date().toISOString()
-    });
-    
+    res.json({ success: true, agent: agentType, task, result, executionTime: `${executionTime}ms`, timestamp: new Date().toISOString() });
   } catch (error) {
     console.error('Task routing error:', error);
     res.status(500).json({ error: error.message });
@@ -528,51 +393,34 @@ app.post('/task/enhanced', async (req, res) => {
 // INTELLIGENT STATIC FILE SERVING
 // =============================================
 console.log('🔍 Looking for frontend files...');
-
-// Possible locations for frontend files
 const possiblePaths = [
-  path.join(__dirname, '../frontend'),           // /backend/../frontend
-  path.join(__dirname, '..'),                     // /backend/.. (root)
-  path.join(__dirname, '../../frontend'),         // /backend/../../frontend
-  path.join(__dirname, '../public'),              // /backend/../public
-  path.join(process.cwd(), 'frontend'),           // Current working directory + frontend
-  path.join(process.cwd(), 'public')              // Current working directory + public
+  path.join(__dirname, '../frontend'),
+  path.join(__dirname, '..'),
+  path.join(__dirname, '../../frontend'),
+  path.join(__dirname, '../public'),
+  path.join(process.cwd(), 'frontend'),
+  path.join(process.cwd(), 'public')
 ];
-
 let staticPath = null;
-
-// Check each possible path for index.html
 for (const testPath of possiblePaths) {
   const indexPath = path.join(testPath, 'index.html');
-  
   if (fs.existsSync(indexPath)) {
     staticPath = testPath;
     console.log(`✅ Frontend found at: ${staticPath}`);
     console.log(`📄 index.html exists: ${indexPath}`);
-    
-    // Also check for other common frontend files
     const hasManifest = fs.existsSync(path.join(testPath, 'manifest.json'));
     const hasSw = fs.existsSync(path.join(testPath, 'sw.js'));
     const hasAssets = fs.existsSync(path.join(testPath, 'assets'));
-    
     if (hasManifest) console.log('📱 manifest.json found');
     if (hasSw) console.log('🔄 service worker found');
     if (hasAssets) console.log('🎨 assets folder found');
-    
     break;
   }
 }
-
 if (staticPath) {
-  // Serve static files from the found location
   app.use(express.static(staticPath));
-  
-  // Log all files being served
   console.log(`📁 Serving static files from: ${staticPath}`);
-  
-  // Catch-all route for SPA - serve index.html for any non-API route
   app.get('*', (req, res, next) => {
-    // Skip API routes
     if (req.path.startsWith('/api/') || 
         req.path === '/health' || 
         req.path === '/agents' ||
@@ -582,28 +430,19 @@ if (staticPath) {
         req.path.startsWith('/generate/') ||
         req.path === '/upload' ||
         req.path === '/task' ||
-        req.path === '/chat/stream') { // <-- Added streaming endpoint to skip list
+        req.path === '/chat/stream') {
       return next();
     }
-    
-    // Check if the request is for a static file that might exist
     const requestedFile = path.join(staticPath, req.path);
     if (fs.existsSync(requestedFile) && fs.statSync(requestedFile).isFile()) {
       return res.sendFile(requestedFile);
     }
-    
-    // Otherwise serve index.html for SPA routing
     res.sendFile(path.join(staticPath, 'index.html'));
   });
-  
   console.log('✅ SPA catch-all route configured');
-  
 } else {
   console.log('⚠️ No frontend files found - running in API-only mode');
-  
-  // API-only mode - return JSON for non-API routes
   app.get('*', (req, res, next) => {
-    // Skip health check and API routes
     if (req.path === '/health' || 
         req.path === '/agents' || 
         req.path === '/models' ||
@@ -616,7 +455,6 @@ if (staticPath) {
         req.path === '/chat/stream') {
       return next();
     }
-    
     res.status(404).json({ 
       success: false,
       error: 'Frontend not found',
@@ -642,7 +480,6 @@ if (staticPath) {
       documentation: 'https://github.com/cephasgm/CephasGM-AI'
     });
   });
-  
   console.log('ℹ️ API-only mode: All non-API routes will return JSON with endpoint list');
 }
 
@@ -661,7 +498,7 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`
 ╔══════════════════════════════════════════════════════════╗
 ║                                                          ║
-║   🚀 CephasGM AI Phase 3 Server Running                 ║
+║   🚀 CephasGM AI Phase 6 Server Running                 ║
 ║   📍 Port: ${PORT}                                          ║
 ║   🌍 Environment: ${config.nodeEnv.padEnd(15)}                   ║
 ║   🎯 Features: Chat, Research, Code, Video, Agents      ║
@@ -675,12 +512,10 @@ app.listen(PORT, '0.0.0.0', () => {
 ║                                                          ║
 ╚══════════════════════════════════════════════════════════╝
   `);
-  
   if (!staticPath) {
     console.log(`
 📝 API-ONLY MODE:
    Your API is live at: https://cephasgm-ai.onrender.com
-   
    Available endpoints:
    • GET  /health          - System status
    • GET  /agents          - List all agents
@@ -697,13 +532,10 @@ app.listen(PORT, '0.0.0.0', () => {
    • POST /upload          - Upload files
    • POST /memory/*        - Vector memory operations
    • POST /graph/*         - Knowledge graph operations
-   
-   To enable frontend, add index.html to /frontend or root directory.
     `);
   }
 });
 
-// Graceful shutdown
 process.on('SIGTERM', async () => {
   console.log('SIGTERM received, shutting down gracefully...');
   await modelHost.shutdown();
