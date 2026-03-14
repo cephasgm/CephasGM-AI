@@ -1,228 +1,197 @@
 /**
- * File Upload Handler
- * Fixed - Uses global namespace pattern
+ * File Upload Handler - Supports multiple files and AI interpretation
  */
-
 window.UploadModule = window.UploadModule || (function() {
-    const API_URL = window.CEPHASGM_CONFIG?.API_URL || "https://cephasgm-ai.onrender.com";
+    const API_BASE = window.CEPHASGM_CONFIG?.API_URL || 'https://cephasgm-ai.onrender.com';
     
-    let fileInput, uploadBtn, uploadStatus, uploadProgress;
+    let fileInput, uploadBtn, uploadStatus, uploadProgress, progressFill, fileInfo;
     
     function init() {
         fileInput = document.getElementById("file");
         uploadBtn = document.getElementById("uploadBtn");
         uploadStatus = document.getElementById("uploadStatus");
         uploadProgress = document.getElementById("uploadProgress");
+        progressFill = document.getElementById("uploadProgressFill");
+        fileInfo = document.getElementById("fileInfo");
 
         if (uploadBtn) {
-            uploadBtn.addEventListener('click', uploadFile);
+            uploadBtn.addEventListener('click', uploadFiles);
         }
 
         if (fileInput) {
             fileInput.addEventListener('change', handleFileSelect);
+            // Allow multiple files
+            fileInput.setAttribute('multiple', 'true');
         }
     }
-    
+
     function handleFileSelect(event) {
-        const file = event.target.files[0];
+        const files = event.target.files;
+        if (!files || files.length === 0) return;
         
-        if (!file) return;
-        
-        // Validate file size (max 10MB)
-        const maxSize = 10 * 1024 * 1024; // 10MB
-        if (file.size > maxSize) {
-            showStatus(`File too large. Max size: 10MB`, "error");
-            fileInput.value = "";
-            return;
+        let message = `Selected ${files.length} file(s):\n`;
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            // Validate each file size (max 10MB)
+            const maxSize = 10 * 1024 * 1024;
+            if (file.size > maxSize) {
+                showUploadStatus(`File ${file.name} too large. Max 10MB.`, "error");
+                fileInput.value = "";
+                return;
+            }
+            message += `- ${file.name} (${formatFileSize(file.size)})\n`;
         }
-        
-        // Show file info
-        showStatus(`Selected: ${file.name} (${formatFileSize(file.size)})`, "info");
+        showUploadStatus(message, "info");
     }
-    
-    async function uploadFile() {
+
+    async function uploadFiles() {
         if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
-            showStatus("Please select a file first", "error");
+            showUploadStatus("Please select at least one file", "error");
             return;
         }
 
-        const file = fileInput.files[0];
-        
-        // Validate file type
-        const allowedTypes = [
-            'application/pdf', 
-            'text/plain',
-            'application/msword',
-            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            'image/jpeg',
-            'image/png',
-            'image/jpg'
-        ];
-        
-        const fileExt = file.name.split('.').pop().toLowerCase();
-        const allowedExts = ['pdf', 'txt', 'doc', 'docx', 'jpg', 'jpeg', 'png'];
-        
-        if (!allowedTypes.includes(file.type) && !allowedExts.includes(fileExt)) {
-            showStatus("File type not supported. Please upload PDF, TXT, DOC, DOCX, JPG, or PNG", "error");
-            return;
-        }
+        const files = fileInput.files;
+        showUploadStatus(`Uploading ${files.length} file(s)...`, "info");
+        uploadBtn.disabled = true;
 
-        // Disable button
-        if (uploadBtn) {
-            uploadBtn.disabled = true;
-            uploadBtn.textContent = "Uploading...";
-        }
+        // Show progress bar
+        uploadProgress.style.display = 'block';
+        progressFill.style.width = '0%';
 
-        if (uploadProgress) {
-            uploadProgress.value = 0;
-            uploadProgress.style.display = "block";
-        }
+        const results = [];
+        let completed = 0;
 
-        showStatus("Uploading file...", "info");
-
-        try {
-            const formData = new FormData();
-            formData.append("file", file);
-            formData.append("filename", file.name);
-            formData.append("type", file.type);
-
-            // Simulate progress
-            simulateProgress();
-
-            // Try local backend first
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
             try {
-                const response = await fetch(`${API_URL}/upload`, {
-                    method: "POST",
-                    body: formData
-                });
-
-                if (response.ok) {
-                    const result = await response.json();
-                    handleUploadSuccess(result, file);
-                    return;
-                }
-            } catch (localError) {
-                console.log("Local upload failed, trying Firebase:", localError);
+                const result = await processSingleFile(file, i, files.length);
+                results.push(result);
+            } catch (error) {
+                console.error(`Error processing ${file.name}:`, error);
+                results.push({ fileName: file.name, error: error.message });
             }
+            completed++;
+            progressFill.style.width = `${(completed / files.length) * 100}%`;
+        }
 
-            // Fallback to Firebase function
-            const response = await fetch("https://us-central1-cephasgm-ai.cloudfunctions.net/documentAI", {
-                method: "POST",
-                body: formData
+        setTimeout(() => {
+            uploadProgress.style.display = 'none';
+            progressFill.style.width = '0%';
+        }, 500);
+
+        showUploadStatus(`Processed ${results.length} file(s)`, "success");
+        displayResults(results);
+
+        uploadBtn.disabled = false;
+        // Clear input
+        fileInput.value = '';
+    }
+
+    async function processSingleFile(file, index, total) {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        // 1. Upload to backend (optional)
+        let uploadResult = null;
+        try {
+            const response = await fetch(`${API_BASE}/upload`, {
+                method: 'POST',
+                body: formData,
+                mode: 'cors',
+                headers: { 'Accept': 'application/json' }
             });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+            if (response.ok) {
+                uploadResult = await response.json();
             }
+        } catch (e) {
+            console.log(`Upload to backend failed for ${file.name}:`, e);
+        }
 
-            const result = await response.json();
-            handleUploadSuccess(result, file);
+        // 2. Read file content for text files
+        let fileContent = '';
+        if (file.type.startsWith('text/') || file.name.endsWith('.txt')) {
+            fileContent = await file.text();
+        } else if (file.type === 'application/pdf') {
+            fileContent = '[PDF content – analysis not implemented]';
+        } else if (file.type.startsWith('image/')) {
+            fileContent = '[Image file – analysis not implemented]';
+        }
 
-        } catch(error) {
-            console.error("Upload error:", error);
-            showStatus(`❌ Upload failed: ${error.message}`, "error");
-            
-            if (uploadProgress) {
-                uploadProgress.style.display = "none";
-            }
-            
-        } finally {
-            // Re-enable button
-            if (uploadBtn) {
-                uploadBtn.disabled = false;
-                uploadBtn.textContent = "Upload File";
-            }
-            
-            // Clear progress interval
-            if (window.uploadProgressInterval) {
-                clearInterval(window.uploadProgressInterval);
+        // 3. Send to AI for interpretation if content exists
+        let interpretation = '';
+        if (fileContent && fileContent.length > 50) {
+            try {
+                const aiResponse = await fetch(`${API_BASE}/chat`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        prompt: `Analyze this document and provide a concise summary:\n\n${fileContent.substring(0, 3000)}`,
+                        model: 'gpt-3.5-turbo'
+                    })
+                });
+                if (aiResponse.ok) {
+                    const data = await aiResponse.json();
+                    interpretation = data.content || data.response || 'No interpretation';
+                }
+            } catch (e) {
+                console.log('AI interpretation failed:', e);
+                interpretation = 'Interpretation unavailable.';
             }
         }
+
+        return {
+            fileName: file.name,
+            size: file.size,
+            type: file.type,
+            uploadResult,
+            contentPreview: fileContent.substring(0, 500) + (fileContent.length > 500 ? '...' : ''),
+            interpretation
+        };
     }
-    
-    function handleUploadSuccess(result, file) {
-        // Complete progress
-        if (uploadProgress) {
-            uploadProgress.value = 100;
-            setTimeout(() => {
-                if (uploadProgress) uploadProgress.style.display = "none";
-            }, 1000);
-        }
 
-        showStatus(`✅ Upload successful! File: ${result.fileName || file.name}`, "success");
-        
-        // Display file info
-        displayFileInfo(result, file);
-        
-        // Clear file input
-        if (fileInput) {
-            fileInput.value = "";
-        }
-    }
-    
-    function simulateProgress() {
-        if (!uploadProgress) return;
-        
-        let progress = 0;
-        const interval = setInterval(() => {
-            progress += 10;
-            if (progress <= 90) {
-                uploadProgress.value = progress;
+    function displayResults(results) {
+        if (!fileInfo) return;
+        let html = '<h3>Upload Results</h3>';
+        results.forEach(r => {
+            html += `<div style="margin-top: 15px; padding: 10px; background: rgba(255,255,255,0.1); border-radius: 5px;">`;
+            html += `<strong>📄 ${r.fileName}</strong> (${formatFileSize(r.size)})<br>`;
+            if (r.error) {
+                html += `<span style="color: #ff6b6b;">❌ Error: ${r.error}</span>`;
             } else {
-                clearInterval(interval);
+                if (r.interpretation) {
+                    html += `<p><em>Interpretation:</em> ${r.interpretation}</p>`;
+                }
+                if (r.contentPreview) {
+                    html += `<details><summary>Preview</summary><pre style="background: #222; padding: 5px; max-height: 200px; overflow: auto;">${escapeHtml(r.contentPreview)}</pre></details>`;
+                }
             }
-        }, 200);
-        
-        window.uploadProgressInterval = interval;
+            html += `</div>`;
+        });
+        fileInfo.innerHTML = html;
     }
-    
-    function displayFileInfo(result, file) {
-        const infoDiv = document.getElementById("fileInfo");
-        if (!infoDiv) return;
-        
-        let html = `<div class="file-info success" style="margin-top: 10px; padding: 10px; background: #e8f5e8; border-radius: 5px;">`;
-        html += `<h4>📄 File processed:</h4>`;
-        html += `<p><strong>Name:</strong> ${result.fileName || file.name}</p>`;
-        
-        if (result.pageCount) {
-            html += `<p><strong>Pages:</strong> ${result.pageCount}</p>`;
-        }
-        
-        if (result.wordCount) {
-            html += `<p><strong>Words:</strong> ${result.wordCount}</p>`;
-        }
-        
-        if (result.summary) {
-            html += `<p><strong>Summary:</strong> ${result.summary}</p>`;
-        }
-        
-        if (result.text) {
-            html += `<details><summary>Preview</summary><pre style="max-height: 200px; overflow: auto;">${result.text.substring(0, 500)}${result.text.length > 500 ? '...' : ''}</pre></details>`;
-        }
-        
-        html += `<p><small>Processed at: ${new Date().toLocaleString()}</small></p>`;
-        html += `</div>`;
-        
-        infoDiv.innerHTML = html;
+
+    function escapeHtml(text) {
+        return text.replace(/[&<>"]/g, function(m) {
+            if (m === '&') return '&amp;';
+            if (m === '<') return '&lt;';
+            if (m === '>') return '&gt;';
+            if (m === '"') return '&quot;';
+            return m;
+        });
     }
-    
-    function showStatus(message, type) {
+
+    function showUploadStatus(message, type) {
         if (!uploadStatus) return;
-        
         uploadStatus.textContent = message;
         uploadStatus.className = `upload-status ${type}`;
-        
-        // Clear success messages after 5 seconds
         if (type === "success") {
             setTimeout(() => {
-                if (uploadStatus) {
-                    uploadStatus.textContent = "";
-                    uploadStatus.className = "upload-status";
-                }
+                uploadStatus.textContent = "";
+                uploadStatus.className = "upload-status";
             }, 5000);
         }
     }
-    
+
     function formatFileSize(bytes) {
         if (bytes === 0) return '0 Bytes';
         const k = 1024;
@@ -230,19 +199,15 @@ window.UploadModule = window.UploadModule || (function() {
         const i = Math.floor(Math.log(bytes) / Math.log(k));
         return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     }
-    
-    // Auto-initialize when DOM is ready
+
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);
     } else {
         init();
     }
-    
-    // Public API
-    return {
-        uploadFile
-    };
+
+    return { uploadFiles: uploadFiles };
 })();
 
-// Export for global use
-window.uploadFile = window.UploadModule.uploadFile;
+// For backward compatibility
+window.uploadFile = window.UploadModule.uploadFiles;
