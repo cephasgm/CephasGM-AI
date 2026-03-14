@@ -2,6 +2,7 @@
  * Main Server - CephasGM AI Phase 6
  * Updated with intelligent static file serving for Render deployment
  * Added additional routes for frontend compatibility
+ * Added Prometheus metrics and Sentry error tracking
  */
 const express = require('express');
 const bodyParser = require('body-parser');
@@ -9,6 +10,41 @@ const cors = require('cors');
 const config = require('./config');
 const path = require('path');
 const fs = require('fs');
+
+// ============================================
+// Monitoring & Error Tracking
+// ============================================
+const promClient = require('prom-client');
+const Sentry = require('@sentry/node');
+
+// Initialize Sentry (add DSN to environment variables)
+if (process.env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.NODE_ENV || 'development',
+  });
+  console.log('✅ Sentry initialized');
+}
+
+// Create a Registry for Prometheus metrics
+const register = new promClient.Registry();
+promClient.collectDefaultMetrics({ register });
+
+// Custom metrics
+const httpRequestDurationMicroseconds = new promClient.Histogram({
+  name: 'http_request_duration_ms',
+  help: 'Duration of HTTP requests in ms',
+  labelNames: ['method', 'route', 'status_code'],
+  buckets: [50, 100, 200, 300, 400, 500, 1000, 2000, 3000, 5000]
+});
+register.registerMetric(httpRequestDurationMicroseconds);
+
+const httpRequestCounter = new promClient.Counter({
+  name: 'http_requests_total',
+  help: 'Total number of HTTP requests',
+  labelNames: ['method', 'route', 'status_code']
+});
+register.registerMetric(httpRequestCounter);
 
 // Import AI modules
 const chatEngine = require('./ai/chat-engine');
@@ -48,6 +84,24 @@ app.options('*', cors());
 app.use(bodyParser.json({ limit: '50mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
 
+// ============================================
+// Metrics Middleware (place after CORS, before any routes)
+// ============================================
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    const route = req.route ? req.route.path : req.path;
+    httpRequestDurationMicroseconds
+      .labels(req.method, route, res.statusCode.toString())
+      .observe(duration);
+    httpRequestCounter
+      .labels(req.method, route, res.statusCode.toString())
+      .inc();
+  });
+  next();
+});
+
 // Request logging
 app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
@@ -67,6 +121,16 @@ app.get('/health', (req, res) => {
       vectorDb: config.vectorDbType
     }
   });
+});
+
+// Metrics endpoint (place before static file handling)
+app.get('/metrics', async (req, res) => {
+  try {
+    res.set('Content-Type', register.contentType);
+    res.end(await register.metrics());
+  } catch (err) {
+    res.status(500).end(err.message);
+  }
 });
 
 // Chat endpoint
@@ -483,6 +547,13 @@ if (staticPath) {
   console.log('ℹ️ API-only mode: All non-API routes will return JSON with endpoint list');
 }
 
+// ============================================
+// Sentry Error Handler (after all routes, before other error handlers)
+// ============================================
+if (process.env.SENTRY_DSN) {
+  app.use(Sentry.Handlers.errorHandler());
+}
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error('Unhandled error:', err);
@@ -509,6 +580,7 @@ app.listen(PORT, '0.0.0.0', () => {
 ║   🌐 CORS: ✅ Configured for Firebase                      ║
 ║   🆕 Added Routes: Image, Audio, Upload, Enhanced Tasks   ║
 ║   🆕 Streaming: ✅ /chat/stream enabled                    ║
+║   📈 Monitoring: ✅ /metrics enabled, Sentry ready         ║
 ║                                                          ║
 ╚══════════════════════════════════════════════════════════╝
   `);
