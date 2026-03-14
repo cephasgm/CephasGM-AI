@@ -1,9 +1,10 @@
 /**
  * Planner Agent - Multi-Agent Coordination
- * Breaks down complex tasks into subtasks and coordinates other agents
+ * Uses AI to break down tasks and delegates to other agents via AgentManager
  */
 const Agent = require("../core/agent-runtime");
-const fetch = require('node-fetch');
+const agentManager = require("./manager"); // Import the agent manager
+const chatEngine = require("../backend/ai/chat-engine"); // For AI planning
 
 class PlannerAgent extends Agent {
   constructor() {
@@ -12,10 +13,7 @@ class PlannerAgent extends Agent {
       maxRetries: 2
     });
     
-    this.subAgents = [];
     this.planHistory = [];
-    this.openaiApiKey = process.env.OPENAI_API_KEY;
-    this.ollamaApiKey = process.env.OLLAMA_API_KEY;
   }
 
   /**
@@ -47,7 +45,7 @@ class PlannerAgent extends Agent {
     // Decompose task into steps using AI
     const plan = await this.createPlan(task);
     
-    // Execute plan (if sub-agents are available)
+    // Execute plan by delegating to real agents
     const results = await this.executePlan(plan);
     
     // Store in history
@@ -70,79 +68,81 @@ class PlannerAgent extends Agent {
    * Create execution plan using AI
    */
   async createPlan(task) {
-    // Use AI to break down task if API keys are available
-    if (this.openaiApiKey || this.ollamaApiKey) {
-      try {
-        const prompt = `Break down the following complex task into a series of simple steps. For each step, specify which type of agent should handle it (research, coding, automation, or general). Return the result as a JSON array of objects with properties: agent, description, action.\n\nTask: ${task}`;
+    // Use AI to break down the task into steps
+    const prompt = `You are a task planning assistant. Break down the following complex task into a series of simple steps. For each step, specify which type of agent should handle it (research, coding, automation, or general). Return a JSON array of objects with properties: "agent", "description", and "action". Only return valid JSON, no extra text.
 
-        let planText;
-        if (this.openaiApiKey) {
-          const response = await fetch('https://api.openai.com/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${this.openaiApiKey}`
-            },
-            body: JSON.stringify({
-              model: 'gpt-3.5-turbo',
-              messages: [
-                { role: 'system', content: 'You are a task planning assistant. Always return valid JSON.' },
-                { role: 'user', content: prompt }
-              ],
-              temperature: 0.3,
-              max_tokens: 800
-            })
-          });
-          if (response.ok) {
-            const data = await response.json();
-            planText = data.choices[0].message.content;
-          }
-        } else if (this.ollamaApiKey) {
-          const response = await fetch('https://ollama.com/api/chat', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${this.ollamaApiKey}`
-            },
-            body: JSON.stringify({
-              model: 'llama3.2:3b',
-              messages: [
-                { role: 'system', content: 'You are a task planning assistant. Always return valid JSON.' },
-                { role: 'user', content: prompt }
-              ],
-              options: {
-                temperature: 0.3,
-                num_predict: 800
-              }
-            })
-          });
-          if (response.ok) {
-            const data = await response.json();
-            planText = data.message.content;
-          }
-        }
+Task: ${task}`;
 
-        if (planText) {
-          // Try to parse JSON
-          const jsonMatch = planText.match(/\[[\s\S]*\]/);
-          if (jsonMatch) {
-            const steps = JSON.parse(jsonMatch[0]);
-            if (Array.isArray(steps) && steps.length > 0) {
-              return {
-                task,
-                steps: steps.map((s, idx) => ({ id: idx + 1, ...s })),
-                estimatedTime: steps.length * 2000,
-                parallelizable: steps.length > 1 && steps.every(s => !s.dependsOn)
-              };
-            }
-          }
+    try {
+      const response = await chatEngine.chat(prompt, { model: 'gpt-3.5-turbo', temperature: 0.3, maxTokens: 800 });
+      const content = response.content;
+      // Extract JSON array from response
+      const jsonMatch = content.match(/\[[\s\S]*\]/);
+      if (!jsonMatch) throw new Error('No JSON found in response');
+      const steps = JSON.parse(jsonMatch[0]);
+      
+      return {
+        task,
+        steps: steps.map((s, idx) => ({ id: idx + 1, ...s })),
+        estimatedTime: steps.length * 2000,
+        parallelizable: steps.length > 1 && steps.every(s => !s.dependsOn)
+      };
+    } catch (error) {
+      console.warn('AI planning failed, using fallback', error);
+      // Fallback to simple rule-based planning
+      return this.fallbackPlan(task);
+    }
+  }
+
+  /**
+   * Execute the plan by delegating to real agents
+   */
+  async executePlan(plan) {
+    const results = [];
+    for (const step of plan.steps) {
+      console.log(`Executing step ${step.id}: ${step.description}`);
+      
+      // Find the appropriate agent via agent manager
+      const availableAgents = agentManager.listAgents();
+      const agent = availableAgents.find(a => a.name.toLowerCase().includes(step.agent.toLowerCase()));
+      
+      if (agent) {
+        try {
+          // We need to get the actual agent instance; agentManager has a getAgent method
+          const agentInstance = agentManager.getAgent(agent.name);
+          const result = await agentInstance.execute(step.action);
+          results.push({
+            step: step.id,
+            success: true,
+            agent: step.agent,
+            result
+          });
+        } catch (error) {
+          results.push({
+            step: step.id,
+            success: false,
+            agent: step.agent,
+            error: error.message
+          });
         }
-      } catch (e) {
-        console.warn('AI planning failed, using fallback', e);
+      } else {
+        // Simulate step execution if agent not found
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        results.push({
+          step: step.id,
+          success: true,
+          agent: step.agent,
+          result: `Executed: ${step.description}`
+        });
       }
     }
+    return results;
+  }
 
-    // Fallback to simple rule-based planning
+  /**
+   * Fallback plan generation (rule‑based)
+   */
+  fallbackPlan(task) {
     const taskLower = task.toLowerCase();
     const steps = [];
     
@@ -186,132 +186,39 @@ class PlannerAgent extends Agent {
       task,
       steps,
       estimatedTime: steps.length * 2000,
-      parallelizable: this.canParallelize(steps)
+      parallelizable: steps.length > 1 && steps.every(s => !s.dependsOn)
     };
   }
 
-  /**
-   * Execute the plan
-   */
-  async executePlan(plan) {
-    const results = [];
-    
-    for (const step of plan.steps) {
-      console.log(`Executing step ${step.id}: ${step.description}`);
-      
-      // Find the right agent
-      const agent = this.findAgent(step.agent);
-      
-      if (agent) {
-        try {
-          const result = await agent.execute(step.action);
-          results.push({
-            step: step.id,
-            success: true,
-            agent: step.agent,
-            result
-          });
-        } catch (error) {
-          results.push({
-            step: step.id,
-            success: false,
-            agent: step.agent,
-            error: error.message
-          });
-        }
-      } else {
-        // Simulate step execution
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        results.push({
-          step: step.id,
-          success: true,
-          agent: step.agent,
-          result: `Executed: ${step.description}`
-        });
-      }
-    }
-    
-    return results;
-  }
-
-  /**
-   * Find an agent by name
-   */
-  findAgent(agentName) {
-    // This would be populated by the OS
-    // For now, return null (simulated)
-    return null;
-  }
-
-  /**
-   * Check if steps can be parallelized
-   */
-  canParallelize(steps) {
-    // Simple heuristic: steps that don't depend on each other
-    return steps.length > 1 && steps.every(s => !s.dependsOn);
-  }
-
-  /**
-   * Extract topic from task
-   */
   extractTopic(task) {
     return task.replace(/research|find|learn about/gi, '').trim();
   }
 
-  /**
-   * Extract code task
-   */
   extractCodeTask(task) {
     return task.replace(/code|program|write|run code/gi, '').trim();
   }
 
-  /**
-   * Generate summary of execution
-   */
   generateSummary(plan, results) {
     const successful = results.filter(r => r.success).length;
     const total = results.length;
-    
     return `Completed ${successful}/${total} steps successfully. ${plan.parallelizable ? 'Steps were executed in parallel.' : 'Steps were executed sequentially.'}`;
   }
 
-  /**
-   * Generate recommendations for future plans
-   */
   generateRecommendations(plan, results) {
     const recommendations = [];
-    
     if (results.some(r => !r.success)) {
       recommendations.push('Add error handling for failed steps');
     }
-    
     if (plan.steps.length > 5) {
       recommendations.push('Consider breaking into smaller sub-plans');
     }
-    
     return recommendations;
   }
 
-  /**
-   * Replan based on feedback
-   */
-  async replan(taskId, feedback) {
-    const plan = this.planHistory.find(p => p.task.includes(taskId));
-    
-    if (!plan) {
-      throw new Error('Plan not found');
+  validateTask(task) {
+    if (!task || typeof task !== 'string') {
+      throw new Error('Task must be a non-empty string');
     }
-    
-    console.log('🔄 Replanning based on feedback...');
-    
-    // Modify plan based on feedback
-    const newPlan = {
-      ...plan.plan,
-      modified: true,
-      feedback
-    };
-    
-    return newPlan;
   }
 }
 
