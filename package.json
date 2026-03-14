@@ -17,6 +17,7 @@
     "format": "prettier --write .",
     "build": "echo 'No build step required'",
     "deploy": "echo 'Deployment handled by Render'",
+    "build:react": "cd client && npm install && npm run build && mkdir -p ../frontend/app && cp -r dist/* ../frontend/app/ && echo '✅ React build complete'",
     "phase1": "echo 'Running Phase 1: Basic PWA with Firebase Auth'",
     "phase2": "echo 'Running Phase 2: AI Features with Firebase Functions'",
     "phase3": "echo 'Running Phase 3: Multi-Agent System'",
