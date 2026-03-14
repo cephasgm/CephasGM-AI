@@ -736,7 +736,7 @@ h1 {
 /* ============================================ */
 /* STREAMING CURSOR STYLES */
 /* ============================================ */
-.streaming-content {
+.streaming-message .message-content {
   border-right: 2px solid #ffb300;
   animation: blink 0.7s step-end infinite;
   min-height: 1.2em;
@@ -1133,7 +1133,7 @@ function formatAgentResponse(data) {
 }
 
 // ============================================
-// Chat Functions
+// Chat Functions (non-streaming fallback)
 // ============================================
 async function sendMessage() {
   const input = document.getElementById('userInput');
@@ -1166,66 +1166,96 @@ async function sendMessage() {
   }
 }
 
-// Streaming chat function
+// ============================================
+// WebSocket Streaming Chat
+// ============================================
+let ws = null;
+let reconnectAttempts = 0;
+const maxReconnectAttempts = 5;
+
+function connectWebSocket() {
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const wsUrl = `${protocol}//${window.location.host}`;
+  ws = new WebSocket(wsUrl);
+  
+  ws.onopen = () => {
+    console.log('✅ WebSocket connected');
+    reconnectAttempts = 0;
+  };
+  
+  ws.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    if (data.done) return;
+    
+    if (data.error) {
+      addMessageToChat('ai', `Error: ${data.error}`);
+      return;
+    }
+    
+    if (data.choices && data.choices[0].delta.content) {
+      // Append to current streaming message
+      const contentDiv = document.querySelector('.streaming-message .message-content');
+      if (contentDiv) {
+        contentDiv.innerHTML += data.choices[0].delta.content;
+        document.getElementById('chat').scrollTop = document.getElementById('chat').scrollHeight;
+      }
+    }
+  };
+  
+  ws.onerror = (error) => {
+    console.error('WebSocket error:', error);
+  };
+  
+  ws.onclose = () => {
+    console.log('WebSocket closed');
+    if (reconnectAttempts < maxReconnectAttempts) {
+      reconnectAttempts++;
+      setTimeout(connectWebSocket, 1000 * reconnectAttempts);
+    }
+  };
+}
+
 async function streamMessage() {
   const input = document.getElementById('userInput');
   const message = input.value.trim();
   if (!message) return;
+
   addMessageToChat('user', message);
   input.value = '';
+
   const messageId = 'msg-' + Date.now();
-  const typingId = showTypingIndicator();
-  try {
-    const response = await fetch(`${API_BASE}/chat/stream`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt: message, model: 'gpt-3.5-turbo' })
+  const aiMessageDiv = document.createElement('div');
+  aiMessageDiv.className = 'message ai-message streaming-message';
+  aiMessageDiv.id = messageId;
+  const timestamp = new Date().toLocaleTimeString();
+  aiMessageDiv.innerHTML = `
+    <div class="message-header">
+      <span>CephasGM AI</span>
+      <span class="timestamp">${timestamp}</span>
+    </div>
+    <div class="message-content"></div>
+  `;
+  document.getElementById('chat').appendChild(aiMessageDiv);
+
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    connectWebSocket();
+    // Wait for connection
+    await new Promise((resolve) => {
+      ws.onopen = () => resolve();
     });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    removeTypingIndicator(typingId);
-    const aiMessageDiv = document.createElement('div');
-    aiMessageDiv.className = 'message ai-message';
-    aiMessageDiv.id = messageId;
-    const timestamp = new Date().toLocaleTimeString();
-    aiMessageDiv.innerHTML = `
-      <div class="message-header">
-        <span>CephasGM AI</span>
-        <span class="timestamp">${timestamp}</span>
-      </div>
-      <div class="message-content streaming-content" id="${messageId}-content"></div>
-    `;
-    document.getElementById('chat').appendChild(aiMessageDiv);
-    const contentDiv = document.getElementById(`${messageId}-content`);
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let fullResponse = '';
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      const chunk = decoder.decode(value);
-      const lines = chunk.split('\n');
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          try {
-            const data = JSON.parse(line.slice(6));
-            if (data.choices && data.choices[0].delta.content) {
-              fullResponse += data.choices[0].delta.content;
-              contentDiv.innerHTML = fullResponse.replace(/\n/g, '<br>');
-              document.getElementById('chat').scrollTop = document.getElementById('chat').scrollHeight;
-            }
-          } catch (e) {
-            console.log('Parse error:', e);
-          }
-        }
-      }
-    }
-    saveToMemory(message, fullResponse);
-  } catch (error) {
-    removeTypingIndicator(typingId);
-    addMessageToChat('ai', `Error: ${error.message}. Please try again.`);
-    console.error('Stream error:', error);
   }
+
+  ws.send(JSON.stringify({
+    type: 'chat',
+    prompt: message,
+    model: 'gpt-3.5-turbo'
+  }));
 }
+
+// Initialize WebSocket on page load
+window.addEventListener('load', () => {
+  connectWebSocket();
+});
 
 function addMessageToChat(sender, content) {
   const chatBox = document.getElementById('chat');
@@ -1287,10 +1317,9 @@ async function fetchUserRole() {
   }
 }
 
-// Function to add admin tab dynamically
 function addAdminTab() {
   const tabNav = document.getElementById('tabNav');
-  if (document.getElementById('adminTabBtn')) return; // already added
+  if (document.getElementById('adminTabBtn')) return;
   const adminBtn = document.createElement('button');
   adminBtn.className = 'tab-btn';
   adminBtn.id = 'adminTabBtn';
@@ -1298,7 +1327,6 @@ function addAdminTab() {
   adminBtn.textContent = '👑 Admin';
   tabNav.appendChild(adminBtn);
   
-  // Create admin tab content
   const adminTab = document.createElement('div');
   adminTab.id = 'adminTab';
   adminTab.className = 'tab-content';
@@ -1319,7 +1347,6 @@ function addAdminTab() {
   document.querySelector('.container').appendChild(adminTab);
 }
 
-// Function to update user role (called from admin panel)
 window.updateUserRole = async function() {
   const email = document.getElementById('adminUserEmail').value.trim();
   const role = document.getElementById('adminNewRole').value;
@@ -1374,7 +1401,6 @@ auth.onAuthStateChanged(async (user) => {
     authMessage.style.display = 'none';
     tabNav.style.display = 'flex';
     
-    // Fetch and display role
     const role = await fetchUserRole();
     if (role) {
       roleBadge.textContent = role;
@@ -1384,7 +1410,6 @@ auth.onAuthStateChanged(async (user) => {
     if (typeof loadMemories === 'function') loadMemories();
     loadChatHistory();
     
-    // If admin, add admin tab
     if (role === 'admin') {
       addAdminTab();
     }
@@ -1392,7 +1417,6 @@ auth.onAuthStateChanged(async (user) => {
     userInfo.style.display = 'none';
     authMessage.style.display = 'block';
     tabNav.style.display = 'none';
-    // Hide admin tab if it exists
     const adminBtn = document.getElementById('adminTabBtn');
     if (adminBtn) adminBtn.remove();
     const adminTab = document.getElementById('adminTab');
@@ -1501,7 +1525,7 @@ function showImageStatus(message, type) {
 }
 
 // ============================================
-// Video Generation (NEW)
+// Video Generation
 // ============================================
 async function generateVideo() {
   const prompt = document.getElementById('videoPrompt').value.trim();
@@ -1513,7 +1537,6 @@ async function generateVideo() {
   document.getElementById('generateVideoBtn').disabled = true;
   try {
     let result, videoUrl = null;
-    // Try multiple endpoints (adjust as needed)
     const endpoints = [
       `${API_BASE}/video`,
       `${API_BASE}/generate/video`,
@@ -1538,7 +1561,6 @@ async function generateVideo() {
       }
     }
     if (!videoUrl) {
-      // Fallback to a placeholder video (simulated)
       videoUrl = 'https://storage.cephasgm.ai/videos/simulated.mp4';
     }
     const videoResult = document.getElementById('videoResult');
@@ -1580,7 +1602,7 @@ function showVideoStatus(message, type) {
 }
 
 // ============================================
-// Upload Functions (multi-file, AI interpretation)
+// Upload Functions
 // ============================================
 async function uploadFiles() {
   const fileInput = document.getElementById('file');
@@ -1726,7 +1748,7 @@ function escapeHtml(text) {
 }
 
 // ============================================
-// Voice Functions (auto-send with streaming)
+// Voice Functions
 // ============================================
 let recognition = null;
 let isListening = false;
@@ -1791,7 +1813,7 @@ function speak(text) {
 }
 
 // ============================================
-// Agent Functions (simplified, use chat)
+// Agent Functions
 // ============================================
 async function runAgent(task, type = 'auto') {
   const resultDiv = document.getElementById('agentResult');
@@ -1857,7 +1879,7 @@ async function runCustomAgent() {
 }
 
 // ============================================
-// Memory Functions (simplified)
+// Memory Functions
 // ============================================
 async function loadMemories() {
   if (!currentUser) return;
@@ -1916,7 +1938,7 @@ function clearLocalMemory() {
 }
 
 // ============================================
-// Research Functions (AI-powered)
+// Research Functions
 // ============================================
 async function conductResearch() {
   const topic = document.getElementById('researchTopic').value.trim();
@@ -2090,7 +2112,7 @@ window.sendMessage = sendMessage;
 window.streamMessage = streamMessage;
 window.clearChat = clearChat;
 window.generateImage = generateImage;
-window.generateVideo = generateVideo; // Added
+window.generateVideo = generateVideo;
 window.uploadFiles = uploadFiles;
 window.startVoice = startVoice;
 window.stopVoice = stopVoice;
@@ -2111,7 +2133,7 @@ window.generateAudio = generateAudio;
 window.runCode = runCode;
 window.debugCode = debugCode;
 window.clearCode = clearCode;
-window.updateUserRole = updateUserRole; // Added for admin panel
+window.updateUserRole = updateUserRole;
 </script>
 
 <!-- Service worker -->
