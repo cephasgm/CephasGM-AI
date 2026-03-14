@@ -1,11 +1,13 @@
 /**
  * AI Software Factory - Complete software development lifecycle
  * Generates, tests, deploys, and maintains code
+ * Integrated with feedback loop for learning.
  */
 const EventEmitter = require('events');
 const vm = require('vm');
 const fs = require('fs').promises;
 const path = require('path');
+const feedbackLoop = require('../learning/feedback-loop'); // Added for feedback recording
 
 class SoftwareFactory extends EventEmitter {
   constructor(config = {}) {
@@ -77,22 +79,40 @@ class SoftwareFactory extends EventEmitter {
       const requirements = this.parseRequirements(task);
 
       // Determine action
+      let result;
       if (task.toLowerCase().includes('build code') || task.toLowerCase().includes('generate')) {
-        return await this.buildCode(task, requirements, options);
+        result = await this.buildCode(task, requirements, options);
       } else if (task.toLowerCase().includes('test')) {
-        return await this.testCode(task, options);
+        result = await this.testCode(task, options);
       } else if (task.toLowerCase().includes('deploy')) {
-        return await this.deployCode(task, options);
+        result = await this.deployCode(task, options);
       } else if (task.toLowerCase().includes('review')) {
-        return await this.reviewCode(task, options);
+        result = await this.reviewCode(task, options);
       } else if (task.toLowerCase().includes('debug') || task.toLowerCase().includes('fix')) {
-        return await this.debugCode(task, options);
+        result = await this.debugCode(task, options);
       } else {
-        return await this.buildCode(task, requirements, options);
+        result = await this.buildCode(task, requirements, options);
       }
+
+      // Record interaction in feedback loop
+      const interactionId = await feedbackLoop.record(
+        task,
+        typeof result === 'string' ? result : JSON.stringify(result),
+        { agent: 'software-factory', id: this.id, projectId }
+      );
+      result.interactionId = interactionId;
+
+      return result;
 
     } catch (error) {
       console.error('Software factory failed:', error);
+
+      // Record failure
+      await feedbackLoop.record(
+        task,
+        error.message,
+        { agent: 'software-factory', id: this.id, error: true }
+      );
 
       return {
         success: false,
