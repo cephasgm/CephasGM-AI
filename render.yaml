@@ -26,5 +26,3 @@ services:
         sync: false
       - key: SENTRY_DSN
         sync: false
-    envVarGroups:
-      - name: cephasgm-ai-env
