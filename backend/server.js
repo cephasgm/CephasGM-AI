@@ -486,7 +486,7 @@ if (staticPath) {
   app.use(express.static(staticPath));
 
   // Also serve React app from /app
-  const reactAppPath = path.join(staticPath, 'app');
+  const reactAppPath = path.join(staticPath, 'frontend', 'app');
   if (fs.existsSync(reactAppPath)) {
     app.use('/app', express.static(reactAppPath));
     console.log(`📁 React app served from /app at: ${reactAppPath}`);
