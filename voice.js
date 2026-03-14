@@ -1,9 +1,8 @@
 /**
  * Voice Recognition and Synthesis
- * Fixed - No duplicate declarations
+ * Fixed - No duplicate declarations, auto‑send with streaming
  */
 
-// Use namespace pattern to avoid globals
 window.VoiceModule = window.VoiceModule || (function() {
     // Private variables
     let recognition = null;
@@ -70,16 +69,22 @@ window.VoiceModule = window.VoiceModule || (function() {
                 voiceOutput.value = transcript;
             }
             
-            const promptInput = document.getElementById("prompt");
-            if (promptInput) {
-                promptInput.value = transcript;
+            // Put transcript in the main input
+            const userInput = document.getElementById("userInput");
+            if (userInput) {
+                userInput.value = transcript;
             }
             
             if (voiceStatus) {
-                voiceStatus.textContent = `Recognized: "${transcript}"`;
+                voiceStatus.textContent = `Recognized: "${transcript}" – sending...`;
             }
             
-            autoSendAfterVoice();
+            // Automatically send using streaming (if available)
+            if (typeof window.streamMessage === 'function') {
+                window.streamMessage();
+            } else if (typeof window.sendMessage === 'function') {
+                window.sendMessage();
+            }
         };
         
         recognition.onerror = function(event) {
@@ -166,15 +171,6 @@ window.VoiceModule = window.VoiceModule || (function() {
         } else {
             voiceBtn.classList.remove('listening');
             voiceBtn.innerHTML = '🎤 Start Voice';
-        }
-    }
-    
-    function autoSendAfterVoice() {
-        const sendBtn = document.getElementById("sendBtn");
-        const promptInput = document.getElementById("prompt");
-        
-        if (sendBtn && promptInput && promptInput.value.trim()) {
-            setTimeout(() => sendBtn.click(), 1000);
         }
     }
     
