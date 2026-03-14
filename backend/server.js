@@ -485,7 +485,7 @@ if (staticPath) {
   // Serve static files from the found location (root PWA)
   app.use(express.static(staticPath));
 
-  // Also serve React app from /app
+  // Also serve React app from /app (build placed in frontend/app)
   const reactAppPath = path.join(staticPath, 'frontend', 'app');
   if (fs.existsSync(reactAppPath)) {
     app.use('/app', express.static(reactAppPath));
@@ -511,7 +511,7 @@ if (staticPath) {
         req.path === '/upload' ||
         req.path === '/task' ||
         req.path === '/chat/stream' ||
-        req.path.startsWith('/app')) {  // <-- Skip React routes
+        req.path.startsWith('/app')) {  // Skip React routes
       return next();
     }
     const requestedFile = path.join(staticPath, req.path);
