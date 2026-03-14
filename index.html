@@ -682,6 +682,20 @@ h1 {
   overflow-x: auto;
 }
 
+/* ============================================ */
+/* STREAMING CURSOR STYLES (NEW) */
+/* ============================================ */
+.streaming-content {
+  border-right: 2px solid #ffb300;
+  animation: blink 0.7s step-end infinite;
+  min-height: 1.2em;
+}
+
+@keyframes blink {
+  from, to { border-color: transparent; }
+  50% { border-color: #ffb300; }
+}
+
 /* Footer */
 .footer {
   text-align: center;
@@ -747,7 +761,7 @@ h1 {
       <div class="input-area">
         <input type="text" id="userInput" placeholder="Ask CephasGM AI anything..." autocomplete="off">
         <button class="voice-btn" id="voiceBtn" onclick="toggleVoice()">🎤</button>
-        <button onclick="sendMessage()" id="sendBtn">Send</button>
+        <button onclick="streamMessage()" id="sendBtn">Send (Streaming)</button>
         <button onclick="clearChat()" style="background: #dc3545;">🗑️</button>
       </div>
     </div>
@@ -1057,7 +1071,7 @@ function formatAgentResponse(data) {
 }
 
 // ============================================
-// Chat Functions - UPDATED
+// Chat Functions
 // ============================================
 async function sendMessage() {
   const input = document.getElementById('userInput');
@@ -1079,7 +1093,7 @@ async function sendMessage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           prompt: message,
-          model: 'llama3.2'
+          model: 'gpt-3.5-turbo' // or 'llama3.2' – choose default
         })
       });
       
@@ -1099,6 +1113,92 @@ async function sendMessage() {
     removeTypingIndicator(typingId);
     addMessageToChat('ai', `Error: ${error.message}. Please try again.`);
     console.error('Chat error:', error);
+  }
+}
+
+// ============================================
+// Streaming Chat Functions (NEW)
+// ============================================
+async function streamMessage() {
+  const input = document.getElementById('userInput');
+  const message = input.value.trim();
+  
+  if (!message) return;
+  
+  addMessageToChat('user', message);
+  input.value = '';
+  
+  const messageId = 'msg-' + Date.now();
+  const typingId = showTypingIndicator();
+  
+  try {
+    // Call the streaming endpoint
+    const response = await fetch(`${API_BASE}/chat/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        prompt: message,
+        model: 'gpt-3.5-turbo' // or 'llama3.2' – choose default
+      })
+    });
+    
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    
+    removeTypingIndicator(typingId);
+    
+    // Create a container for the streaming response
+    const aiMessageDiv = document.createElement('div');
+    aiMessageDiv.className = 'message ai-message';
+    aiMessageDiv.id = messageId;
+    
+    const timestamp = new Date().toLocaleTimeString();
+    aiMessageDiv.innerHTML = `
+      <div class="message-header">
+        <span>CephasGM AI</span>
+        <span class="timestamp">${timestamp}</span>
+      </div>
+      <div class="message-content streaming-content" id="${messageId}-content"></div>
+    `;
+    
+    document.getElementById('chat').appendChild(aiMessageDiv);
+    
+    const contentDiv = document.getElementById(`${messageId}-content`);
+    
+    // Read the stream
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let fullResponse = '';
+    
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      
+      const chunk = decoder.decode(value);
+      const lines = chunk.split('\n');
+      
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try {
+            const data = JSON.parse(line.slice(6));
+            if (data.choices && data.choices[0].delta.content) {
+              fullResponse += data.choices[0].delta.content;
+              contentDiv.innerHTML = fullResponse.replace(/\n/g, '<br>');
+              // Auto-scroll
+              document.getElementById('chat').scrollTop = document.getElementById('chat').scrollHeight;
+            }
+          } catch (e) {
+            console.log('Parse error:', e);
+          }
+        }
+      }
+    }
+    
+    saveToMemory(message, fullResponse);
+    
+  } catch (error) {
+    removeTypingIndicator(typingId);
+    addMessageToChat('ai', `Error: ${error.message}. Please try again.`);
+    console.error('Stream error:', error);
   }
 }
 
@@ -1411,7 +1511,7 @@ function initVoice() {
       document.getElementById('voiceStatus').textContent = `Recognized: "${transcript}"`;
       
       if (confirm(`Send: "${transcript}"?`)) {
-        sendMessage();
+        streamMessage(); // Use streaming by default
       }
     };
     
@@ -1841,6 +1941,7 @@ window.onload = async function() {
 // Make functions globally available
 window.switchTab = switchTab;
 window.sendMessage = sendMessage;
+window.streamMessage = streamMessage; // <-- Expose the new streaming function
 window.clearChat = clearChat;
 window.generateImage = generateImage;
 window.uploadFile = uploadFile;
