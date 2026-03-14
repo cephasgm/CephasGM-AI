@@ -1,10 +1,12 @@
 /**
  * Planner Agent - Multi-Agent Coordination
  * Uses AI to break down tasks and delegates to other agents via AgentManager
+ * Integrated with feedback loop for learning
  */
 const Agent = require("../core/agent-runtime");
-const agentManager = require("./manager"); // Import the agent manager
-const chatEngine = require("../backend/ai/chat-engine"); // For AI planning
+const agentManager = require("./manager");
+const chatEngine = require("../backend/ai/chat-engine");
+const feedbackLoop = require("../learning/feedback-loop");
 
 class PlannerAgent extends Agent {
   constructor() {
@@ -14,6 +16,7 @@ class PlannerAgent extends Agent {
     });
     
     this.planHistory = [];
+    this.performanceHistory = []; // Store success rates per agent type
   }
 
   /**
@@ -31,7 +34,7 @@ class PlannerAgent extends Agent {
    * Get agent capabilities
    */
   getCapabilities() {
-    return ['task decomposition', 'workflow orchestration', 'resource allocation', 'scheduling'];
+    return ['task decomposition', 'workflow orchestration', 'resource allocation', 'scheduling', 'learning from feedback'];
   }
 
   /**
@@ -42,8 +45,11 @@ class PlannerAgent extends Agent {
     
     console.log(`📋 Planner agent creating plan for: "${task.substring(0, 50)}..."`);
     
-    // Decompose task into steps using AI
-    const plan = await this.createPlan(task);
+    // Optionally use feedback to influence planning
+    const pastSuccessRates = await this.getPastSuccessRates();
+    
+    // Decompose task into steps using AI (with context of past performance)
+    const plan = await this.createPlan(task, pastSuccessRates);
     
     // Execute plan by delegating to real agents
     const results = await this.executePlan(plan);
@@ -56,27 +62,44 @@ class PlannerAgent extends Agent {
       timestamp: new Date().toISOString()
     });
     
+    // Record overall plan outcome
+    const overallSuccess = results.every(r => r.success);
+    const planResult = {
+      plan: plan.steps.map(s => s.description),
+      stepResults: results,
+      overallSuccess
+    };
+    await this.recordOutcome(task, planResult, overallSuccess, { type: 'plan' });
+    
     return {
       plan: plan,
       results: results,
       summary: this.generateSummary(plan, results),
-      recommendations: this.generateRecommendations(plan, results)
+      recommendations: this.generateRecommendations(plan, results),
+      learning: this.getLearningInsights()
     };
   }
 
   /**
-   * Create execution plan using AI
+   * Create execution plan using AI, optionally influenced by past performance
    */
-  async createPlan(task) {
-    // Use AI to break down the task into steps
+  async createPlan(task, pastSuccessRates = {}) {
+    // Build prompt with optional performance context
+    let performanceContext = '';
+    if (Object.keys(pastSuccessRates).length > 0) {
+      performanceContext = '\nBased on past performance, the success rates for agent types are:\n' +
+        Object.entries(pastSuccessRates)
+          .map(([agent, rate]) => `- ${agent}: ${(rate * 100).toFixed(1)}% success`)
+          .join('\n');
+    }
+
     const prompt = `You are a task planning assistant. Break down the following complex task into a series of simple steps. For each step, specify which type of agent should handle it (research, coding, automation, or general). Return a JSON array of objects with properties: "agent", "description", and "action". Only return valid JSON, no extra text.
 
-Task: ${task}`;
+Task: ${task}${performanceContext}`;
 
     try {
       const response = await chatEngine.chat(prompt, { model: 'gpt-3.5-turbo', temperature: 0.3, maxTokens: 800 });
       const content = response.content;
-      // Extract JSON array from response
       const jsonMatch = content.match(/\[[\s\S]*\]/);
       if (!jsonMatch) throw new Error('No JSON found in response');
       const steps = JSON.parse(jsonMatch[0]);
@@ -89,7 +112,6 @@ Task: ${task}`;
       };
     } catch (error) {
       console.warn('AI planning failed, using fallback', error);
-      // Fallback to simple rule-based planning
       return this.fallbackPlan(task);
     }
   }
@@ -108,16 +130,18 @@ Task: ${task}`;
       
       if (agent) {
         try {
-          // We need to get the actual agent instance; agentManager has a getAgent method
           const agentInstance = agentManager.getAgent(agent.name);
-          const result = await agentInstance.execute(step.action);
+          // Use the agent's executeWithRetry (which records feedback automatically)
+          const result = await agentInstance.executeWithRetry(step.action);
           results.push({
             step: step.id,
             success: true,
             agent: step.agent,
-            result
+            result: result.result,
+            interactionId: result.interactionId
           });
         } catch (error) {
+          // Error already recorded by agent
           results.push({
             step: step.id,
             success: false,
@@ -128,15 +152,44 @@ Task: ${task}`;
       } else {
         // Simulate step execution if agent not found
         await new Promise(resolve => setTimeout(resolve, 1000));
+        const interactionId = await feedbackLoop.record(
+          step.action,
+          `Simulated: ${step.description}`,
+          { agent: step.agent, simulated: true }
+        );
+        await feedbackLoop.submitFeedback(interactionId, 'success', 3);
         results.push({
           step: step.id,
           success: true,
           agent: step.agent,
-          result: `Executed: ${step.description}`
+          result: `Executed: ${step.description}`,
+          interactionId
         });
       }
     }
     return results;
+  }
+
+  /**
+   * Get past success rates for agent types from feedback loop
+   */
+  async getPastSuccessRates() {
+    const insights = await feedbackLoop.getInsights();
+    const rates = {};
+    if (insights.topAgents) {
+      // Convert raw counts to rates (simplified – could be improved)
+      insights.topAgents.forEach(([agent, count]) => {
+        rates[agent] = count / (insights.metrics.totalInteractions || 1);
+      });
+    }
+    return rates;
+  }
+
+  /**
+   * Get learning insights from feedback loop
+   */
+  getLearningInsights() {
+    return feedbackLoop.getInsights();
   }
 
   /**
