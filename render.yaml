@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: cephasgm-ai
+    runtime: node
+    buildCommand: npm install && cd client && npm install && npm run build && cp -r dist/* ../frontend/
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
