@@ -4,7 +4,7 @@ services:
     runtime: node
     repo: https://github.com/cephasgm/CephasGM-AI
     branch: main
-    buildCommand: npm run build:react
+    buildCommand: npm install && npm run build:react
     startCommand: npm start
     healthCheckPath: /health
     envVars:
