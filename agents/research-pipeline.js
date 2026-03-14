@@ -1,9 +1,11 @@
 /**
  * Research Pipeline Agent
  * Multi-stage research with web search, summarization, and analysis
+ * Integrated with feedback loop for learning.
  */
 const fetch = require("node-fetch");
 const EventEmitter = require('events');
+const feedbackLoop = require('../learning/feedback-loop'); // Added for feedback recording
 
 class ResearchPipeline extends EventEmitter {
   constructor() {
@@ -68,6 +70,14 @@ class ResearchPipeline extends EventEmitter {
         }
       };
 
+      // Record interaction in feedback loop
+      const interactionId = await feedbackLoop.record(
+        topic,
+        summary,
+        { agent: 'research-pipeline', sourceCount: sources.length, depth }
+      );
+      result.interactionId = interactionId;
+
       // Cache the result
       this.cache.set(cacheKey, result);
       
@@ -80,6 +90,13 @@ class ResearchPipeline extends EventEmitter {
 
     } catch (error) {
       console.error('Research pipeline failed:', error);
+
+      // Record failure
+      await feedbackLoop.record(
+        topic,
+        error.message,
+        { agent: 'research-pipeline', error: true }
+      );
       
       return {
         id: researchId,
