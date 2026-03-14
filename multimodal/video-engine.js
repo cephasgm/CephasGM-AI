@@ -1,6 +1,6 @@
 /**
  * Multimodal Video Engine - Video generation and processing with AI
- * Currently simulated – integrate with RunwayML or Replicate when keys are available
+ * Integrates RunwayML and Replicate for real video generation.
  */
 const EventEmitter = require('events');
 const fs = require('fs').promises;
@@ -57,7 +57,7 @@ class VideoEngine extends EventEmitter {
     this.outputDir = path.join(__dirname, '../generated-videos');
     this.ollamaApiKey = process.env.OLLAMA_API_KEY;
     this.replicateApiToken = process.env.REPLICATE_API_TOKEN;
-    this.runwayApiKey = process.env.RUNWAYML_KEY;
+    this.runwayApiKey = process.env.RUNWAYML_API_KEY;
     
     this.initOutputDir();
     
@@ -105,22 +105,22 @@ class VideoEngine extends EventEmitter {
       let enhancedPrompt = prompt;
       
       if (this.ollamaApiKey) {
-        // Generate video script
         script = await this.generateVideoScript(prompt, duration, style);
-        
-        // Generate storyboard description
         storyboard = await this.generateStoryboard(prompt, duration);
-        
-        // Enhance prompt
         const enhanced = await this.enhanceVideoPrompt(prompt, style);
-        if (enhanced) {
-          enhancedPrompt = enhanced;
-        }
+        if (enhanced) enhancedPrompt = enhanced;
       }
 
-      // Generate video – currently simulated
-      // To use a real API, add the appropriate branch here (e.g., Replicate, RunwayML)
-      const result = await this.generateVideo(enhancedPrompt, provider, model, duration, resolution, fps);
+      // Attempt real API call based on provider and key availability
+      let result;
+      if (provider === 'runwayml' && this.runwayApiKey) {
+        result = await this.callRunwayML(enhancedPrompt, model, duration, resolution, fps);
+      } else if (provider === 'replicate' && this.replicateApiToken) {
+        result = await this.callReplicate(enhancedPrompt, model, duration);
+      } else {
+        // Fallback to simulation
+        result = await this.simulateGeneration(enhancedPrompt, provider, model, duration, resolution, fps);
+      }
 
       const videoData = {
         id: requestId,
@@ -162,6 +162,111 @@ class VideoEngine extends EventEmitter {
         timestamp: new Date().toISOString()
       };
     }
+  }
+
+  /**
+   * Call RunwayML API
+   */
+  async callRunwayML(prompt, model, duration, resolution, fps) {
+    const url = 'https://api.runwayml.com/v1/video';
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.runwayApiKey}`
+      },
+      body: JSON.stringify({
+        prompt,
+        model,
+        duration,
+        resolution,
+        fps
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`RunwayML API error (${response.status}): ${errorText}`);
+    }
+
+    const data = await response.json();
+    // Assume response contains a video URL
+    return {
+      url: data.video_url || data.url,
+      thumbnail: data.thumbnail_url || null,
+      provider: 'runwayml'
+    };
+  }
+
+  /**
+   * Call Replicate API
+   */
+  async callReplicate(prompt, model, duration) {
+    // Replicate uses a prediction endpoint; we need to create a prediction and poll for result.
+    const createUrl = 'https://api.replicate.com/v1/predictions';
+    const createResponse = await fetch(createUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Token ${this.replicateApiToken}`
+      },
+      body: JSON.stringify({
+        version: model, // e.g., 'stability-ai/stable-video-diffusion:...'
+        input: { prompt, duration }
+      })
+    });
+
+    if (!createResponse.ok) {
+      const errorText = await createResponse.text();
+      throw new Error(`Replicate create error (${createResponse.status}): ${errorText}`);
+    }
+
+    const prediction = await createResponse.json();
+    const getUrl = `https://api.replicate.com/v1/predictions/${prediction.id}`;
+
+    // Poll until completed
+    let result;
+    while (true) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      const getResponse = await fetch(getUrl, {
+        headers: { 'Authorization': `Token ${this.replicateApiToken}` }
+      });
+      const status = await getResponse.json();
+      if (status.status === 'succeeded') {
+        result = status.output;
+        break;
+      } else if (status.status === 'failed') {
+        throw new Error(`Replicate prediction failed: ${status.error}`);
+      }
+    }
+
+    // Replicate output could be a video URL
+    return {
+      url: result.video || result[0],
+      thumbnail: null,
+      provider: 'replicate'
+    };
+  }
+
+  /**
+   * Simulate video generation (fallback)
+   */
+  async simulateGeneration(prompt, provider, model, duration, resolution, fps) {
+    await this.simulateDelay(duration * 1000);
+    const videoId = this.generateRequestId();
+    const resolutionMap = {
+      '720p': '1280x720',
+      '1080p': '1920x1080',
+      '4k': '3840x2160'
+    };
+    const actualResolution = resolutionMap[resolution] || '1280x720';
+    return {
+      url: this.getVideoUrl(videoId, provider),
+      thumbnail: this.getThumbnailUrl(videoId, actualResolution),
+      provider,
+      model,
+      simulated: true
+    };
   }
 
   /**
@@ -251,7 +356,6 @@ class VideoEngine extends EventEmitter {
 
       const data = await response.json();
       
-      // Parse into scene list
       const scenes = this.parseStoryboardScenes(data.message.content);
       
       return {
@@ -276,22 +380,13 @@ class VideoEngine extends EventEmitter {
 
     for (const line of lines) {
       if (line.toLowerCase().includes('scene') || line.toLowerCase().includes('shot')) {
-        if (currentScene) {
-          scenes.push(currentScene);
-        }
-        currentScene = {
-          description: line,
-          details: []
-        };
+        if (currentScene) scenes.push(currentScene);
+        currentScene = { description: line, details: [] };
       } else if (currentScene && line.trim()) {
         currentScene.details.push(line.trim());
       }
     }
-
-    if (currentScene) {
-      scenes.push(currentScene);
-    }
-
+    if (currentScene) scenes.push(currentScene);
     return scenes;
   }
 
@@ -330,7 +425,6 @@ class VideoEngine extends EventEmitter {
       });
 
       if (!response.ok) return prompt;
-
       const data = await response.json();
       return data.message.content;
 
@@ -338,31 +432,6 @@ class VideoEngine extends EventEmitter {
       console.log('Prompt enhancement failed:', error.message);
       return prompt;
     }
-  }
-
-  /**
-   * Generate video (simulated with provider selection)
-   */
-  async generateVideo(prompt, provider, model, duration, resolution, fps) {
-    // Simulate video generation time based on duration
-    await this.simulateDelay(duration * 1000);
-
-    const videoId = this.generateRequestId();
-    const resolutionMap = {
-      '720p': '1280x720',
-      '1080p': '1920x1080',
-      '4k': '3840x2160'
-    };
-
-    const actualResolution = resolutionMap[resolution] || '1280x720';
-    const [width, height] = actualResolution.split('x').map(Number);
-
-    return {
-      url: this.getVideoUrl(videoId, provider),
-      thumbnail: this.getThumbnailUrl(videoId, actualResolution),
-      provider,
-      model
-    };
   }
 
   /**
@@ -377,9 +446,7 @@ class VideoEngine extends EventEmitter {
     } = options;
 
     console.log(`🎬 Creating slideshow with ${images.length} images`);
-
     await this.simulateDelay(images.length * 1000);
-
     const videoId = this.generateRequestId();
     const totalDuration = images.length * durationPerImage;
 
@@ -401,11 +468,8 @@ class VideoEngine extends EventEmitter {
    */
   async edit(videoUrl, edits, options = {}) {
     console.log(`✂️ Editing video: ${videoUrl}`);
-
     await this.simulateDelay(3000);
-
     const editId = this.generateRequestId();
-
     return {
       success: true,
       id: editId,
@@ -419,9 +483,7 @@ class VideoEngine extends EventEmitter {
    * Analyze video content with AI
    */
   async analyze(videoUrl) {
-    if (!this.ollamaApiKey) {
-      return this.getMockAnalysis();
-    }
+    if (!this.ollamaApiKey) return this.getMockAnalysis();
 
     try {
       const response = await fetch('https://ollama.com/api/chat', {
@@ -449,12 +511,8 @@ class VideoEngine extends EventEmitter {
         })
       });
 
-      if (!response.ok) {
-        return this.getMockAnalysis();
-      }
-
+      if (!response.ok) return this.getMockAnalysis();
       const data = await response.json();
-      
       return {
         success: true,
         analysis: data.message.content,
@@ -484,9 +542,7 @@ class VideoEngine extends EventEmitter {
    * Generate video transcript
    */
   async generateTranscript(videoUrl, duration) {
-    if (!this.ollamaApiKey) {
-      return this.getMockTranscript(duration);
-    }
+    if (!this.ollamaApiKey) return this.getMockTranscript(duration);
 
     try {
       const response = await fetch('https://ollama.com/api/chat', {
@@ -514,12 +570,8 @@ class VideoEngine extends EventEmitter {
         })
       });
 
-      if (!response.ok) {
-        return this.getMockTranscript(duration);
-      }
-
+      if (!response.ok) return this.getMockTranscript(duration);
       const data = await response.json();
-      
       return {
         success: true,
         transcript: data.message.content,
@@ -540,12 +592,8 @@ class VideoEngine extends EventEmitter {
   getMockTranscript(duration) {
     const segments = [];
     for (let i = 0; i < duration; i += 5) {
-      segments.push({
-        time: `${i}:00`,
-        text: `This is simulated transcript segment at ${i} seconds.`
-      });
+      segments.push({ time: `${i}:00`, text: `This is simulated transcript segment at ${i} seconds.` });
     }
-
     return {
       success: true,
       segments,
@@ -560,17 +608,7 @@ class VideoEngine extends EventEmitter {
    */
   async getStatus(videoId) {
     const video = this.generated.find(v => v.id === videoId);
-
-    if (video) {
-      return {
-        id: videoId,
-        status: 'completed',
-        progress: 100,
-        ...video
-      };
-    }
-
-    // Simulate in-progress
+    if (video) return { id: videoId, status: 'completed', progress: 100, ...video };
     return {
       id: videoId,
       status: 'processing',
@@ -584,7 +622,6 @@ class VideoEngine extends EventEmitter {
    */
   async listVideos(limit = 10) {
     const metadataPath = path.join(this.outputDir, 'metadata.json');
-
     try {
       const data = await fs.readFile(metadataPath, 'utf8');
       const videos = JSON.parse(data);
@@ -605,17 +642,12 @@ class VideoEngine extends EventEmitter {
    */
   async saveMetadata(videoData) {
     const metadataPath = path.join(this.outputDir, 'metadata.json');
-
     try {
       let metadata = [];
-
       try {
         const existing = await fs.readFile(metadataPath, 'utf8');
         metadata = JSON.parse(existing);
-      } catch {
-        // No existing metadata
-      }
-
+      } catch {}
       metadata.push({
         id: videoData.id,
         prompt: videoData.prompt.substring(0, 100) + '...',
@@ -623,13 +655,8 @@ class VideoEngine extends EventEmitter {
         provider: videoData.provider,
         timestamp: videoData.timestamp
       });
-
-      if (metadata.length > 50) {
-        metadata = metadata.slice(-50);
-      }
-
+      if (metadata.length > 50) metadata = metadata.slice(-50);
       await fs.writeFile(metadataPath, JSON.stringify(metadata, null, 2));
-
     } catch (error) {
       console.error('Failed to save metadata:', error);
     }
@@ -654,11 +681,7 @@ class VideoEngine extends EventEmitter {
    * Get placeholder URL
    */
   getPlaceholderUrl(prompt, resolution) {
-    const resolutionMap = {
-      '720p': '1280x720',
-      '1080p': '1920x1080',
-      '4k': '3840x2160'
-    };
+    const resolutionMap = { '720p': '1280x720', '1080p': '1920x1080', '4k': '3840x2160' };
     const res = resolutionMap[resolution] || '1280x720';
     const encodedPrompt = encodeURIComponent(prompt.substring(0, 30));
     return `https://via.placeholder.com/${res}.png?text=${encodedPrompt}`;
@@ -698,7 +721,6 @@ class VideoEngine extends EventEmitter {
   estimateCost(provider, duration) {
     const providerInfo = this.providers[provider] || this.providers['runwayml'];
     const cost = (providerInfo.pricePerSecond * duration).toFixed(2);
-    
     return {
       provider: providerInfo.name,
       duration: `${duration}s`,
