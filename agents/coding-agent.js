@@ -1,5 +1,6 @@
 /**
  * Coding Agent - Code generation and execution
+ * Integrated with feedback loop for learning
  */
 const Agent = require("../core/agent-runtime");
 const vm = require("vm");
@@ -34,9 +35,16 @@ class CodingAgent extends Agent {
   }
 
   /**
-   * Execute coding task
+   * Execute coding task with retry and feedback recording
    */
   async execute(task) {
+    return this.executeWithRetry(task);
+  }
+
+  /**
+   * Internal task processing – called by executeWithRetry
+   */
+  async processTask(task) {
     this.validateTask(task);
     
     console.log(`💻 Coding agent processing: "${task.substring(0, 50)}..."`);
