@@ -2,6 +2,8 @@
  * Agent Runtime Base Class
  * All agents inherit from this class
  */
+const feedbackLoop = require('../learning/feedback-loop'); // Add feedback loop
+
 class Agent {
   /**
    * Create a new agent
@@ -53,6 +55,7 @@ class Agent {
    */
   async executeWithRetry(task, retries = this.config.maxRetries) {
     const startTime = Date.now();
+    let interactionId = null;
     
     for (let i = 0; i < retries; i++) {
       try {
@@ -63,18 +66,39 @@ class Agent {
         this.metrics.successCount++;
         this.metrics.totalExecutionTime += Date.now() - startTime;
         
+        // Record success in feedback loop
+        if (!interactionId) {
+          interactionId = await feedbackLoop.record(
+            typeof task === 'string' ? task : JSON.stringify(task),
+            result,
+            { agent: this.name, attempt: i + 1 }
+          );
+        }
+        await feedbackLoop.submitFeedback(interactionId, 'success', 5);
+        
         return {
           success: true,
           agent: this.name,
           result,
-          attempts: i + 1
+          attempts: i + 1,
+          interactionId
         };
         
       } catch (error) {
         console.log(`${this.name} attempt ${i + 1}/${retries} failed:`, error.message);
         
+        // Record failure (but not final if retrying)
         if (i === retries - 1) {
           this.metrics.failureCount++;
+          
+          // Record final failure
+          interactionId = await feedbackLoop.record(
+            typeof task === 'string' ? task : JSON.stringify(task),
+            error.message,
+            { agent: this.name, error: error.message, final: true }
+          );
+          await feedbackLoop.submitFeedback(interactionId, 'failure', 1);
+          
           throw error;
         }
         
@@ -82,6 +106,23 @@ class Agent {
         await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
       }
     }
+  }
+
+  /**
+   * Record outcome for a completed task (used when executed outside executeWithRetry)
+   */
+  async recordOutcome(task, result, success = true, metadata = {}) {
+    const interactionId = await feedbackLoop.record(
+      typeof task === 'string' ? task : JSON.stringify(task),
+      result,
+      { agent: this.name, ...metadata }
+    );
+    await feedbackLoop.submitFeedback(
+      interactionId,
+      success ? 'success' : 'failure',
+      success ? 5 : 1
+    );
+    return interactionId;
   }
 
   /**
