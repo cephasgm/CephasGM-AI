@@ -1,5 +1,6 @@
 /**
  * Automation Agent - Business process automation
+ * Integrated with feedback loop for learning
  */
 const Agent = require("../core/agent-runtime");
 const fs = require("fs").promises;
@@ -36,9 +37,17 @@ class AutomationAgent extends Agent {
   }
 
   /**
-   * Execute automation task
+   * Execute automation task with retry and feedback recording
    */
   async execute(task) {
+    // Use base class retry logic – this automatically records outcomes
+    return this.executeWithRetry(task);
+  }
+
+  /**
+   * Internal task processing – called by executeWithRetry
+   */
+  async processTask(task) {
     this.validateTask(task);
     
     console.log(`⚙️ Automation agent processing: "${task.substring(0, 50)}..."`);
@@ -47,17 +56,20 @@ class AutomationAgent extends Agent {
     await this.logAutomation(task);
     
     // Determine automation type
+    let result;
     if (task.toLowerCase().includes('schedule')) {
-      return await this.createSchedule(task);
+      result = await this.createSchedule(task);
     } else if (task.toLowerCase().includes('backup')) {
-      return await this.createBackup(task);
+      result = await this.createBackup(task);
     } else if (task.toLowerCase().includes('monitor')) {
-      return await this.createMonitor(task);
+      result = await this.createMonitor(task);
     } else if (task.toLowerCase().includes('sync')) {
-      return await this.createSync(task);
+      result = await this.createSync(task);
     } else {
-      return await this.genericAutomation(task);
+      result = await this.genericAutomation(task);
     }
+    
+    return result;
   }
 
   /**
