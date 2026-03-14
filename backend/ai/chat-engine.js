@@ -1,6 +1,6 @@
 /**
- * AI Chat Engine - Core chat functionality with OpenAI and Ollama
- * Enhanced with streaming support
+ * AI Chat Engine - Core chat functionality with OpenAI, Ollama, and DeepSeek
+ * Enhanced with streaming support and robust error handling
  */
 const fetch = require('node-fetch');
 const config = require('../config');
@@ -54,17 +54,25 @@ class ChatEngine {
         provider: 'ollama', 
         model: 'neural-chat:7b',
         description: 'Neural Chat - Optimized for conversations'
+      },
+      // DeepSeek model (new)
+      'deepseek-chat': { 
+        provider: 'deepseek', 
+        model: 'deepseek-chat',
+        description: 'DeepSeek Chat - Competitive alternative'
       }
     };
     
     this.conversationHistory = new Map();
     this.ollamaApiKey = process.env.OLLAMA_API_KEY;
     this.openaiApiKey = process.env.OPENAI_API_KEY;
+    this.deepseekApiKey = process.env.DEEPSEEK_API_KEY;
     this.ollamaHost = 'https://api.ollama.com';
     
     console.log('🤖 Chat engine initialized');
     console.log(`   OpenAI: ${this.openaiApiKey ? '✅ Configured' : '❌ Missing'}`);
     console.log(`   Ollama: ${this.ollamaApiKey ? '✅ Configured' : '❌ Missing'}`);
+    console.log(`   DeepSeek: ${this.deepseekApiKey ? '✅ Configured' : '❌ Missing'}`);
     console.log(`   Available models: ${Object.keys(this.models).length}`);
     
     // Test connection on startup
@@ -109,11 +117,13 @@ class ChatEngine {
       let response;
       if (modelConfig.provider === 'openai' && this.openaiApiKey) {
         response = await this.callOpenAI(modelConfig.model, messages, temperature, maxTokens);
+      } else if (modelConfig.provider === 'deepseek' && this.deepseekApiKey) {
+        response = await this.callDeepSeek(modelConfig.model, messages, temperature, maxTokens);
       } else if (this.ollamaApiKey) {
         // Use Ollama (convert messages to Ollama format)
         response = await this.callOllama(modelConfig.model, messages, temperature, maxTokens);
       } else {
-        throw new Error('No API key configured');
+        throw new Error('No API key configured for the selected model');
       }
 
       // Update history
@@ -176,10 +186,41 @@ class ChatEngine {
   }
 
   /**
+   * Call DeepSeek API (non-streaming)
+   */
+  async callDeepSeek(model, messages, temperature, maxTokens) {
+    const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.deepseekApiKey}`
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        temperature,
+        max_tokens: maxTokens,
+        stream: false
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`DeepSeek API error (${response.status}): ${errorText}`);
+    }
+
+    const data = await response.json();
+    return {
+      content: data.choices[0].message.content,
+      usage: data.usage,
+      provider: 'deepseek'
+    };
+  }
+
+  /**
    * Call Ollama API (non-streaming)
    */
   async callOllama(model, messages, temperature, maxTokens) {
-    // Ollama expects messages in the same format as OpenAI
     const response = await fetch('https://api.ollama.com/api/chat', {
       method: 'POST',
       headers: {
@@ -205,7 +246,7 @@ class ChatEngine {
     const data = await response.json();
     return {
       content: data.message.content,
-      usage: { prompt_tokens: 0, completion_tokens: 0 }, // Ollama doesn't provide token counts
+      usage: { prompt_tokens: 0, completion_tokens: 0 },
       provider: 'ollama'
     };
   }
@@ -214,80 +255,143 @@ class ChatEngine {
    * Stream chat response (for real-time applications)
    */
   async *stream(prompt, options = {}) {
-    const {
-      model = 'gpt-3.5-turbo',
-      temperature = 0.7,
-      maxTokens = 2000,
-      systemPrompt = 'You are CephasGM AI, an African-inspired artificial intelligence assistant.'
-    } = options;
+    try {
+      const {
+        model = 'gpt-3.5-turbo',
+        temperature = 0.7,
+        maxTokens = 2000,
+        systemPrompt = 'You are CephasGM AI, an African-inspired artificial intelligence assistant.'
+      } = options;
 
-    const modelConfig = this.models[model] || this.models['gpt-3.5-turbo'];
+      const modelConfig = this.models[model] || this.models['gpt-3.5-turbo'];
 
-    if (modelConfig.provider === 'openai' && this.openaiApiKey) {
       // OpenAI streaming
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.openaiApiKey}`
-        },
-        body: JSON.stringify({
-          model: modelConfig.model,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: prompt }
-          ],
-          temperature,
-          max_tokens: maxTokens,
-          stream: true
-        })
-      });
+      if (modelConfig.provider === 'openai' && this.openaiApiKey) {
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${this.openaiApiKey}`
+          },
+          body: JSON.stringify({
+            model: modelConfig.model,
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: prompt }
+            ],
+            temperature,
+            max_tokens: maxTokens,
+            stream: true
+          })
+        });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`OpenAI stream error (${response.status}): ${errorText}`);
-      }
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`OpenAI stream error (${response.status}): ${errorText}`);
+        }
 
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
 
-        const chunk = decoder.decode(value);
-        const lines = chunk.split('\n');
+          const chunk = decoder.decode(value);
+          const lines = chunk.split('\n');
 
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6);
-            if (data === '[DONE]') break;
-            try {
-              const parsed = JSON.parse(data);
-              yield parsed;
-            } catch (e) {
-              // Ignore parse errors
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const data = line.slice(6);
+              if (data === '[DONE]') continue;
+              try {
+                const parsed = JSON.parse(data);
+                yield parsed;
+              } catch (e) {
+                console.warn('Parse error in stream chunk:', e.message);
+              }
             }
           }
         }
       }
-    } else if (this.ollamaApiKey) {
-      // Ollama doesn't support true streaming, so simulate it
-      const result = await this.chat(prompt, { model, temperature, maxTokens, systemPrompt });
-      const words = result.content.split(' ');
+      // DeepSeek streaming (similar to OpenAI)
+      else if (modelConfig.provider === 'deepseek' && this.deepseekApiKey) {
+        const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${this.deepseekApiKey}`
+          },
+          body: JSON.stringify({
+            model: modelConfig.model,
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: prompt }
+            ],
+            temperature,
+            max_tokens: maxTokens,
+            stream: true
+          })
+        });
 
-      for (let i = 0; i < words.length; i++) {
-        yield {
-          choices: [{
-            delta: { content: words[i] + (i < words.length - 1 ? ' ' : '') },
-            index: 0,
-            finish_reason: i === words.length - 1 ? 'stop' : null
-          }]
-        };
-        await new Promise(resolve => setTimeout(resolve, 30));
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`DeepSeek stream error (${response.status}): ${errorText}`);
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const chunk = decoder.decode(value);
+          const lines = chunk.split('\n');
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const data = line.slice(6);
+              if (data === '[DONE]') continue;
+              try {
+                const parsed = JSON.parse(data);
+                yield parsed;
+              } catch (e) {
+                console.warn('Parse error in stream chunk:', e.message);
+              }
+            }
+          }
+        }
       }
-    } else {
-      throw new Error('No API key configured for streaming');
+      // Ollama simulation (no true streaming)
+      else if (this.ollamaApiKey) {
+        const result = await this.chat(prompt, { model, temperature, maxTokens, systemPrompt });
+        const words = result.content.split(' ');
+
+        for (let i = 0; i < words.length; i++) {
+          yield {
+            choices: [{
+              delta: { content: words[i] + (i < words.length - 1 ? ' ' : '') },
+              index: 0,
+              finish_reason: i === words.length - 1 ? 'stop' : null
+            }]
+          };
+          await new Promise(resolve => setTimeout(resolve, 30));
+        }
+      } else {
+        throw new Error('No API key configured for streaming');
+      }
+    } catch (error) {
+      console.error('Stream error:', error);
+      // Yield an error chunk so frontend can display it
+      yield {
+        error: error.message,
+        choices: [{
+          delta: { content: `\n\n❌ Error: ${error.message}` },
+          index: 0,
+          finish_reason: 'stop'
+        }]
+      };
     }
   }
 
@@ -374,7 +478,7 @@ class ChatEngine {
     if (isApiKeyError) {
       return `🔑 **API Key Issue Detected**
 
-I notice there's an issue with your OpenAI or Ollama API key. Here's how to fix it:
+I notice there's an issue with your OpenAI, DeepSeek, or Ollama API key. Here's how to fix it:
 
 1. Verify your API keys in the Render environment variables
 2. Ensure the keys haven't expired
