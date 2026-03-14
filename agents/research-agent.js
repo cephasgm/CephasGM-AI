@@ -1,10 +1,11 @@
 /**
  * Research Agent - Autonomous research with AI-powered synthesis
  * Uses chat engine (OpenAI/DeepSeek/Ollama) to generate comprehensive answers.
+ * Integrated with feedback loop for learning.
  */
 const fetch = require('node-fetch');
-// Import chat engine – adjust path as needed
 const chatEngine = require('../backend/ai/chat-engine');
+const feedbackLoop = require('../learning/feedback-loop'); // Added for feedback recording
 
 class ResearchAgent {
   constructor() {
@@ -15,7 +16,7 @@ class ResearchAgent {
     this.cache = new Map();
     this.sources = ['wikipedia', 'duckduckgo', 'news', 'academic'];
     
-    console.log('🔍 Research agent initialized (AI‑powered)');
+    console.log('🔍 Research agent initialized (AI‑powered, with feedback)');
   }
 
   /**
@@ -47,7 +48,7 @@ class ResearchAgent {
   /**
    * Execute research task with AI
    */
-  async execute(task) {
+  async execute(task, options = {}) {
     this.validateTask(task);
     
     const topic = this.extractTopic(task);
@@ -107,6 +108,14 @@ class ResearchAgent {
         confidence: 0.9,
         timestamp: new Date().toISOString()
       };
+      
+      // Record interaction in feedback loop
+      const interactionId = await feedbackLoop.record(
+        topic,
+        answer,
+        { agent: 'research', sources: researchResult.sources.length }
+      );
+      researchResult.interactionId = interactionId;
       
       // Cache the result
       this.cache.set(cacheKey, {
