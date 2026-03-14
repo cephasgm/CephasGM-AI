@@ -5,6 +5,7 @@
 const EventEmitter = require('events');
 const queue = require("./task-queue");
 const os = require('os');
+const feedbackLoop = require('../learning/feedback-loop'); // ADDED for workflow recording
 
 class Orchestrator extends EventEmitter {
   constructor() {
@@ -229,6 +230,19 @@ class Orchestrator extends EventEmitter {
       
       console.log(`🎉 [${workflowId}] Workflow completed`);
       this.emit('workflowCompleted', workflow);
+
+      // === ADDED: Record workflow completion in feedback loop ===
+      const workflowResult = {
+        tasks: workflow.tasks.map(t => t.type),
+        results: workflow.results
+      };
+      await feedbackLoop.record(
+        `Workflow: ${workflow.id}`,
+        workflowResult,
+        { type: 'workflow', agent: 'orchestrator' }
+      );
+      // =========================================================
+      
       return;
     }
 
