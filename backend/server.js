@@ -1,5 +1,5 @@
 /**
- * Main Server - CephasGM AI Phase 3
+ * Main Server - CephasGM AI Phase 6
  * Updated with intelligent static file serving for Render deployment
  * Added additional routes for frontend compatibility
  */
@@ -84,6 +84,38 @@ app.post('/chat', async (req, res) => {
 
   } catch (error) {
     console.error('Chat error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================
+// STREAMING CHAT ENDPOINT (NEW)
+// ============================================
+app.post('/chat/stream', async (req, res) => {
+  try {
+    const { prompt, model = 'gpt-3.5-turbo' } = req.body;
+    
+    if (!prompt) {
+      return res.status(400).json({ error: 'Prompt is required' });
+    }
+    
+    // Set headers for SSE
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    
+    // Use the stream method from chat-engine
+    const stream = await chatEngine.stream(prompt, { model });
+    
+    for await (const chunk of stream) {
+      res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+    }
+    
+    res.write('data: [DONE]\n\n');
+    res.end();
+    
+  } catch (error) {
+    console.error('Stream error:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -549,7 +581,8 @@ if (staticPath) {
         req.path.startsWith('/graph/') ||
         req.path.startsWith('/generate/') ||
         req.path === '/upload' ||
-        req.path === '/task') {
+        req.path === '/task' ||
+        req.path === '/chat/stream') { // <-- Added streaming endpoint to skip list
       return next();
     }
     
@@ -579,7 +612,8 @@ if (staticPath) {
         req.path.startsWith('/graph/') ||
         req.path.startsWith('/generate/') ||
         req.path === '/upload' ||
-        req.path === '/task') {
+        req.path === '/task' ||
+        req.path === '/chat/stream') {
       return next();
     }
     
@@ -592,6 +626,7 @@ if (staticPath) {
         agents: '/agents',
         models: '/models',
         chat: 'POST /chat',
+        'chat/stream': 'POST /chat/stream',
         research: 'POST /research',
         code: 'POST /code',
         video: 'POST /video',
@@ -636,6 +671,7 @@ app.listen(PORT, '0.0.0.0', () => {
 ║   📊 Mode: ${staticPath ? 'Full Stack' : 'API Only'}                      ║
 ║   🌐 CORS: ✅ Configured for Firebase                      ║
 ║   🆕 Added Routes: Image, Audio, Upload, Enhanced Tasks   ║
+║   🆕 Streaming: ✅ /chat/stream enabled                    ║
 ║                                                          ║
 ╚══════════════════════════════════════════════════════════╝
   `);
@@ -650,6 +686,7 @@ app.listen(PORT, '0.0.0.0', () => {
    • GET  /agents          - List all agents
    • GET  /models          - List available models
    • POST /chat            - Chat with AI
+   • POST /chat/stream     - Streaming chat
    • POST /research        - Research topics
    • POST /code            - Execute code
    • POST /video           - Generate video
