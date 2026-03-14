@@ -1,6 +1,6 @@
 /**
  * Multimodal Audio Engine - Speech synthesis, recognition, and AI audio processing
- * Now integrated with Ollama Cloud for audio script generation and analysis
+ * Now integrates ElevenLabs for high-quality TTS, with Ollama for script enhancement.
  */
 const EventEmitter = require('events');
 const fs = require('fs').promises;
@@ -11,6 +11,7 @@ class AudioEngine extends EventEmitter {
   constructor() {
     super();
     
+    // Custom voices (used for display and fallback)
     this.voices = [
       { id: 'african-female-1', name: 'Amara', language: 'en', gender: 'female', accent: 'west-african' },
       { id: 'african-male-1', name: 'Kwame', language: 'en', gender: 'male', accent: 'west-african' },
@@ -19,15 +20,28 @@ class AudioEngine extends EventEmitter {
       { id: 'standard-female', name: 'Emma', language: 'en', gender: 'female', accent: 'american' },
       { id: 'standard-male', name: 'James', language: 'en', gender: 'male', accent: 'british' }
     ];
+
+    // Mapping to ElevenLabs voice IDs (user can override via environment)
+    // Default to ElevenLabs example voices – replace with actual IDs if known
+    this.elevenLabsVoiceMap = {
+      'african-female-1': process.env.ELEVENLABS_VOICE_AFRICAN_FEMALE || '21m00Tcm4TlvDq8ikWAM', // Rachel
+      'african-male-1': process.env.ELEVENLABS_VOICE_AFRICAN_MALE || 'TxGEqnHWrfWFTfGW9XjX', // Josh
+      'african-female-2': process.env.ELEVENLABS_VOICE_AFRICAN_FEMALE_2 || '21m00Tcm4TlvDq8ikWAM',
+      'african-male-2': process.env.ELEVENLABS_VOICE_AFRICAN_MALE_2 || 'TxGEqnHWrfWFTfGW9XjX',
+      'standard-female': process.env.ELEVENLABS_VOICE_STANDARD_FEMALE || '21m00Tcm4TlvDq8ikWAM',
+      'standard-male': process.env.ELEVENLABS_VOICE_STANDARD_MALE || 'TxGEqnHWrfWFTfGW9XjX'
+    };
     
     this.generated = [];
     this.outputDir = path.join(__dirname, '../generated-audio');
     this.ollamaApiKey = process.env.OLLAMA_API_KEY;
+    this.elevenLabsApiKey = process.env.ELEVENLABS_API_KEY;
     
     this.initOutputDir();
     
-    console.log('🔊 Audio engine initialized with Ollama Cloud');
-    console.log(`   API Key: ${this.ollamaApiKey ? '✅ Configured' : '❌ Missing'}`);
+    console.log('🔊 Audio engine initialized');
+    console.log(`   Ollama: ${this.ollamaApiKey ? '✅ Configured' : '❌ Missing'}`);
+    console.log(`   ElevenLabs: ${this.elevenLabsApiKey ? '✅ Configured' : '❌ Missing'}`);
     console.log(`   Voices available: ${this.voices.length}`);
   }
 
@@ -60,7 +74,7 @@ class AudioEngine extends EventEmitter {
     console.log(`🔊 [${requestId}] Generating audio: "${text.substring(0, 50)}..."`);
 
     try {
-      // Enhance script with AI if requested
+      // Enhance script with Ollama if requested
       let finalText = text;
       let scriptMetadata = null;
       
@@ -75,9 +89,24 @@ class AudioEngine extends EventEmitter {
       // Get voice details
       const voiceConfig = this.voices.find(v => v.id === voice) || this.voices[0];
 
-      // Simulate audio generation with quality based on text length
-      const audioDuration = this.estimateDuration(finalText, speed);
-      await this.simulateDelay(Math.min(500 + finalText.length * 5, 3000));
+      // Attempt real TTS with ElevenLabs if key exists
+      let audioUrl;
+      let usedProvider = 'simulated';
+      if (this.elevenLabsApiKey) {
+        try {
+          audioUrl = await this.callElevenLabs(finalText, voice, options);
+          usedProvider = 'elevenlabs';
+        } catch (error) {
+          console.warn(`ElevenLabs TTS failed: ${error.message}. Falling back to simulation.`);
+        }
+      }
+
+      // If ElevenLabs didn't work, simulate
+      if (!audioUrl) {
+        const audioDuration = this.estimateDuration(finalText, speed);
+        await this.simulateDelay(Math.min(500 + finalText.length * 5, 3000));
+        audioUrl = this.getAudioUrl(requestId, format);
+      }
 
       const audioData = {
         id: requestId,
@@ -87,8 +116,9 @@ class AudioEngine extends EventEmitter {
         speed,
         pitch,
         format,
-        duration: audioDuration,
-        url: this.getAudioUrl(requestId, format),
+        duration: this.estimateDuration(finalText, speed),
+        url: audioUrl,
+        provider: usedProvider,
         enhanced: !!scriptMetadata,
         scriptMetadata,
         timestamp: new Date().toISOString()
@@ -115,6 +145,43 @@ class AudioEngine extends EventEmitter {
         timestamp: new Date().toISOString()
       };
     }
+  }
+
+  /**
+   * Call ElevenLabs TTS API
+   */
+  async callElevenLabs(text, voiceId, options = {}) {
+    const elevenLabsVoiceId = this.elevenLabsVoiceMap[voiceId] || voiceId; // fallback to using the ID directly
+    const url = `https://api.elevenlabs.io/v1/text-to-speech/${elevenLabsVoiceId}`;
+    
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'xi-api-key': this.elevenLabsApiKey
+      },
+      body: JSON.stringify({
+        text,
+        model_id: 'eleven_monolingual_v1',
+        voice_settings: {
+          stability: 0.5,
+          similarity_boost: 0.5,
+          speed: options.speed || 1.0
+        }
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`ElevenLabs API error (${response.status}): ${errorText}`);
+    }
+
+    // The response is an audio stream (MP3). We could save it to a file and return a URL.
+    // For simplicity, we'll return a data URL or a placeholder. In production, you'd upload to cloud storage.
+    // Here we'll return a data URL for demo purposes.
+    const buffer = await response.buffer();
+    const base64 = buffer.toString('base64');
+    return `data:audio/mpeg;base64,${base64}`;
   }
 
   /**
@@ -212,7 +279,6 @@ class AudioEngine extends EventEmitter {
    * Generate realistic transcription for demo
    */
   generateTranscription(audioFile) {
-    // For demo purposes, generate plausible transcriptions
     const transcriptions = [
       {
         text: "Hello, I'm testing the speech recognition system. It seems to be working well.",
@@ -572,7 +638,10 @@ Host 2: Join us next time for more insights on AI and technology in Africa.`,
       generatedCount: this.generated.length,
       voicesCount: this.voices.length,
       lastGenerated: this.generated[this.generated.length - 1]?.timestamp,
-      apiKeyConfigured: !!this.ollamaApiKey
+      apiKeyConfigured: {
+        ollama: !!this.ollamaApiKey,
+        elevenlabs: !!this.elevenLabsApiKey
+      }
     };
   }
 
