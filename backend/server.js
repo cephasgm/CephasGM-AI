@@ -3,6 +3,7 @@
  * Updated with intelligent static file serving for Render deployment
  * Added additional routes for frontend compatibility
  * Added Prometheus metrics and Sentry error tracking
+ * Added role-based access control
  */
 const express = require('express');
 const bodyParser = require('body-parser');
@@ -17,7 +18,7 @@ const fs = require('fs');
 const promClient = require('prom-client');
 const Sentry = require('@sentry/node');
 
-// Initialize Sentry (add DSN to environment variables)
+// Initialize Sentry
 if (process.env.SENTRY_DSN) {
   Sentry.init({
     dsn: process.env.SENTRY_DSN,
@@ -45,6 +46,55 @@ const httpRequestCounter = new promClient.Counter({
   labelNames: ['method', 'route', 'status_code']
 });
 register.registerMetric(httpRequestCounter);
+
+// ============================================
+// Firebase Admin for Role Verification
+// ============================================
+const admin = require('firebase-admin');
+
+if (!admin.apps.length) {
+  // If running on Render, set FIREBASE_SERVICE_ACCOUNT as an env variable with the JSON string
+  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+      projectId: 'cephasgm-ai',
+    });
+  } else {
+    // Fallback for local development or default credentials
+    admin.initializeApp({
+      credential: admin.credential.applicationDefault(),
+      projectId: 'cephasgm-ai',
+    });
+  }
+  console.log('✅ Firebase Admin initialized');
+}
+
+// Middleware to check if user is authenticated and has required role
+const requireRole = (allowedRoles = []) => {
+  return async (req, res, next) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Missing or invalid authorization token' });
+    }
+
+    const idToken = authHeader.split('Bearer ')[1];
+    try {
+      const decodedToken = await admin.auth().verifyIdToken(idToken);
+      const userRole = decodedToken.role || 'user';
+
+      if (allowedRoles.length > 0 && !allowedRoles.includes(userRole)) {
+        return res.status(403).json({ error: 'Insufficient permissions' });
+      }
+
+      req.user = decodedToken;
+      next();
+    } catch (error) {
+      console.error('Token verification error:', error);
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+  };
+};
 
 // Import AI modules
 const chatEngine = require('./ai/chat-engine');
@@ -85,7 +135,7 @@ app.use(bodyParser.json({ limit: '50mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
 
 // ============================================
-// Metrics Middleware (place after CORS, before any routes)
+// Metrics Middleware
 // ============================================
 app.use((req, res, next) => {
   const start = Date.now();
@@ -123,7 +173,7 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Metrics endpoint (place before static file handling)
+// Metrics endpoint
 app.get('/metrics', async (req, res) => {
   try {
     res.set('Content-Type', register.contentType);
@@ -146,9 +196,7 @@ app.post('/chat', async (req, res) => {
   }
 });
 
-// ============================================
-// STREAMING CHAT ENDPOINT
-// ============================================
+// Streaming chat endpoint
 app.post('/chat/stream', async (req, res) => {
   try {
     const { prompt, model = 'gpt-3.5-turbo' } = req.body;
@@ -453,6 +501,45 @@ app.post('/task/enhanced', async (req, res) => {
   }
 });
 
+// ============================================
+// ROLE MANAGEMENT ENDPOINTS
+// ============================================
+
+// Get current user's role
+app.get('/user/role', requireRole(), async (req, res) => {
+  res.json({ role: req.user.role || 'user' });
+});
+
+// Admin: Update user role by email
+app.post('/admin/updateRole', requireRole(['admin']), async (req, res) => {
+  try {
+    const { email, role } = req.body;
+    if (!email || !role) {
+      return res.status(400).json({ error: 'Email and role required' });
+    }
+
+    const allowedRoles = ['user', 'premium', 'admin'];
+    if (!allowedRoles.includes(role)) {
+      return res.status(400).json({ error: `Role must be one of: ${allowedRoles.join(', ')}` });
+    }
+
+    const user = await admin.auth().getUserByEmail(email);
+    await admin.auth().setCustomUserClaims(user.uid, { role });
+    await admin.firestore().collection('users').doc(user.uid).update({
+      role,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    res.json({ success: true, message: `Role for ${email} updated to ${role}` });
+  } catch (error) {
+    console.error('Error updating role:', error);
+    if (error.code === 'auth/user-not-found') {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // =============================================
 // INTELLIGENT STATIC FILE SERVING
 // =============================================
@@ -482,16 +569,12 @@ for (const testPath of possiblePaths) {
   }
 }
 if (staticPath) {
-  // Serve static files from the found location (root PWA)
   app.use(express.static(staticPath));
 
-  // Also serve React app from /app (build placed in frontend/app)
   const reactAppPath = path.join(staticPath, 'frontend', 'app');
   if (fs.existsSync(reactAppPath)) {
     app.use('/app', express.static(reactAppPath));
     console.log(`📁 React app served from /app at: ${reactAppPath}`);
-
-    // Handle React SPA routes under /app
     app.get('/app/*', (req, res) => {
       res.sendFile(path.join(reactAppPath, 'index.html'));
     });
@@ -499,7 +582,6 @@ if (staticPath) {
     console.log('⚠️ React app build not found at', reactAppPath);
   }
 
-  // Existing catch‑all for root SPA (non‑API routes)
   app.get('*', (req, res, next) => {
     if (req.path.startsWith('/api/') || 
         req.path === '/health' || 
@@ -511,7 +593,9 @@ if (staticPath) {
         req.path === '/upload' ||
         req.path === '/task' ||
         req.path === '/chat/stream' ||
-        req.path.startsWith('/app')) {  // Skip React routes
+        req.path === '/user/role' ||
+        req.path === '/admin/updateRole' ||
+        req.path.startsWith('/app')) {
       return next();
     }
     const requestedFile = path.join(staticPath, req.path);
@@ -533,7 +617,9 @@ if (staticPath) {
         req.path.startsWith('/generate/') ||
         req.path === '/upload' ||
         req.path === '/task' ||
-        req.path === '/chat/stream') {
+        req.path === '/chat/stream' ||
+        req.path === '/user/role' ||
+        req.path === '/admin/updateRole') {
       return next();
     }
     res.status(404).json({ 
@@ -556,7 +642,9 @@ if (staticPath) {
         upload: 'POST /upload',
         memory: '/memory/*',
         graph: '/graph/*',
-        gpu: '/gpu/infer'
+        gpu: '/gpu/infer',
+        'user/role': 'GET /user/role',
+        'admin/updateRole': 'POST /admin/updateRole'
       },
       documentation: 'https://github.com/cephasgm/CephasGM-AI'
     });
@@ -565,7 +653,7 @@ if (staticPath) {
 }
 
 // ============================================
-// Sentry Error Handler (after all routes, before other error handlers)
+// Sentry Error Handler
 // ============================================
 if (process.env.SENTRY_DSN) {
   app.use(Sentry.Handlers.errorHandler());
@@ -598,6 +686,7 @@ app.listen(PORT, '0.0.0.0', () => {
 ║   🆕 Added Routes: Image, Audio, Upload, Enhanced Tasks   ║
 ║   🆕 Streaming: ✅ /chat/stream enabled                    ║
 ║   📈 Monitoring: ✅ /metrics enabled, Sentry ready         ║
+║   🔐 Role Management: ✅ /user/role, /admin/updateRole     ║
 ║                                                          ║
 ╚══════════════════════════════════════════════════════════╝
   `);
@@ -621,6 +710,8 @@ app.listen(PORT, '0.0.0.0', () => {
    • POST /upload          - Upload files
    • POST /memory/*        - Vector memory operations
    • POST /graph/*         - Knowledge graph operations
+   • GET  /user/role       - Get current user role
+   • POST /admin/updateRole - Admin: update user role
     `);
   }
 });
