@@ -1,9 +1,11 @@
 /**
  * Research Lab Agent - Advanced research capabilities
  * Multi-source research with analysis and synthesis
+ * Integrated with feedback loop for learning.
  */
 const EventEmitter = require('events');
 const fetch = require('node-fetch');
+const feedbackLoop = require('../learning/feedback-loop'); // Added for feedback recording
 
 class ResearchLab extends EventEmitter {
   constructor(config = {}) {
@@ -100,6 +102,14 @@ class ResearchLab extends EventEmitter {
         }
       };
 
+      // Record interaction in feedback loop
+      const interactionId = await feedbackLoop.record(
+        topic,
+        summary,
+        { agent: 'research-lab', id: this.id, sourceCount: sources.length }
+      );
+      result.interactionId = interactionId;
+
       // Cache result
       if (this.config.cacheResults) {
         this.cache.set(cacheKey, result);
@@ -108,12 +118,19 @@ class ResearchLab extends EventEmitter {
       // Store in history
       this.researchHistory.push(result);
 
-      this.emit('researchCompleted', { researchId, topic });
+      this.emit('researchCompleted', { researchId, topic, interactionId });
 
       return result;
 
     } catch (error) {
       console.error('Research lab failed:', error);
+
+      // Record failure
+      await feedbackLoop.record(
+        task,
+        error.message,
+        { agent: 'research-lab', id: this.id, error: true }
+      );
 
       return {
         id: researchId,
