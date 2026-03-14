@@ -482,8 +482,24 @@ for (const testPath of possiblePaths) {
   }
 }
 if (staticPath) {
+  // Serve static files from the found location (root PWA)
   app.use(express.static(staticPath));
-  console.log(`📁 Serving static files from: ${staticPath}`);
+
+  // Also serve React app from /app
+  const reactAppPath = path.join(staticPath, 'app');
+  if (fs.existsSync(reactAppPath)) {
+    app.use('/app', express.static(reactAppPath));
+    console.log(`📁 React app served from /app at: ${reactAppPath}`);
+
+    // Handle React SPA routes under /app
+    app.get('/app/*', (req, res) => {
+      res.sendFile(path.join(reactAppPath, 'index.html'));
+    });
+  } else {
+    console.log('⚠️ React app build not found at', reactAppPath);
+  }
+
+  // Existing catch‑all for root SPA (non‑API routes)
   app.get('*', (req, res, next) => {
     if (req.path.startsWith('/api/') || 
         req.path === '/health' || 
@@ -494,7 +510,8 @@ if (staticPath) {
         req.path.startsWith('/generate/') ||
         req.path === '/upload' ||
         req.path === '/task' ||
-        req.path === '/chat/stream') {
+        req.path === '/chat/stream' ||
+        req.path.startsWith('/app')) {  // <-- Skip React routes
       return next();
     }
     const requestedFile = path.join(staticPath, req.path);
