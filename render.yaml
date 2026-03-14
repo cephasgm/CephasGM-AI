@@ -2,8 +2,29 @@ services:
   - type: web
     name: cephasgm-ai
     runtime: node
-    buildCommand: npm install && cd client && npm install && npm run build && cp -r dist/* ../frontend/
+    repo: https://github.com/cephasgm/CephasGM-AI  # optional, if you want to link directly
+    branch: main
+    buildCommand: npm install && cd client && npm install && npm run build && mkdir -p ../frontend/app && cp -r dist/* ../frontend/app/
     startCommand: npm start
+    healthCheckPath: /health
     envVars:
       - key: NODE_ENV
         value: production
+      - key: SUPABASE_URL
+        sync: false   # these should be set manually in dashboard
+      - key: SUPABASE_KEY
+        sync: false
+      - key: OLLAMA_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: STABILITY_KEY
+        sync: false
+      - key: REPLICATE_API_TOKEN
+        sync: false
+      - key: DEEPSEEK_API_KEY
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
+    envVarGroups:
+      - name: cephasgm-ai-env   # optional group
