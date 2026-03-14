@@ -5,8 +5,8 @@
 const fs = require("fs").promises;
 const path = require("path");
 const crypto = require('crypto');
-const vectorDb = require('../memory/vector-db');      // For vector storage
-const knowledgeGraph = require('../memory/knowledge-graph'); // For user‑interaction relationships
+const vectorDb = require('../backend/memory/vector-db');      // ✅ Corrected path
+const knowledgeGraph = require('../backend/memory/knowledge-graph'); // ✅ Corrected path
 
 class FeedbackLoop {
   constructor() {
@@ -39,12 +39,10 @@ class FeedbackLoop {
    */
   _embedText(text) {
     const hash = crypto.createHash('sha256').update(text).digest();
-    // Convert hash to a vector of 384 numbers (common embedding dimension)
     const vector = [];
     for (let i = 0; i < 384; i++) {
-      // Use byte values to generate numbers between -1 and 1
       const byte = hash[i % hash.length];
-      vector.push((byte / 127.5) - 1); // maps 0-255 to approx -1..1
+      vector.push((byte / 127.5) - 1);
     }
     return vector;
   }
@@ -70,10 +68,8 @@ class FeedbackLoop {
     this.interactions.push(interaction);
     this.metrics.totalInteractions++;
 
-    // Log to file (optional)
     await this.log(interaction);
 
-    // Generate embedding and store in vector database
     const text = `${prompt} ${response}`;
     const vector = this._embedText(text);
     await vectorDb.add(vector, {
@@ -84,7 +80,6 @@ class FeedbackLoop {
       promptPreview: prompt.substring(0, 100)
     });
 
-    // Update topic metrics
     this.updateTopicMetrics(prompt);
 
     return id;
@@ -112,7 +107,6 @@ class FeedbackLoop {
     interaction.feedback = feedbackEntry;
     this.feedback.push(feedbackEntry);
 
-    // Update metrics
     if (finalRating >= 4) {
       this.metrics.positiveFeedback++;
       if (interaction.metadata.agent) {
@@ -125,7 +119,6 @@ class FeedbackLoop {
 
     this.updateAverageRating();
 
-    // Store feedback in knowledge graph (user –[liked/disliked]→ interaction)
     const userId = interaction.userId || 'anonymous';
     const relation = finalRating >= 4 ? 'liked' : (finalRating <= 2 ? 'disliked' : 'neutral');
     await knowledgeGraph.link(userId, relation, interactionId, {
@@ -134,7 +127,6 @@ class FeedbackLoop {
       timestamp: feedbackEntry.timestamp
     });
 
-    // Also update the interaction node with the feedback
     await knowledgeGraph.addNode(interactionId, {
       prompt: interaction.prompt.substring(0, 200),
       agent: interaction.metadata.agent,
@@ -142,10 +134,7 @@ class FeedbackLoop {
       rating: finalRating
     });
 
-    // Save metrics
     await this.saveMetrics();
-
-    // Learn from feedback (pattern analysis)
     await this.learn(feedbackEntry);
 
     return {
@@ -159,9 +148,8 @@ class FeedbackLoop {
    */
   async findSimilarInteractions(query, userId = null, limit = 5, threshold = 0.5) {
     const queryVector = this._embedText(query);
-    let results = await vectorDb.search(queryVector, limit * 2, threshold); // get more, then filter
+    let results = await vectorDb.search(queryVector, limit * 2, threshold);
 
-    // If userId provided, filter by user (metadata.userId)
     if (userId) {
       results.results = results.results.filter(r => r.metadata?.userId === userId);
     }
@@ -173,17 +161,15 @@ class FeedbackLoop {
    * Get user's preferences (liked/disliked interactions)
    */
   async getUserPreferences(userId) {
-    // Get all edges from user
     const relations = await knowledgeGraph.get(userId);
     const liked = relations.filter(r => r.relation === 'liked');
     const disliked = relations.filter(r => r.relation === 'disliked');
     const neutral = relations.filter(r => r.relation === 'neutral');
 
-    // For each liked/disliked, fetch the interaction node details
     const enrich = async (edges) => {
       const enriched = [];
       for (const edge of edges) {
-        const node = await knowledgeGraph.get(edge.entity); // entity is interactionId
+        const node = await knowledgeGraph.get(edge.entity);
         enriched.push({
           interactionId: edge.entity,
           rating: edge.properties?.rating,
@@ -227,7 +213,6 @@ class FeedbackLoop {
       
       console.log(`📊 Loaded ${this.interactions.length} past interactions`);
       
-      // Load metrics if available
       try {
         const metricsData = await fs.readFile(this.metricsFile, 'utf8');
         this.metrics = { ...this.metrics, ...JSON.parse(metricsData) };
@@ -277,7 +262,6 @@ class FeedbackLoop {
   async learn(feedback) {
     console.log('🧠 Learning from feedback:', feedback);
     
-    // Analyze patterns
     const patterns = this.analyzePatterns();
     if (patterns.length > 0) {
       console.log('📈 Detected patterns:', patterns);
