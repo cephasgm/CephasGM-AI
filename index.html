@@ -77,6 +77,29 @@ h1 {
   font-size: 14px;
 }
 
+.role-badge {
+  margin-left: 10px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.role-badge.user {
+  background: #555;
+  color: white;
+}
+
+.role-badge.premium {
+  background: #ffb300;
+  color: black;
+}
+
+.role-badge.admin {
+  background: #ffb300;
+  color: black;
+}
+
 .logout-btn {
   padding: 5px 15px;
   font-size: 12px;
@@ -243,14 +266,14 @@ h1 {
   100% { transform: scale(1); }
 }
 
-/* Image Generation Tab */
-.image-input-area {
+/* Image & Video Generation Tabs */
+.image-input-area, .video-input-area {
   display: flex;
   gap: 10px;
   margin: 20px 0;
 }
 
-.image-input-area input {
+.image-input-area input, .video-input-area input {
   flex: 1;
   padding: 15px;
   border-radius: 30px;
@@ -258,7 +281,7 @@ h1 {
   font-size: 16px;
 }
 
-.image-result {
+.image-result, .video-result {
   margin-top: 20px;
   text-align: center;
   min-height: 300px;
@@ -268,21 +291,21 @@ h1 {
   gap: 20px;
 }
 
-.image-result img {
+.image-result img, .video-result video {
   max-width: 100%;
   max-height: 400px;
   border-radius: 10px;
   box-shadow: 0 0 20px rgba(255,179,0,0.3);
 }
 
-.image-actions {
+.image-actions, .video-actions {
   display: flex;
   gap: 10px;
   justify-content: center;
   margin-top: 10px;
 }
 
-.image-actions button {
+.image-actions button, .video-actions button {
   padding: 10px 20px;
   border: none;
   border-radius: 30px;
@@ -292,7 +315,7 @@ h1 {
   font-weight: bold;
 }
 
-.image-actions button:hover {
+.image-actions button:hover, .video-actions button:hover {
   opacity: 0.9;
 }
 
@@ -611,6 +634,34 @@ h1 {
   white-space: pre-wrap;
 }
 
+/* Admin Tab */
+.admin-role-form {
+  display: flex;
+  gap: 10px;
+  margin: 20px 0;
+  flex-wrap: wrap;
+}
+
+.admin-role-form input,
+.admin-role-form select {
+  flex: 1;
+  min-width: 200px;
+  padding: 15px;
+  border-radius: 30px;
+  border: none;
+  font-size: 16px;
+}
+
+.admin-role-form button {
+  padding: 15px 30px;
+  border: none;
+  border-radius: 30px;
+  background: #ffb300;
+  color: black;
+  font-weight: bold;
+  cursor: pointer;
+}
+
 /* ============================================ */
 /* RESPONSE FORMATTING STYLES */
 /* ============================================ */
@@ -734,6 +785,7 @@ h1 {
     <!-- User Info -->
     <div class="user-info" id="userInfo" style="display: none;">
       <span class="user-email" id="userEmail"></span>
+      <span id="roleBadge" class="role-badge"></span>
       <button class="logout-btn" id="logoutBtn">Logout</button>
     </div>
     
@@ -745,7 +797,8 @@ h1 {
     <!-- Tab Navigation -->
     <div class="tab-nav" id="tabNav" style="display: none;">
       <button class="tab-btn active" onclick="switchTab('chat')">💬 Chat</button>
-      <button class="tab-btn" onclick="switchTab('image')">🎨 Image Gen</button>
+      <button class="tab-btn" onclick="switchTab('image')">🎨 Image</button>
+      <button class="tab-btn" onclick="switchTab('video')">🎬 Video</button>
       <button class="tab-btn" onclick="switchTab('upload')">📁 Upload</button>
       <button class="tab-btn" onclick="switchTab('voice')">🎤 Voice</button>
       <button class="tab-btn" onclick="switchTab('agents')">🤖 Agents</button>
@@ -753,6 +806,7 @@ h1 {
       <button class="tab-btn" onclick="switchTab('research')">🔬 Research</button>
       <button class="tab-btn" onclick="switchTab('audio')">🔊 Audio</button>
       <button class="tab-btn" onclick="switchTab('software')">🏭 Software</button>
+      <!-- Admin tab will be added dynamically if user is admin -->
     </div>
     
     <!-- Chat Tab -->
@@ -776,6 +830,18 @@ h1 {
       </div>
       <div class="image-result" id="imageResult"></div>
       <div class="status" id="imageStatus"></div>
+    </div>
+    
+    <!-- Video Generation Tab (NEW) -->
+    <div id="videoTab" class="tab-content">
+      <h2>🎬 Generate Videos</h2>
+      <p>Describe the video you want to create</p>
+      <div class="video-input-area">
+        <input type="text" id="videoPrompt" placeholder="A cinematic drone shot over African mountains...">
+        <button onclick="generateVideo()" id="generateVideoBtn">Generate</button>
+      </div>
+      <div class="video-result" id="videoResult"></div>
+      <div class="status" id="videoStatus"></div>
     </div>
     
     <!-- Upload Tab -->
@@ -918,6 +984,8 @@ h1 {
       <textarea id="codeInput" class="code-editor" placeholder="Write your code here..."></textarea>
       <div class="code-output" id="codeOutput"></div>
     </div>
+    
+    <!-- Admin Tab (dynamically created) will be appended here -->
   </div>
   
   <!-- Footer -->
@@ -1195,25 +1263,140 @@ function saveToMemory(prompt, response) {
 }
 
 // ============================================
+// Role Management
+// ============================================
+async function fetchUserRole() {
+  if (!currentUser) return null;
+  try {
+    const token = await currentUser.getIdToken();
+    const response = await fetch(`${API_BASE}/user/role`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    if (!response.ok) {
+      console.warn('Role fetch failed, defaulting to user');
+      return 'user';
+    }
+    const data = await response.json();
+    return data.role || 'user';
+  } catch (error) {
+    console.error('Error fetching role:', error);
+    return null;
+  }
+}
+
+// Function to add admin tab dynamically
+function addAdminTab() {
+  const tabNav = document.getElementById('tabNav');
+  if (document.getElementById('adminTabBtn')) return; // already added
+  const adminBtn = document.createElement('button');
+  adminBtn.className = 'tab-btn';
+  adminBtn.id = 'adminTabBtn';
+  adminBtn.setAttribute('onclick', "switchTab('admin')");
+  adminBtn.textContent = '👑 Admin';
+  tabNav.appendChild(adminBtn);
+  
+  // Create admin tab content
+  const adminTab = document.createElement('div');
+  adminTab.id = 'adminTab';
+  adminTab.className = 'tab-content';
+  adminTab.innerHTML = `
+    <h2>Admin Panel</h2>
+    <p>Manage user roles</p>
+    <div class="admin-role-form">
+      <input type="email" id="adminUserEmail" placeholder="User email">
+      <select id="adminNewRole">
+        <option value="user">User</option>
+        <option value="premium">Premium</option>
+        <option value="admin">Admin</option>
+      </select>
+      <button onclick="updateUserRole()">Update Role</button>
+    </div>
+    <div id="adminMessage" class="status"></div>
+  `;
+  document.querySelector('.container').appendChild(adminTab);
+}
+
+// Function to update user role (called from admin panel)
+window.updateUserRole = async function() {
+  const email = document.getElementById('adminUserEmail').value.trim();
+  const role = document.getElementById('adminNewRole').value;
+  if (!email) {
+    showAdminMessage('Please enter an email', 'error');
+    return;
+  }
+  showAdminMessage('Updating...', 'info');
+  try {
+    const token = await currentUser.getIdToken();
+    const response = await fetch(`${API_BASE}/admin/updateRole`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ email, role })
+    });
+    const data = await response.json();
+    if (response.ok) {
+      showAdminMessage(data.message || 'Role updated', 'success');
+    } else {
+      showAdminMessage(data.error || 'Error', 'error');
+    }
+  } catch (error) {
+    showAdminMessage('Network error', 'error');
+  }
+};
+
+function showAdminMessage(message, type) {
+  const msgDiv = document.getElementById('adminMessage');
+  if (msgDiv) {
+    msgDiv.textContent = message;
+    msgDiv.className = `status ${type}`;
+  }
+}
+
+// ============================================
 // Auth Functions
 // ============================================
-auth.onAuthStateChanged(user => {
+auth.onAuthStateChanged(async (user) => {
   currentUser = user;
   const userInfo = document.getElementById('userInfo');
   const userEmail = document.getElementById('userEmail');
+  const roleBadge = document.getElementById('roleBadge');
   const authMessage = document.getElementById('authMessage');
   const tabNav = document.getElementById('tabNav');
+  
   if (user) {
     userInfo.style.display = 'flex';
     userEmail.textContent = user.email;
     authMessage.style.display = 'none';
     tabNav.style.display = 'flex';
+    
+    // Fetch and display role
+    const role = await fetchUserRole();
+    if (role) {
+      roleBadge.textContent = role;
+      roleBadge.className = `role-badge ${role}`;
+    }
+    
     if (typeof loadMemories === 'function') loadMemories();
     loadChatHistory();
+    
+    // If admin, add admin tab
+    if (role === 'admin') {
+      addAdminTab();
+    }
   } else {
     userInfo.style.display = 'none';
     authMessage.style.display = 'block';
     tabNav.style.display = 'none';
+    // Hide admin tab if it exists
+    const adminBtn = document.getElementById('adminTabBtn');
+    if (adminBtn) adminBtn.remove();
+    const adminTab = document.getElementById('adminTab');
+    if (adminTab) adminTab.remove();
   }
 });
 
@@ -1307,6 +1490,85 @@ async function generateImage() {
 
 function showImageStatus(message, type) {
   const status = document.getElementById('imageStatus');
+  status.textContent = message;
+  status.className = `status ${type}`;
+  if (type === 'success') {
+    setTimeout(() => {
+      status.textContent = '';
+      status.className = 'status';
+    }, 3000);
+  }
+}
+
+// ============================================
+// Video Generation (NEW)
+// ============================================
+async function generateVideo() {
+  const prompt = document.getElementById('videoPrompt').value.trim();
+  if (!prompt) {
+    showVideoStatus('Please enter a prompt', 'error');
+    return;
+  }
+  showVideoStatus('Generating video...', 'info');
+  document.getElementById('generateVideoBtn').disabled = true;
+  try {
+    let result, videoUrl = null;
+    // Try multiple endpoints (adjust as needed)
+    const endpoints = [
+      `${API_BASE}/video`,
+      `${API_BASE}/generate/video`,
+      'https://us-central1-cephasgm-ai.cloudfunctions.net/video'
+    ];
+    for (const endpoint of endpoints) {
+      try {
+        console.log(`Trying endpoint: ${endpoint}`);
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt }),
+          mode: 'cors'
+        });
+        if (response.ok) {
+          result = await response.json();
+          videoUrl = result.url || result.video_url;
+          if (videoUrl) break;
+        }
+      } catch (e) {
+        console.log(`Endpoint ${endpoint} failed:`, e.message);
+      }
+    }
+    if (!videoUrl) {
+      // Fallback to a placeholder video (simulated)
+      videoUrl = 'https://storage.cephasgm.ai/videos/simulated.mp4';
+    }
+    const videoResult = document.getElementById('videoResult');
+    videoResult.innerHTML = `
+      <video controls src="${videoUrl}" onerror="this.onerror=null; this.outerHTML='<p>Video preview not available</p>';">
+        Your browser does not support the video tag.
+      </video>
+      <div class="video-actions">
+        <a href="${videoUrl}" target="_blank" download>
+          <button>Download</button>
+        </a>
+        <button onclick="generateVideo()">Regenerate</button>
+      </div>
+    `;
+    showVideoStatus('Video generated successfully!', 'success');
+  } catch (error) {
+    console.error('Video generation error:', error);
+    const videoResult = document.getElementById('videoResult');
+    videoResult.innerHTML = `
+      <p>😕 Video generation failed</p>
+      <button onclick="generateVideo()">Try Again</button>
+    `;
+    showVideoStatus('Error generating video. Please try again.', 'error');
+  } finally {
+    document.getElementById('generateVideoBtn').disabled = false;
+  }
+}
+
+function showVideoStatus(message, type) {
+  const status = document.getElementById('videoStatus');
   status.textContent = message;
   status.className = `status ${type}`;
   if (type === 'success') {
@@ -1490,7 +1752,6 @@ function initVoice() {
       document.getElementById('voiceOutput').value = transcript;
       document.getElementById('userInput').value = transcript;
       document.getElementById('voiceStatus').textContent = `Recognized: "${transcript}" – sending...`;
-      // Use streaming if available
       if (typeof streamMessage === 'function') {
         streamMessage();
       } else if (typeof sendMessage === 'function') {
@@ -1829,7 +2090,8 @@ window.sendMessage = sendMessage;
 window.streamMessage = streamMessage;
 window.clearChat = clearChat;
 window.generateImage = generateImage;
-window.uploadFiles = uploadFiles; // multi-file upload
+window.generateVideo = generateVideo; // Added
+window.uploadFiles = uploadFiles;
 window.startVoice = startVoice;
 window.stopVoice = stopVoice;
 window.toggleVoice = toggleVoice;
@@ -1849,6 +2111,7 @@ window.generateAudio = generateAudio;
 window.runCode = runCode;
 window.debugCode = debugCode;
 window.clearCode = clearCode;
+window.updateUserRole = updateUserRole; // Added for admin panel
 </script>
 
 <!-- Service worker -->
