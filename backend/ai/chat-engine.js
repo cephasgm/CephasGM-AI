@@ -1,6 +1,6 @@
 /**
  * AI Chat Engine - Core chat functionality with OpenAI, Ollama, and DeepSeek
- * Enhanced with streaming support and robust error handling
+ * Enhanced with streaming support, robust error handling, and automatic failover.
  */
 const fetch = require('node-fetch');
 const config = require('../config');
@@ -82,7 +82,7 @@ class ChatEngine {
   }
 
   /**
-   * Send chat message and get response (non-streaming)
+   * Send chat message and get response (non-streaming) with automatic failover.
    */
   async chat(prompt, options = {}) {
     try {
@@ -103,45 +103,94 @@ class ChatEngine {
       // Get conversation history
       let history = this.getHistory(sessionId);
       
-      // Prepare messages array
+      // Prepare messages array once
       const messages = [
         { role: 'system', content: systemPrompt },
         ...history,
         { role: 'user', content: prompt }
       ];
 
-      // Get model configuration
-      const modelConfig = this.models[model] || this.models['gpt-3.5-turbo'];
+      // Determine the requested provider from the model parameter
+      const requestedConfig = this.models[model] || this.models['gpt-3.5-turbo'];
+      const requestedProvider = requestedConfig.provider;
 
-      // Call appropriate provider
-      let response;
-      if (modelConfig.provider === 'openai' && this.openaiApiKey) {
-        response = await this.callOpenAI(modelConfig.model, messages, temperature, maxTokens);
-      } else if (modelConfig.provider === 'deepseek' && this.deepseekApiKey) {
-        response = await this.callDeepSeek(modelConfig.model, messages, temperature, maxTokens);
-      } else if (this.ollamaApiKey) {
-        // Use Ollama (convert messages to Ollama format)
-        response = await this.callOllama(modelConfig.model, messages, temperature, maxTokens);
-      } else {
-        throw new Error('No API key configured for the selected model');
+      // Define a list of providers to try in order:
+      // 1. The requested provider (if its key is available)
+      // 2. Other providers as fallbacks
+      const providersToTry = [];
+
+      // Helper to add a provider if key exists
+      const addProvider = (name, condition, caller, modelName) => {
+        if (condition) {
+          providersToTry.push({ name, caller, model: modelName });
+        }
+      };
+
+      // Order: requested first, then OpenAI, DeepSeek, Ollama (if not already covered)
+      if (requestedProvider === 'openai' && this.openaiApiKey) {
+        addProvider('openai', true, this.callOpenAI.bind(this), requestedConfig.model);
+      } else if (requestedProvider === 'deepseek' && this.deepseekApiKey) {
+        addProvider('deepseek', true, this.callDeepSeek.bind(this), requestedConfig.model);
+      } else if (requestedProvider === 'ollama' && this.ollamaApiKey) {
+        addProvider('ollama', true, this.callOllama.bind(this), requestedConfig.model);
       }
 
-      // Update history
-      this.updateHistory(sessionId, prompt, response.content);
+      // Then add all other available providers as fallbacks (avoid duplicates)
+      if (requestedProvider !== 'openai' && this.openaiApiKey) {
+        addProvider('openai', true, this.callOpenAI.bind(this), 'gpt-3.5-turbo');
+      }
+      if (requestedProvider !== 'deepseek' && this.deepseekApiKey) {
+        addProvider('deepseek', true, this.callDeepSeek.bind(this), 'deepseek-chat');
+      }
+      if (requestedProvider !== 'ollama' && this.ollamaApiKey) {
+        addProvider('ollama', true, this.callOllama.bind(this), 'llama3.2');
+      }
+
+      if (providersToTry.length === 0) {
+        throw new Error('No API keys configured for any provider');
+      }
+
+      const errors = [];
+      let lastError = null;
+
+      // Try each provider in order
+      for (const provider of providersToTry) {
+        try {
+          console.log(`🔄 Trying provider: ${provider.name} with model ${provider.model}`);
+          const response = await provider.caller(provider.model, messages, temperature, maxTokens);
+          
+          // Success – update history and return
+          this.updateHistory(sessionId, prompt, response.content);
+          return {
+            success: true,
+            content: response.content,
+            model: model,
+            provider: response.provider,
+            usage: response.usage || { prompt_tokens: 0, completion_tokens: 0 },
+            timestamp: new Date().toISOString()
+          };
+        } catch (err) {
+          console.warn(`❌ Provider ${provider.name} failed:`, err.message);
+          errors.push(`${provider.name}: ${err.message}`);
+          lastError = err;
+        }
+      }
+
+      // All providers failed
+      const errorSummary = errors.join('; ');
+      console.error('All providers failed:', errorSummary);
 
       return {
         success: true,
-        content: response.content,
-        model: model,
-        provider: response.provider,
-        usage: response.usage || { prompt_tokens: 0, completion_tokens: 0 },
+        content: this.getFallbackResponse(prompt, errorSummary, lastError),
+        model: options.model || 'gpt-3.5-turbo',
+        provider: 'fallback',
+        error: errorSummary,
         timestamp: new Date().toISOString()
       };
 
     } catch (error) {
-      console.error('Chat engine error details:', error); // More detailed log
-      
-      // Fallback response with helpful message
+      console.error('Chat engine error details:', error);
       return {
         success: true,
         content: this.getFallbackResponse(prompt, error.message, error),
@@ -383,7 +432,6 @@ class ChatEngine {
       }
     } catch (error) {
       console.error('Stream error:', error);
-      // Yield an error chunk so frontend can display it
       yield {
         error: error.message,
         choices: [{
@@ -402,7 +450,6 @@ class ChatEngine {
     if (!this.conversationHistory.has(sessionId)) {
       this.conversationHistory.set(sessionId, []);
     }
-    
     const history = this.conversationHistory.get(sessionId);
     return history.slice(-6); // Last 6 messages (3 exchanges) for context
   }
@@ -412,17 +459,13 @@ class ChatEngine {
    */
   updateHistory(sessionId, userMessage, aiResponse) {
     const history = this.conversationHistory.get(sessionId) || [];
-    
     history.push(
       { role: 'user', content: userMessage },
       { role: 'assistant', content: aiResponse }
     );
-    
-    // Keep last 20 messages (10 exchanges)
     if (history.length > 20) {
       history.splice(0, history.length - 20);
     }
-    
     this.conversationHistory.set(sessionId, history);
   }
 
@@ -473,15 +516,13 @@ class ChatEngine {
    * Get fallback response when APIs are unavailable
    */
   getFallbackResponse(prompt, errorMsg, errorObj) {
-    // Log the full error for debugging (but not to user)
     console.error('Full error object:', errorObj);
-    
     const isApiKeyError = errorMsg.includes('API key') || errorMsg.includes('401') || errorMsg.includes('403');
     
     if (isApiKeyError) {
       return `🔑 **API Key Issue Detected**
 
-I notice there's an issue with your OpenAI, DeepSeek, or Ollama API key. Here's how to fix it:
+I notice there's an issue with your API keys. Here's how to fix it:
 
 1. Verify your API keys in the Render environment variables
 2. Ensure the keys haven't expired
