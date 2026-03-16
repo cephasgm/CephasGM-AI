@@ -1,6 +1,7 @@
 /**
  * AI Chat Engine - Core chat functionality with OpenAI, Ollama, and DeepSeek
  * Enhanced with streaming support, robust error handling, and automatic failover.
+ * Ollama model names now include proper tags (e.g., llama3.2:3b).
  */
 const fetch = require('node-fetch');
 const config = require('../config');
@@ -8,7 +9,7 @@ const config = require('../config');
 class ChatEngine {
   constructor() {
     this.models = {
-      // OpenAI models
+      // OpenAI models (kept for future paid use)
       'gpt-4': { 
         provider: 'openai', 
         model: 'gpt-4',
@@ -24,7 +25,7 @@ class ChatEngine {
         model: 'gpt-3.5-turbo',
         description: 'OpenAI GPT-3.5 Turbo - Fast, efficient'
       },
-      // Ollama models (fallback)
+      // Ollama models (with correct tags) – currently free
       'llama3': { 
         provider: 'ollama', 
         model: 'llama3:8b',
@@ -32,7 +33,7 @@ class ChatEngine {
       },
       'llama3.2': { 
         provider: 'ollama', 
-        model: 'llama3.2',
+        model: 'llama3.2:3b',
         description: 'Latest Llama 3.2 3B - Fast and efficient'
       },
       'mistral': { 
@@ -55,7 +56,7 @@ class ChatEngine {
         model: 'neural-chat:7b',
         description: 'Neural Chat - Optimized for conversations'
       },
-      // DeepSeek model
+      // DeepSeek model (kept for future)
       'deepseek-chat': { 
         provider: 'deepseek', 
         model: 'deepseek-chat',
@@ -70,12 +71,11 @@ class ChatEngine {
     this.ollamaHost = 'https://api.ollama.com';
     
     console.log('🤖 Chat engine initialized');
-    console.log(`   OpenAI: ${this.openaiApiKey ? '✅ Configured' : '❌ Missing'}`);
+    console.log(`   OpenAI: ${this.openaiApiKey ? '✅ Configured' : '❌ Missing (will be used later)'}`);
     console.log(`   Ollama: ${this.ollamaApiKey ? '✅ Configured' : '❌ Missing'}`);
-    console.log(`   DeepSeek: ${this.deepseekApiKey ? '✅ Configured' : '❌ Missing'}`);
+    console.log(`   DeepSeek: ${this.deepseekApiKey ? '✅ Configured' : '❌ Missing (will be used later)'}`);
     console.log(`   Available models: ${Object.keys(this.models).length}`);
     
-    // Test connection on startup
     if (this.ollamaApiKey) {
       this.testOllamaConnection().catch(() => {});
     }
@@ -87,7 +87,7 @@ class ChatEngine {
   async chat(prompt, options = {}) {
     try {
       const {
-        model = 'gpt-3.5-turbo',
+        model = 'llama3.2',          // Default to a free Ollama model
         temperature = 0.7,
         maxTokens = 2000,
         sessionId = 'default',
@@ -100,33 +100,26 @@ class ChatEngine {
 
       console.log(`💬 Chat request [${model}]: "${prompt.substring(0, 50)}..."`);
 
-      // Get conversation history
-      let history = this.getHistory(sessionId);
-      
-      // Prepare messages array once
+      const history = this.getHistory(sessionId);
       const messages = [
         { role: 'system', content: systemPrompt },
         ...history,
         { role: 'user', content: prompt }
       ];
 
-      // Determine the requested provider from the model parameter
-      const requestedConfig = this.models[model] || this.models['gpt-3.5-turbo'];
+      const requestedConfig = this.models[model] || this.models['llama3.2'];
       const requestedProvider = requestedConfig.provider;
 
-      // Define a list of providers to try in order:
-      // 1. The requested provider (if its key is available)
-      // 2. Other providers as fallbacks
+      // Build list of providers to try:
+      // 1. The requested provider (if its key is present)
+      // 2. Then Ollama (free), then OpenAI, then DeepSeek (as fallbacks)
       const providersToTry = [];
 
-      // Helper to add a provider if key exists
       const addProvider = (name, condition, caller, modelName) => {
-        if (condition) {
-          providersToTry.push({ name, caller, model: modelName });
-        }
+        if (condition) providersToTry.push({ name, caller, model: modelName });
       };
 
-      // Order: requested first, then OpenAI, DeepSeek, Ollama (if not already covered)
+      // Requested provider first
       if (requestedProvider === 'openai' && this.openaiApiKey) {
         addProvider('openai', true, this.callOpenAI.bind(this), requestedConfig.model);
       } else if (requestedProvider === 'deepseek' && this.deepseekApiKey) {
@@ -135,15 +128,15 @@ class ChatEngine {
         addProvider('ollama', true, this.callOllama.bind(this), requestedConfig.model);
       }
 
-      // Then add all other available providers as fallbacks (avoid duplicates)
-      if (requestedProvider !== 'openai' && this.openaiApiKey) {
+      // Then add all available providers as fallbacks (prioritise free Ollama)
+      if (this.ollamaApiKey && requestedProvider !== 'ollama') {
+        addProvider('ollama', true, this.callOllama.bind(this), 'llama3.2:3b');
+      }
+      if (this.openaiApiKey && requestedProvider !== 'openai') {
         addProvider('openai', true, this.callOpenAI.bind(this), 'gpt-3.5-turbo');
       }
-      if (requestedProvider !== 'deepseek' && this.deepseekApiKey) {
+      if (this.deepseekApiKey && requestedProvider !== 'deepseek') {
         addProvider('deepseek', true, this.callDeepSeek.bind(this), 'deepseek-chat');
-      }
-      if (requestedProvider !== 'ollama' && this.ollamaApiKey) {
-        addProvider('ollama', true, this.callOllama.bind(this), 'llama3.2');
       }
 
       if (providersToTry.length === 0) {
@@ -153,13 +146,11 @@ class ChatEngine {
       const errors = [];
       let lastError = null;
 
-      // Try each provider in order
       for (const provider of providersToTry) {
         try {
           console.log(`🔄 Trying provider: ${provider.name} with model ${provider.model}`);
           const response = await provider.caller(provider.model, messages, temperature, maxTokens);
           
-          // Success – update history and return
           this.updateHistory(sessionId, prompt, response.content);
           return {
             success: true,
@@ -176,14 +167,13 @@ class ChatEngine {
         }
       }
 
-      // All providers failed
       const errorSummary = errors.join('; ');
       console.error('All providers failed:', errorSummary);
 
       return {
         success: true,
         content: this.getFallbackResponse(prompt, errorSummary, lastError),
-        model: options.model || 'gpt-3.5-turbo',
+        model: options.model || 'llama3.2',
         provider: 'fallback',
         error: errorSummary,
         timestamp: new Date().toISOString()
@@ -194,7 +184,7 @@ class ChatEngine {
       return {
         success: true,
         content: this.getFallbackResponse(prompt, error.message, error),
-        model: options.model || 'gpt-3.5-turbo',
+        model: options.model || 'llama3.2',
         provider: 'fallback',
         error: error.message,
         timestamp: new Date().toISOString()
@@ -202,9 +192,7 @@ class ChatEngine {
     }
   }
 
-  /**
-   * Call OpenAI API (non-streaming)
-   */
+  // ---------- Provider call methods (unchanged) ----------
   async callOpenAI(model, messages, temperature, maxTokens) {
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -212,31 +200,16 @@ class ChatEngine {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${this.openaiApiKey}`
       },
-      body: JSON.stringify({
-        model,
-        messages,
-        temperature,
-        max_tokens: maxTokens,
-        stream: false
-      })
+      body: JSON.stringify({ model, messages, temperature, max_tokens: maxTokens, stream: false })
     });
-
     if (!response.ok) {
       const errorText = await response.text();
       throw new Error(`OpenAI API error (${response.status}): ${errorText}`);
     }
-
     const data = await response.json();
-    return {
-      content: data.choices[0].message.content,
-      usage: data.usage,
-      provider: 'openai'
-    };
+    return { content: data.choices[0].message.content, usage: data.usage, provider: 'openai' };
   }
 
-  /**
-   * Call DeepSeek API (non-streaming)
-   */
   async callDeepSeek(model, messages, temperature, maxTokens) {
     const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
       method: 'POST',
@@ -244,31 +217,16 @@ class ChatEngine {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${this.deepseekApiKey}`
       },
-      body: JSON.stringify({
-        model,
-        messages,
-        temperature,
-        max_tokens: maxTokens,
-        stream: false
-      })
+      body: JSON.stringify({ model, messages, temperature, max_tokens: maxTokens, stream: false })
     });
-
     if (!response.ok) {
       const errorText = await response.text();
       throw new Error(`DeepSeek API error (${response.status}): ${errorText}`);
     }
-
     const data = await response.json();
-    return {
-      content: data.choices[0].message.content,
-      usage: data.usage,
-      provider: 'deepseek'
-    };
+    return { content: data.choices[0].message.content, usage: data.usage, provider: 'deepseek' };
   }
 
-  /**
-   * Call Ollama API (non-streaming)
-   */
   async callOllama(model, messages, temperature, maxTokens) {
     const response = await fetch('https://api.ollama.com/api/chat', {
       method: 'POST',
@@ -276,147 +234,86 @@ class ChatEngine {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${this.ollamaApiKey}`
       },
-      body: JSON.stringify({
-        model,
-        messages,
-        stream: false,
-        options: {
-          temperature,
-          num_predict: maxTokens
-        }
-      })
+      body: JSON.stringify({ model, messages, stream: false, options: { temperature, num_predict: maxTokens } })
     });
-
     if (!response.ok) {
       const errorText = await response.text();
       throw new Error(`Ollama API error (${response.status}): ${errorText}`);
     }
-
     const data = await response.json();
-    return {
-      content: data.message.content,
-      usage: { prompt_tokens: 0, completion_tokens: 0 },
-      provider: 'ollama'
-    };
+    return { content: data.message.content, usage: { prompt_tokens: 0, completion_tokens: 0 }, provider: 'ollama' };
   }
 
-  /**
-   * Stream chat response (for real-time applications)
-   */
+  // ---------- Streaming method (unchanged) ----------
   async *stream(prompt, options = {}) {
     try {
-      const {
-        model = 'gpt-3.5-turbo',
-        temperature = 0.7,
-        maxTokens = 2000,
-        systemPrompt = 'You are CephasGM AI, an African-inspired artificial intelligence assistant.'
-      } = options;
+      const { model = 'llama3.2', temperature = 0.7, maxTokens = 2000, systemPrompt = 'You are CephasGM AI...' } = options;
+      const modelConfig = this.models[model] || this.models['llama3.2'];
 
-      const modelConfig = this.models[model] || this.models['gpt-3.5-turbo'];
-
-      // OpenAI streaming
       if (modelConfig.provider === 'openai' && this.openaiApiKey) {
+        // OpenAI streaming (unchanged)
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${this.openaiApiKey}`
-          },
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${this.openaiApiKey}` },
           body: JSON.stringify({
             model: modelConfig.model,
-            messages: [
-              { role: 'system', content: systemPrompt },
-              { role: 'user', content: prompt }
-            ],
-            temperature,
-            max_tokens: maxTokens,
-            stream: true
+            messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: prompt }],
+            temperature, max_tokens: maxTokens, stream: true
           })
         });
-
         if (!response.ok) {
           const errorText = await response.text();
           throw new Error(`OpenAI stream error (${response.status}): ${errorText}`);
         }
-
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
-
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-
           const chunk = decoder.decode(value);
           const lines = chunk.split('\n');
-
           for (const line of lines) {
             if (line.startsWith('data: ')) {
               const data = line.slice(6);
               if (data === '[DONE]') continue;
-              try {
-                const parsed = JSON.parse(data);
-                yield parsed;
-              } catch (e) {
-                console.warn('Parse error in stream chunk:', e.message);
-              }
+              try { yield JSON.parse(data); } catch (e) { console.warn('Parse error', e.message); }
             }
           }
         }
-      }
-      // DeepSeek streaming (similar to OpenAI)
-      else if (modelConfig.provider === 'deepseek' && this.deepseekApiKey) {
+      } else if (modelConfig.provider === 'deepseek' && this.deepseekApiKey) {
+        // DeepSeek streaming (unchanged)
         const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${this.deepseekApiKey}`
-          },
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${this.deepseekApiKey}` },
           body: JSON.stringify({
             model: modelConfig.model,
-            messages: [
-              { role: 'system', content: systemPrompt },
-              { role: 'user', content: prompt }
-            ],
-            temperature,
-            max_tokens: maxTokens,
-            stream: true
+            messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: prompt }],
+            temperature, max_tokens: maxTokens, stream: true
           })
         });
-
         if (!response.ok) {
           const errorText = await response.text();
           throw new Error(`DeepSeek stream error (${response.status}): ${errorText}`);
         }
-
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
-
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-
           const chunk = decoder.decode(value);
           const lines = chunk.split('\n');
-
           for (const line of lines) {
             if (line.startsWith('data: ')) {
               const data = line.slice(6);
               if (data === '[DONE]') continue;
-              try {
-                const parsed = JSON.parse(data);
-                yield parsed;
-              } catch (e) {
-                console.warn('Parse error in stream chunk:', e.message);
-              }
+              try { yield JSON.parse(data); } catch (e) { console.warn('Parse error', e.message); }
             }
           }
         }
-      }
-      // Ollama simulation (no true streaming)
-      else if (this.ollamaApiKey) {
+      } else if (this.ollamaApiKey) {
+        // Ollama simulation (no true streaming)
         const result = await this.chat(prompt, { model, temperature, maxTokens, systemPrompt });
         const words = result.content.split(' ');
-
         for (let i = 0; i < words.length; i++) {
           yield {
             choices: [{
@@ -443,82 +340,43 @@ class ChatEngine {
     }
   }
 
-  /**
-   * Get conversation history
-   */
+  // ---------- History methods (unchanged) ----------
   getHistory(sessionId) {
-    if (!this.conversationHistory.has(sessionId)) {
-      this.conversationHistory.set(sessionId, []);
-    }
-    const history = this.conversationHistory.get(sessionId);
-    return history.slice(-6); // Last 6 messages (3 exchanges) for context
+    if (!this.conversationHistory.has(sessionId)) this.conversationHistory.set(sessionId, []);
+    return this.conversationHistory.get(sessionId).slice(-6);
   }
 
-  /**
-   * Update conversation history
-   */
   updateHistory(sessionId, userMessage, aiResponse) {
     const history = this.conversationHistory.get(sessionId) || [];
-    history.push(
-      { role: 'user', content: userMessage },
-      { role: 'assistant', content: aiResponse }
-    );
-    if (history.length > 20) {
-      history.splice(0, history.length - 20);
-    }
+    history.push({ role: 'user', content: userMessage }, { role: 'assistant', content: aiResponse });
+    if (history.length > 20) history.splice(0, history.length - 20);
     this.conversationHistory.set(sessionId, history);
   }
 
-  /**
-   * Clear conversation history
-   */
   clearHistory(sessionId) {
     this.conversationHistory.delete(sessionId);
     return { success: true, message: 'History cleared' };
   }
 
-  /**
-   * Get available models
-   */
   getModels() {
     return Object.entries(this.models).map(([name, config]) => ({
-      id: name,
-      name: name,
-      fullName: config.model,
-      provider: config.provider,
-      description: config.description
+      id: name, name, fullName: config.model, provider: config.provider, description: config.description
     }));
   }
 
-  /**
-   * Test Ollama connection
-   */
   async testOllamaConnection() {
     try {
-      const endpoint = 'https://api.ollama.com/api/tags';
-      const response = await fetch(endpoint, {
-        headers: {
-          'Authorization': `Bearer ${this.ollamaApiKey}`,
-          'Accept': 'application/json'
-        }
+      const response = await fetch('https://api.ollama.com/api/tags', {
+        headers: { 'Authorization': `Bearer ${this.ollamaApiKey}`, 'Accept': 'application/json' }
       });
-      if (response.ok) {
-        console.log('✅ Ollama Cloud connection verified');
-      } else {
-        console.warn('⚠️ Ollama Cloud connection failed');
-      }
-    } catch (error) {
-      // Ignore
-    }
+      if (response.ok) console.log('✅ Ollama Cloud connection verified');
+      else console.warn('⚠️ Ollama Cloud connection failed');
+    } catch (error) { /* ignore */ }
   }
 
-  /**
-   * Get fallback response when APIs are unavailable
-   */
   getFallbackResponse(prompt, errorMsg, errorObj) {
     console.error('Full error object:', errorObj);
     const isApiKeyError = errorMsg.includes('API key') || errorMsg.includes('401') || errorMsg.includes('403');
-    
     if (isApiKeyError) {
       return `🔑 **API Key Issue Detected**
 
@@ -531,7 +389,6 @@ I notice there's an issue with your API keys. Here's how to fix it:
 
 Once the API keys are fixed, I'll be able to provide intelligent responses using powerful AI models!`;
     }
-
     return `🌐 **Connection Issue**
 
 I'm having trouble connecting to the AI service at the moment. This could be due to network issues or service unavailability.
