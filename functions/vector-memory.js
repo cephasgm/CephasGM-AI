@@ -55,22 +55,20 @@ function textToVector(text) {
  * Endpoint: https://us-central1-cephasgm-ai.cloudfunctions.net/vectorMemory
  */
 exports.vectorMemory = functions.https.onRequest(async (req, res) => {
-  // Enable CORS
-  res.set("Access-Control-Allow-Origin", "*");
-  res.set("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
-  res.set("Access-Control-Allow-Headers", "Content-Type");
+  // Set CORS headers for all responses
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type');
 
-  // Handle preflight
-  if (req.method === "OPTIONS") {
-    res.status(204).send("");
+  // Handle preflight (OPTIONS) immediately
+  if (req.method === 'OPTIONS') {
+    res.status(204).send('');
     return;
   }
 
   try {
-    const { action, text, vector, id, metadata, limit = 5, threshold = 0.5 } = req.body;
-
     // GET request - return all memories
-    if (req.method === "GET") {
+    if (req.method === 'GET') {
       res.json({
         success: true,
         count: memoryStore.length,
@@ -84,10 +82,17 @@ exports.vectorMemory = functions.https.onRequest(async (req, res) => {
     }
 
     // POST request - perform action
-    if (req.method === "POST") {
+    if (req.method === 'POST') {
+      const { action, text, vector, id, metadata, limit = 5, threshold = 0.5 } = req.body;
+
+      // Validate required fields
+      if (!action) {
+        res.status(400).json({ error: 'Missing action parameter' });
+        return;
+      }
       
       // Add vector to memory
-      if (action === "add") {
+      if (action === 'add') {
         let vectorToStore = vector;
         
         // Generate vector from text if not provided
@@ -96,7 +101,7 @@ exports.vectorMemory = functions.https.onRequest(async (req, res) => {
         }
         
         if (!vectorToStore) {
-          res.status(400).json({ error: "Either vector or text is required" });
+          res.status(400).json({ error: "Either vector or text is required for add" });
           return;
         }
 
@@ -185,8 +190,9 @@ exports.vectorMemory = functions.https.onRequest(async (req, res) => {
       else {
         res.status(400).json({ error: "Invalid action. Use: add, search, delete, clear" });
       }
+    } else {
+      res.status(405).json({ error: 'Method not allowed. Use GET or POST.' });
     }
-
   } catch (error) {
     console.error("Vector memory error:", error);
     res.status(500).json({ 
