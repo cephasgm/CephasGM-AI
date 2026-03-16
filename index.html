@@ -183,37 +183,7 @@ h1 {
   line-height: 1.5;
   white-space: pre-wrap;
 }
-.input-area {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-.input-area input {
-  flex: 1;
-  padding: 15px;
-  border-radius: 30px;
-  border: none;
-  font-size: 16px;
-  background: rgba(255,255,255,0.9);
-}
-.input-area input:focus {
-  outline: 2px solid #ffb300;
-}
-.input-area button {
-  padding: 15px 30px;
-  border: none;
-  border-radius: 30px;
-  background: #ffb300;
-  color: black;
-  font-weight: bold;
-  cursor: pointer;
-  transition: all 0.3s;
-  min-width: 100px;
-}
-.input-area button:hover {
-  transform: scale(1.05);
-  background: #ffa000;
-}
+/* New input area styles – will be inline in HTML */
 .voice-btn {
   background: #28a745 !important;
   color: white !important;
@@ -288,57 +258,6 @@ h1 {
 .status.error {
   background: rgba(220, 53, 69, 0.3);
   color: #ffb3b3;
-}
-.upload-area {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-.file-input {
-  padding: 20px;
-  background: rgba(255,255,255,0.1);
-  border: 2px dashed #ffb300;
-  border-radius: 10px;
-  text-align: center;
-  cursor: pointer;
-}
-.file-input:hover {
-  background: rgba(255,179,0,0.1);
-}
-.file-input input {
-  display: none;
-}
-.file-label {
-  cursor: pointer;
-  font-size: 1.1rem;
-}
-.upload-btn {
-  padding: 15px;
-  border: none;
-  border-radius: 30px;
-  background: #ffb300;
-  color: black;
-  font-weight: bold;
-  cursor: pointer;
-  font-size: 1.1rem;
-}
-.upload-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.progress-bar {
-  width: 100%;
-  height: 10px;
-  background: rgba(255,255,255,0.1);
-  border-radius: 5px;
-  overflow: hidden;
-  display: none;
-}
-.progress-bar-fill {
-  height: 100%;
-  background: #ffb300;
-  width: 0%;
-  transition: width 0.3s;
 }
 .file-info {
   margin-top: 20px;
@@ -676,12 +595,11 @@ h1 {
       <a href="login-signup.html" style="color: #ffb300; text-decoration: none;">Login / Signup</a> to access all features
     </div>
     
-    <!-- Tab Navigation -->
+    <!-- Tab Navigation (Upload tab removed) -->
     <div class="tab-nav" id="tabNav" style="display: none;">
       <button class="tab-btn active" onclick="switchTab('chat')">💬 Chat</button>
       <button class="tab-btn" onclick="switchTab('image')">🎨 Image</button>
       <button class="tab-btn" onclick="switchTab('video')">🎬 Video</button>
-      <button class="tab-btn" onclick="switchTab('upload')">📁 Upload</button>
       <button class="tab-btn" onclick="switchTab('voice')">🎤 Voice</button>
       <button class="tab-btn" onclick="switchTab('agents')">🤖 Agents</button>
       <button class="tab-btn" onclick="switchTab('memory')">🧠 Memory</button>
@@ -691,23 +609,41 @@ h1 {
       <!-- Admin tab will be added dynamically if user is admin -->
     </div>
     
-    <!-- Chat Tab -->
+    <!-- Chat Tab (with file upload) -->
     <div id="chatTab" class="tab-content active">
       <div class="chat-box" id="chat"></div>
+      <!-- New input area with file attachment -->
       <div class="input-area">
-        <input type="text" id="userInput" placeholder="Ask CephasGM AI anything..." autocomplete="off">
-        <!-- Model selector dropdown -->
-        <select id="modelSelect" style="padding: 15px; border-radius: 30px; border: none; background: #ffb300; color: black; font-weight: bold;">
-          <option value="gpt-3.5-turbo">OpenAI GPT-3.5</option>
-          <option value="gpt-4">OpenAI GPT-4</option>
-          <option value="deepseek-chat">DeepSeek</option>
-          <option value="llama3.2">Llama 3.2</option>
-          <option value="mistral">Mistral</option>
-          <option value="codellama">Code Llama</option>
-        </select>
-        <button class="voice-btn" id="voiceBtn" onclick="toggleVoice()">🎤</button>
-        <button onclick="streamMessage()" id="sendBtn">Send (Streaming)</button>
-        <button onclick="clearChat()" style="background: #dc3545;">🗑️</button>
+        <div style="display: flex; flex-direction: column; gap: 10px; width: 100%;">
+          <div style="display: flex; gap: 10px; align-items: center;">
+            <input type="text" id="userInput" placeholder="Ask CephasGM AI anything..." autocomplete="off" style="flex: 1; padding: 15px; border-radius: 30px; border: none; font-size: 16px; background: rgba(255,255,255,0.9);">
+            <button class="voice-btn" id="voiceBtn" onclick="toggleVoice()">🎤</button>
+          </div>
+          <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+            <!-- File attachment button -->
+            <label for="chatFileInput" style="padding: 10px 20px; background: #ffb300; border-radius: 30px; cursor: pointer; color: black; font-weight: bold;">
+              📎 Attach Files
+            </label>
+            <input type="file" id="chatFileInput" multiple accept=".txt,.pdf,.doc,.docx,.jpg,.png" style="display: none;">
+            <span id="fileList" style="color: #ccc; font-size: 0.9rem;"></span>
+            <!-- Model selector grouped -->
+            <select id="modelSelect" style="padding: 10px 20px; border-radius: 30px; border: none; background: #ffb300; color: black; font-weight: bold;">
+              <optgroup label="Free Models (Ollama)">
+                <option value="llama3.2">Llama 3.2</option>
+                <option value="mistral">Mistral</option>
+                <option value="phi3">Phi-3</option>
+                <option value="codellama">Code Llama</option>
+              </optgroup>
+              <optgroup label="Paid Models (Requires Credits)">
+                <option value="gpt-3.5-turbo">OpenAI GPT-3.5</option>
+                <option value="gpt-4">OpenAI GPT-4</option>
+                <option value="deepseek-chat">DeepSeek</option>
+              </optgroup>
+            </select>
+            <button onclick="streamMessage()" id="sendBtn" style="padding: 10px 30px; border: none; border-radius: 30px; background: #ffb300; color: black; font-weight: bold;">Send</button>
+            <button onclick="clearChat()" style="padding: 10px 20px; background: #dc3545; border: none; border-radius: 30px; color: white;">🗑️</button>
+          </div>
+        </div>
       </div>
     </div>
     
@@ -733,24 +669,6 @@ h1 {
       </div>
       <div class="video-result" id="videoResult"></div>
       <div class="status" id="videoStatus"></div>
-    </div>
-    
-    <!-- Upload Tab -->
-    <div id="uploadTab" class="tab-content">
-      <h2>📁 Upload Documents</h2>
-      <p>Upload PDF, text files, or images for analysis</p>
-      <div class="upload-area">
-        <div class="file-input" onclick="document.getElementById('file').click()">
-          <input type="file" id="file" multiple accept=".pdf,.txt,.doc,.docx,.jpg,.png,.mp3,.mp4">
-          <div class="file-label">📄 Click to select files (multiple allowed)</div>
-        </div>
-        <div class="progress-bar" id="uploadProgress">
-          <div class="progress-bar-fill" id="uploadProgressFill"></div>
-        </div>
-        <button class="upload-btn" onclick="uploadFiles()" id="uploadBtn">Upload Files</button>
-        <div class="status" id="uploadStatus"></div>
-        <div class="file-info" id="fileInfo"></div>
-      </div>
     </div>
     
     <!-- Voice Tab -->
@@ -902,7 +820,7 @@ h1 {
 <script src="ai.js"></script>
 <script src="agents.js"></script>
 <script src="image.js"></script>
-<script src="upload.js"></script>
+<script src="upload.js"></script>   <!-- upload.js kept for other uses, but the Upload tab is removed -->
 
 <!-- ============================================ -->
 <!-- Main Application Script (everything below)   -->
@@ -1024,6 +942,19 @@ function formatAgentResponse(data) {
 }
 
 // ============================================
+// File Attachment Handling
+// ============================================
+document.getElementById('chatFileInput').addEventListener('change', function(e) {
+  const files = e.target.files;
+  const fileList = document.getElementById('fileList');
+  if (files.length > 0) {
+    fileList.textContent = Array.from(files).map(f => f.name).join(', ');
+  } else {
+    fileList.textContent = '';
+  }
+});
+
+// ============================================
 // Chat Functions (non-streaming fallback)
 // ============================================
 async function sendMessage() {
@@ -1036,7 +967,7 @@ async function sendMessage() {
   try {
     let response;
     if (API_BASE) {
-      const model = document.getElementById('modelSelect').value; // get selected model
+      const model = document.getElementById('modelSelect').value;
       const res = await fetch(`${API_BASE}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1059,31 +990,51 @@ async function sendMessage() {
 }
 
 // ============================================
-// Streaming Chat with fallback to non‑streaming
+// Streaming Chat with File Uploads
 // ============================================
 async function streamMessage() {
   const input = document.getElementById('userInput');
   const message = input.value.trim();
-  if (!message) return;
+  const fileInput = document.getElementById('chatFileInput');
+  const files = fileInput.files;
+  const model = document.getElementById('modelSelect').value;
 
-  addMessageToChat('user', message);
+  if (!message && files.length === 0) {
+    alert('Please enter a message or attach a file.');
+    return;
+  }
+
+  // Add user message (optionally with file names)
+  let userMessageText = message;
+  if (files.length > 0) {
+    const fileNames = Array.from(files).map(f => f.name).join(', ');
+    userMessageText += `\n[Attached files: ${fileNames}]`;
+  }
+  addMessageToChat('user', userMessageText);
+
   input.value = '';
+  fileInput.value = '';
+  document.getElementById('fileList').textContent = '';
 
   const typingId = showTypingIndicator();
 
   try {
-    const model = document.getElementById('modelSelect').value;
-    const response = await fetch(`${API_BASE}/chat/stream`, {
+    const formData = new FormData();
+    formData.append('prompt', message);
+    formData.append('model', model);
+    for (let i = 0; i < files.length; i++) {
+      formData.append('files', files[i]);
+    }
+
+    const response = await fetch(`${API_BASE}/chat/upload`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt: message, model: model })
+      body: formData
     });
 
     if (!response.ok) {
-      // If streaming fails, fall back to non‑streaming chat
-      console.warn('Streaming failed, falling back to non‑streaming');
+      console.warn('Upload endpoint failed, falling back to regular chat');
       removeTypingIndicator(typingId);
-      await fallbackSendMessage(message);
+      await fallbackSendMessage(message, model);
       return;
     }
 
@@ -1130,13 +1081,12 @@ async function streamMessage() {
   } catch (error) {
     removeTypingIndicator(typingId);
     console.warn('Streaming error, falling back to non‑streaming:', error);
-    await fallbackSendMessage(message);
+    await fallbackSendMessage(message, model);
   }
 }
 
-// Helper to send non‑streaming message
-async function fallbackSendMessage(message) {
-  const model = document.getElementById('modelSelect').value;
+// Helper fallback for non‑streaming chat
+async function fallbackSendMessage(message, model) {
   try {
     const res = await fetch(`${API_BASE}/chat`, {
       method: 'POST',
@@ -1189,7 +1139,7 @@ function saveToMemory(prompt, response) {
 }
 
 // ============================================
-// Role Management
+// Role Management (unchanged)
 // ============================================
 async function fetchUserRole() {
   if (!currentUser) return null;
@@ -1197,14 +1147,9 @@ async function fetchUserRole() {
     const token = await currentUser.getIdToken();
     const response = await fetch(`${API_BASE}/user/role`, {
       method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
+      headers: { 'Authorization': `Bearer ${token}` }
     });
-    if (!response.ok) {
-      console.warn('Role fetch failed, defaulting to user');
-      return 'user';
-    }
+    if (!response.ok) return 'user';
     const data = await response.json();
     return data.role || 'user';
   } catch (error) {
@@ -1246,10 +1191,7 @@ function addAdminTab() {
 window.updateUserRole = async function() {
   const email = document.getElementById('adminUserEmail').value.trim();
   const role = document.getElementById('adminNewRole').value;
-  if (!email) {
-    showAdminMessage('Please enter an email', 'error');
-    return;
-  }
+  if (!email) { showAdminMessage('Please enter an email', 'error'); return; }
   showAdminMessage('Updating...', 'info');
   try {
     const token = await currentUser.getIdToken();
@@ -1262,11 +1204,8 @@ window.updateUserRole = async function() {
       body: JSON.stringify({ email, role })
     });
     const data = await response.json();
-    if (response.ok) {
-      showAdminMessage(data.message || 'Role updated', 'success');
-    } else {
-      showAdminMessage(data.error || 'Error', 'error');
-    }
+    if (response.ok) showAdminMessage(data.message || 'Role updated', 'success');
+    else showAdminMessage(data.error || 'Error', 'error');
   } catch (error) {
     showAdminMessage('Network error', 'error');
   }
@@ -1274,10 +1213,7 @@ window.updateUserRole = async function() {
 
 function showAdminMessage(message, type) {
   const msgDiv = document.getElementById('adminMessage');
-  if (msgDiv) {
-    msgDiv.textContent = message;
-    msgDiv.className = `status ${type}`;
-  }
+  if (msgDiv) { msgDiv.textContent = message; msgDiv.className = `status ${type}`; }
 }
 
 // ============================================
@@ -1306,9 +1242,7 @@ auth.onAuthStateChanged(async (user) => {
     if (typeof loadMemories === 'function') loadMemories();
     loadChatHistory();
     
-    if (role === 'admin') {
-      addAdminTab();
-    }
+    if (role === 'admin') addAdminTab();
   } else {
     userInfo.style.display = 'none';
     authMessage.style.display = 'block';
@@ -1350,19 +1284,12 @@ function switchTab(tabName) {
 // ============================================
 async function generateImage() {
   const prompt = document.getElementById('imagePrompt').value.trim();
-  if (!prompt) {
-    showImageStatus('Please enter a prompt', 'error');
-    return;
-  }
+  if (!prompt) { showImageStatus('Please enter a prompt', 'error'); return; }
   showImageStatus('Generating image...', 'info');
   document.getElementById('generateImageBtn').disabled = true;
   try {
     let result, imageUrl = null;
-    const endpoints = [
-      `${API_BASE}/generate/image`,
-      `${API_BASE}/api/generate/image`,
-      'https://us-central1-cephasgm-ai.cloudfunctions.net/image'
-    ];
+    const endpoints = [ `${API_BASE}/generate/image`, `${API_BASE}/api/generate/image`, 'https://us-central1-cephasgm-ai.cloudfunctions.net/image' ];
     for (const endpoint of endpoints) {
       try {
         console.log(`Trying endpoint: ${endpoint}`);
@@ -1377,13 +1304,9 @@ async function generateImage() {
           imageUrl = result.url || result.imageUrl;
           if (imageUrl) break;
         }
-      } catch (e) {
-        console.log(`Endpoint ${endpoint} failed:`, e.message);
-      }
+      } catch (e) { console.log(`Endpoint ${endpoint} failed:`, e.message); }
     }
-    if (!imageUrl) {
-      imageUrl = `https://images.unsplash.com/photo-1508672019048-805c876b67e2?w=512&h=512&fit=crop&auto=format`;
-    }
+    if (!imageUrl) imageUrl = 'https://images.unsplash.com/photo-1508672019048-805c876b67e2?w=512&h=512&fit=crop&auto=format';
     const imageResult = document.getElementById('imageResult');
     imageResult.innerHTML = `
       <img src="${imageUrl}" alt="${prompt}" onerror="this.onerror=null; this.src='https://images.unsplash.com/photo-1508672019048-805c876b67e2?w=512&h=512&fit=crop&auto=format';">
@@ -1398,46 +1321,31 @@ async function generateImage() {
     const imageResult = document.getElementById('imageResult');
     imageResult.innerHTML = `
       <img src="https://images.unsplash.com/photo-1508672019048-805c876b67e2?w=512&h=512&fit=crop&auto=format" alt="Fallback image">
-      <div class="image-actions">
-        <button onclick="generateImage()">Try Again</button>
-      </div>
+      <div class="image-actions"><button onclick="generateImage()">Try Again</button></div>
     `;
     showImageStatus('Using fallback image. Please try again later.', 'info');
   } finally {
     document.getElementById('generateImageBtn').disabled = false;
   }
 }
-
 function showImageStatus(message, type) {
   const status = document.getElementById('imageStatus');
   status.textContent = message;
   status.className = `status ${type}`;
-  if (type === 'success') {
-    setTimeout(() => {
-      status.textContent = '';
-      status.className = 'status';
-    }, 3000);
-  }
+  if (type === 'success') setTimeout(() => { status.textContent = ''; status.className = 'status'; }, 3000);
 }
 
 // ============================================
-// Video Generation
+// Video Generation (unchanged)
 // ============================================
 async function generateVideo() {
   const prompt = document.getElementById('videoPrompt').value.trim();
-  if (!prompt) {
-    showVideoStatus('Please enter a prompt', 'error');
-    return;
-  }
+  if (!prompt) { showVideoStatus('Please enter a prompt', 'error'); return; }
   showVideoStatus('Generating video...', 'info');
   document.getElementById('generateVideoBtn').disabled = true;
   try {
     let result, videoUrl = null;
-    const endpoints = [
-      `${API_BASE}/video`,
-      `${API_BASE}/generate/video`,
-      'https://us-central1-cephasgm-ai.cloudfunctions.net/video'
-    ];
+    const endpoints = [ `${API_BASE}/video`, `${API_BASE}/generate/video`, 'https://us-central1-cephasgm-ai.cloudfunctions.net/video' ];
     for (const endpoint of endpoints) {
       try {
         console.log(`Trying endpoint: ${endpoint}`);
@@ -1452,22 +1360,16 @@ async function generateVideo() {
           videoUrl = result.url || result.video_url;
           if (videoUrl) break;
         }
-      } catch (e) {
-        console.log(`Endpoint ${endpoint} failed:`, e.message);
-      }
+      } catch (e) { console.log(`Endpoint ${endpoint} failed:`, e.message); }
     }
-    if (!videoUrl) {
-      videoUrl = 'https://storage.cephasgm.ai/videos/simulated.mp4';
-    }
+    if (!videoUrl) videoUrl = 'https://storage.cephasgm.ai/videos/simulated.mp4';
     const videoResult = document.getElementById('videoResult');
     videoResult.innerHTML = `
       <video controls src="${videoUrl}" onerror="this.onerror=null; this.outerHTML='<p>Video preview not available</p>';">
         Your browser does not support the video tag.
       </video>
       <div class="video-actions">
-        <a href="${videoUrl}" target="_blank" download>
-          <button>Download</button>
-        </a>
+        <a href="${videoUrl}" target="_blank" download><button>Download</button></a>
         <button onclick="generateVideo()">Regenerate</button>
       </div>
     `;
@@ -1475,181 +1377,24 @@ async function generateVideo() {
   } catch (error) {
     console.error('Video generation error:', error);
     const videoResult = document.getElementById('videoResult');
-    videoResult.innerHTML = `
-      <p>😕 Video generation failed</p>
-      <button onclick="generateVideo()">Try Again</button>
-    `;
+    videoResult.innerHTML = `<p>😕 Video generation failed</p><button onclick="generateVideo()">Try Again</button>`;
     showVideoStatus('Error generating video. Please try again.', 'error');
   } finally {
     document.getElementById('generateVideoBtn').disabled = false;
   }
 }
-
 function showVideoStatus(message, type) {
   const status = document.getElementById('videoStatus');
   status.textContent = message;
   status.className = `status ${type}`;
-  if (type === 'success') {
-    setTimeout(() => {
-      status.textContent = '';
-      status.className = 'status';
-    }, 3000);
-  }
+  if (type === 'success') setTimeout(() => { status.textContent = ''; status.className = 'status'; }, 3000);
 }
 
 // ============================================
-// Upload Functions
-// ============================================
-async function uploadFiles() {
-  const fileInput = document.getElementById('file');
-  if (!fileInput.files || fileInput.files.length === 0) {
-    showUploadStatus('Please select at least one file', 'error');
-    return;
-  }
-  const files = fileInput.files;
-  showUploadStatus(`Uploading ${files.length} file(s)...`, 'info');
-  document.getElementById('uploadBtn').disabled = true;
-  const progressBar = document.getElementById('uploadProgress');
-  const progressFill = document.getElementById('uploadProgressFill');
-  progressBar.style.display = 'block';
-  progressFill.style.width = '0%';
-  const results = [];
-  let completed = 0;
-  for (let i = 0; i < files.length; i++) {
-    const file = files[i];
-    try {
-      const result = await processSingleFile(file);
-      results.push(result);
-    } catch (error) {
-      console.error(`Error processing ${file.name}:`, error);
-      results.push({ fileName: file.name, error: error.message });
-    }
-    completed++;
-    progressFill.style.width = `${(completed / files.length) * 100}%`;
-  }
-  setTimeout(() => {
-    progressBar.style.display = 'none';
-    progressFill.style.width = '0%';
-  }, 500);
-  showUploadStatus(`Processed ${results.length} file(s)`, 'success');
-  displayUploadResults(results);
-  document.getElementById('uploadBtn').disabled = false;
-  fileInput.value = '';
-}
-
-async function processSingleFile(file) {
-  const formData = new FormData();
-  formData.append('file', file);
-  let uploadResult = null;
-  try {
-    const response = await fetch(`${API_BASE}/upload`, {
-      method: 'POST',
-      body: formData,
-      mode: 'cors',
-      headers: { 'Accept': 'application/json' }
-    });
-    if (response.ok) uploadResult = await response.json();
-  } catch (e) {
-    console.log(`Upload to backend failed for ${file.name}:`, e);
-  }
-  let fileContent = '';
-  if (file.type.startsWith('text/') || file.name.endsWith('.txt')) {
-    fileContent = await file.text();
-  } else if (file.type === 'application/pdf') {
-    fileContent = '[PDF content – analysis not implemented]';
-  } else if (file.type.startsWith('image/')) {
-    fileContent = '[Image file – analysis not implemented]';
-  }
-  let interpretation = '';
-  if (fileContent && fileContent.length > 50) {
-    try {
-      const model = document.getElementById('modelSelect').value;
-      const aiResponse = await fetch(`${API_BASE}/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: `Analyze this document and provide a concise summary:\n\n${fileContent.substring(0, 3000)}`,
-          model: model
-        })
-      });
-      if (aiResponse.ok) {
-        const data = await aiResponse.json();
-        interpretation = data.content || data.response || 'No interpretation';
-      }
-    } catch (e) {
-      console.log('AI interpretation failed:', e);
-      interpretation = 'Interpretation unavailable.';
-    }
-  }
-  return {
-    fileName: file.name,
-    size: file.size,
-    type: file.type,
-    uploadResult,
-    contentPreview: fileContent.substring(0, 500) + (fileContent.length > 500 ? '...' : ''),
-    interpretation
-  };
-}
-
-function displayUploadResults(results) {
-  const fileInfo = document.getElementById('fileInfo');
-  if (!fileInfo) return;
-  let html = '<h3>Upload Results</h3>';
-  results.forEach(r => {
-    html += `<div style="margin-top: 15px; padding: 10px; background: rgba(255,255,255,0.1); border-radius: 5px;">`;
-    html += `<strong>📄 ${r.fileName}</strong> (${formatFileSize(r.size)})<br>`;
-    if (r.error) {
-      html += `<span style="color: #ff6b6b;">❌ Error: ${r.error}</span>`;
-    } else {
-      if (r.interpretation) {
-        html += `<p><em>Interpretation:</em> ${r.interpretation}</p>`;
-      }
-      if (r.contentPreview) {
-        html += `<details><summary>Preview</summary><pre style="background: #222; padding: 5px; max-height: 200px; overflow: auto;">${escapeHtml(r.contentPreview)}</pre></details>`;
-      }
-    }
-    html += `</div>`;
-  });
-  fileInfo.innerHTML = html;
-}
-
-function showUploadStatus(message, type) {
-  const status = document.getElementById('uploadStatus');
-  if (!status) return;
-  status.textContent = message;
-  status.className = `status ${type}`;
-  if (type === 'success') {
-    setTimeout(() => {
-      status.textContent = '';
-      status.className = 'status';
-    }, 5000);
-  }
-}
-
-function formatFileSize(bytes) {
-  if (bytes === 0) return '0 Bytes';
-  const k = 1024;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-}
-
-function escapeHtml(text) {
-  return text.replace(/[&<>"]/g, function(m) {
-    if (m === '&') return '&amp;';
-    if (m === '<') return '&lt;';
-    if (m === '>') return '&gt;';
-    if (m === '"') return '&quot;';
-    return m;
-  });
-}
-
-// ============================================
-// Voice Functions
+// Voice Functions (unchanged)
 // ============================================
 let recognition = null;
 let isListening = false;
-
 function initVoice() {
   if ('webkitSpeechRecognition' in window) {
     recognition = new webkitSpeechRecognition();
@@ -1671,32 +1416,17 @@ function initVoice() {
       document.getElementById('voiceOutput').value = transcript;
       document.getElementById('userInput').value = transcript;
       document.getElementById('voiceStatus').textContent = `Recognized: "${transcript}" – sending...`;
-      if (typeof streamMessage === 'function') {
-        streamMessage();
-      } else if (typeof sendMessage === 'function') {
-        sendMessage();
-      }
+      if (typeof streamMessage === 'function') streamMessage();
+      else if (typeof sendMessage === 'function') sendMessage();
     };
     recognition.onerror = (event) => {
       document.getElementById('voiceStatus').textContent = 'Error: ' + event.error;
     };
   }
 }
-
-function startVoice() {
-  if (!recognition) initVoice();
-  if (recognition) recognition.start();
-  else alert('Voice recognition not supported in this browser');
-}
-
-function stopVoice() {
-  if (recognition && isListening) recognition.stop();
-}
-
-function toggleVoice() {
-  isListening ? stopVoice() : startVoice();
-}
-
+function startVoice() { if (!recognition) initVoice(); if (recognition) recognition.start(); else alert('Voice recognition not supported'); }
+function stopVoice() { if (recognition && isListening) recognition.stop(); }
+function toggleVoice() { isListening ? stopVoice() : startVoice(); }
 function speak(text) {
   if ('speechSynthesis' in window) {
     const utterance = new SpeechSynthesisUtterance(text);
@@ -1704,13 +1434,11 @@ function speak(text) {
     utterance.rate = 1.0;
     utterance.pitch = 1.0;
     window.speechSynthesis.speak(utterance);
-  } else {
-    alert('Speech synthesis not supported');
-  }
+  } else alert('Speech synthesis not supported');
 }
 
 // ============================================
-// Agent Functions
+// Agent Functions (unchanged)
 // ============================================
 async function runAgent(task, type = 'auto') {
   const resultDiv = document.getElementById('agentResult');
@@ -1744,39 +1472,16 @@ async function runAgent(task, type = 'auto') {
     resultDiv.innerHTML = `<p class="status error">Error: ${error.message}</p>`;
   }
 }
-
-async function runSearchAgent() {
-  const task = document.getElementById('agentTask').value || 'search for latest AI news in Africa';
-  await runAgent(task, 'search');
-}
-async function runSummarizeAgent() {
-  const task = document.getElementById('agentTask').value || 'summarize the benefits of AI in Africa';
-  await runAgent(task, 'summarize');
-}
-async function runTranslateAgent() {
-  const task = document.getElementById('agentTask').value || 'translate hello to Swahili';
-  await runAgent(task, 'translate');
-}
-async function runAnalyzeAgent() {
-  const task = document.getElementById('agentTask').value || 'analyze the sentiment: I love CephasGM AI';
-  await runAgent(task, 'analyze');
-}
-async function runResearchAgent() {
-  const task = document.getElementById('agentTask').value || 'research artificial intelligence in Africa';
-  await runAgent(task, 'research');
-}
-async function runCodingAgent() {
-  const task = document.getElementById('agentTask').value || 'write a function to calculate fibonacci';
-  await runAgent(task, 'coding');
-}
-async function runCustomAgent() {
-  const task = document.getElementById('agentTask').value;
-  if (!task) { alert('Please enter a task'); return; }
-  await runAgent(task);
-}
+async function runSearchAgent() { const task = document.getElementById('agentTask').value || 'search for latest AI news in Africa'; await runAgent(task, 'search'); }
+async function runSummarizeAgent() { const task = document.getElementById('agentTask').value || 'summarize the benefits of AI in Africa'; await runAgent(task, 'summarize'); }
+async function runTranslateAgent() { const task = document.getElementById('agentTask').value || 'translate hello to Swahili'; await runAgent(task, 'translate'); }
+async function runAnalyzeAgent() { const task = document.getElementById('agentTask').value || 'analyze the sentiment: I love CephasGM AI'; await runAgent(task, 'analyze'); }
+async function runResearchAgent() { const task = document.getElementById('agentTask').value || 'research artificial intelligence in Africa'; await runAgent(task, 'research'); }
+async function runCodingAgent() { const task = document.getElementById('agentTask').value || 'write a function to calculate fibonacci'; await runAgent(task, 'coding'); }
+async function runCustomAgent() { const task = document.getElementById('agentTask').value; if (!task) { alert('Please enter a task'); return; } await runAgent(task); }
 
 // ============================================
-// Memory Functions
+// Memory Functions (unchanged)
 // ============================================
 async function loadMemories() {
   if (!currentUser) return;
@@ -1794,11 +1499,8 @@ async function loadMemories() {
         <div class="memory-time">${new Date(m.timestamp).toLocaleString()}</div>
       </div>
     `).join('');
-  } catch (error) {
-    console.error('Error loading memories:', error);
-  }
+  } catch (error) { console.error('Error loading memories:', error); }
 }
-
 async function searchMemory() {
   const query = document.getElementById('memorySearch').value;
   if (!query) { loadMemories(); return; }
@@ -1820,11 +1522,8 @@ async function searchMemory() {
         <div class="memory-time">${new Date(m.timestamp).toLocaleString()}</div>
       </div>
     `).join('');
-  } catch (error) {
-    console.error('Error searching memories:', error);
-  }
+  } catch (error) { console.error('Error searching memories:', error); }
 }
-
 function clearLocalMemory() {
   if (confirm('Clear all local memory?')) {
     localStorage.removeItem('chatMemories');
@@ -1835,7 +1534,7 @@ function clearLocalMemory() {
 }
 
 // ============================================
-// Research Functions
+// Research Functions (unchanged)
 // ============================================
 async function conductResearch() {
   const topic = document.getElementById('researchTopic').value.trim();
@@ -1860,9 +1559,7 @@ async function conductResearch() {
       const r = data.result;
       let html = '<div class="research-response">';
       html += `<h3>📚 Research: ${r.topic || topic}</h3>`;
-      if (r.summary) {
-        html += `<div class="research-summary"><strong>Summary:</strong><br>${r.summary.replace(/\n/g, '<br>')}</div>`;
-      }
+      if (r.summary) html += `<div class="research-summary"><strong>Summary:</strong><br>${r.summary.replace(/\n/g, '<br>')}</div>`;
       if (r.findings && r.findings.length > 0) {
         html += '<div class="research-findings"><strong>Key Findings:</strong><ul>';
         r.findings.forEach(f => { html += `<li>${f.content || f.snippet || f.title}</li>`; });
@@ -1877,9 +1574,7 @@ async function conductResearch() {
         });
         html += '</ul></div>';
       }
-      if (r.confidence) {
-        html += `<div class="research-confidence"><small>Confidence: ${(r.confidence * 100).toFixed(0)}%</small></div>`;
-      }
+      if (r.confidence) html += `<div class="research-confidence"><small>Confidence: ${(r.confidence * 100).toFixed(0)}%</small></div>`;
       html += '</div>';
       resultsDiv.innerHTML = html;
     } else {
@@ -1891,7 +1586,7 @@ async function conductResearch() {
 }
 
 // ============================================
-// Audio Functions
+// Audio Functions (unchanged)
 // ============================================
 async function generateAudio() {
   const text = document.getElementById('audioText').value.trim();
@@ -1927,7 +1622,7 @@ async function generateAudio() {
 }
 
 // ============================================
-// Software Factory Functions
+// Software Factory Functions (unchanged)
 // ============================================
 async function runCode() {
   const code = document.getElementById('codeInput').value.trim();
@@ -1970,7 +1665,6 @@ async function runCode() {
     output.innerHTML = `<p class="status error">Error: ${error.message}</p>`;
   }
 }
-
 async function debugCode() {
   const code = document.getElementById('codeInput').value.trim();
   if (!code) { alert('Please enter code to debug'); return; }
@@ -1988,7 +1682,6 @@ async function debugCode() {
     output.innerHTML = `<p class="status error">Error: ${error.message}</p>`;
   }
 }
-
 function clearCode() {
   document.getElementById('codeInput').value = '';
   document.getElementById('codeOutput').innerHTML = '';
@@ -2010,7 +1703,6 @@ window.streamMessage = streamMessage;
 window.clearChat = clearChat;
 window.generateImage = generateImage;
 window.generateVideo = generateVideo;
-window.uploadFiles = uploadFiles;
 window.startVoice = startVoice;
 window.stopVoice = stopVoice;
 window.toggleVoice = toggleVoice;
