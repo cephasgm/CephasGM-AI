@@ -696,7 +696,7 @@ h1 {
       <div class="chat-box" id="chat"></div>
       <div class="input-area">
         <input type="text" id="userInput" placeholder="Ask CephasGM AI anything..." autocomplete="off">
-        <!-- Model selector dropdown (NEW) -->
+        <!-- Model selector dropdown -->
         <select id="modelSelect" style="padding: 15px; border-radius: 30px; border: none; background: #ffb300; color: black; font-weight: bold;">
           <option value="gpt-3.5-turbo">OpenAI GPT-3.5</option>
           <option value="gpt-4">OpenAI GPT-4</option>
@@ -1036,7 +1036,7 @@ async function sendMessage() {
   try {
     let response;
     if (API_BASE) {
-      const model = document.getElementById('modelSelect').value; // 👈 get selected model
+      const model = document.getElementById('modelSelect').value; // get selected model
       const res = await fetch(`${API_BASE}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1059,7 +1059,7 @@ async function sendMessage() {
 }
 
 // ============================================
-// Streaming Chat (HTTP streaming)
+// Streaming Chat with fallback to non‑streaming
 // ============================================
 async function streamMessage() {
   const input = document.getElementById('userInput');
@@ -1069,20 +1069,27 @@ async function streamMessage() {
   addMessageToChat('user', message);
   input.value = '';
 
-  const messageId = 'msg-' + Date.now();
   const typingId = showTypingIndicator();
 
   try {
-    const model = document.getElementById('modelSelect').value; // 👈 get selected model
+    const model = document.getElementById('modelSelect').value;
     const response = await fetch(`${API_BASE}/chat/stream`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ prompt: message, model: model })
     });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+    if (!response.ok) {
+      // If streaming fails, fall back to non‑streaming chat
+      console.warn('Streaming failed, falling back to non‑streaming');
+      removeTypingIndicator(typingId);
+      await fallbackSendMessage(message);
+      return;
+    }
 
     removeTypingIndicator(typingId);
 
+    const messageId = 'msg-' + Date.now();
     const aiMessageDiv = document.createElement('div');
     aiMessageDiv.className = 'message ai-message streaming-message';
     aiMessageDiv.id = messageId;
@@ -1104,10 +1111,8 @@ async function streamMessage() {
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-
       const chunk = decoder.decode(value);
       const lines = chunk.split('\n');
-
       for (const line of lines) {
         if (line.startsWith('data: ')) {
           try {
@@ -1117,17 +1122,34 @@ async function streamMessage() {
               contentDiv.innerHTML = fullResponse.replace(/\n/g, '<br>');
               document.getElementById('chat').scrollTop = document.getElementById('chat').scrollHeight;
             }
-          } catch (e) {
-            console.log('Parse error:', e);
-          }
+          } catch (e) {}
         }
       }
     }
     saveToMemory(message, fullResponse);
   } catch (error) {
     removeTypingIndicator(typingId);
+    console.warn('Streaming error, falling back to non‑streaming:', error);
+    await fallbackSendMessage(message);
+  }
+}
+
+// Helper to send non‑streaming message
+async function fallbackSendMessage(message) {
+  const model = document.getElementById('modelSelect').value;
+  try {
+    const res = await fetch(`${API_BASE}/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt: message, model: model })
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const response = formatAIResponse(data);
+    addMessageToChat('ai', response);
+    saveToMemory(message, response);
+  } catch (error) {
     addMessageToChat('ai', `Error: ${error.message}. Please try again.`);
-    console.error('Stream error:', error);
   }
 }
 
@@ -1541,7 +1563,7 @@ async function processSingleFile(file) {
   let interpretation = '';
   if (fileContent && fileContent.length > 50) {
     try {
-      const model = document.getElementById('modelSelect').value; // 👈 use selected model
+      const model = document.getElementById('modelSelect').value;
       const aiResponse = await fetch(`${API_BASE}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
