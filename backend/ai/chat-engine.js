@@ -1,7 +1,7 @@
 /**
  * AI Chat Engine - Core chat functionality with OpenAI, Ollama, and DeepSeek
  * Enhanced with streaming support, robust error handling, and automatic failover.
- * Ollama model names now include proper tags (e.g., llama3.2:3b).
+ * Ollama models now use available free models from the API.
  */
 const fetch = require('node-fetch');
 const config = require('../config');
@@ -25,37 +25,34 @@ class ChatEngine {
         model: 'gpt-3.5-turbo',
         description: 'OpenAI GPT-3.5 Turbo - Fast, efficient'
       },
-      // Ollama models (with correct tags) – currently free
-      'llama3': { 
+      // Ollama models (free) – updated to match available models
+      'gemma-3-4b': { 
         provider: 'ollama', 
-        model: 'llama3:8b',
-        description: 'Meta Llama 3 8B - Good general purpose'
+        model: 'gemma3:4b',
+        description: 'Gemma 3 4B - Fast and efficient (free)'
       },
-      'llama3.2': { 
+      'ministral-3-3b': { 
         provider: 'ollama', 
-        model: 'llama3.2:3b',
-        description: 'Latest Llama 3.2 3B - Fast and efficient'
+        model: 'ministral-3:3b',
+        description: 'Ministral 3 3B - Very fast (free)'
       },
-      'mistral': { 
+      'ministral-3-8b': { 
         provider: 'ollama', 
-        model: 'mistral:7b',
-        description: 'Mistral 7B - Excellent performance'
+        model: 'ministral-3:8b',
+        description: 'Ministral 3 8B - Good balance (free)'
       },
-      'phi3': { 
+      'gemma-3-12b': { 
         provider: 'ollama', 
-        model: 'phi3:3.8b',
-        description: 'Phi-3 Mini - Small but powerful'
+        model: 'gemma3:12b',
+        description: 'Gemma 3 12B - More powerful (free)'
       },
-      'codellama': { 
+      'ministral-3-14b': { 
         provider: 'ollama', 
-        model: 'codellama:7b',
-        description: 'Code Llama - Specialized for code'
+        model: 'ministral-3:14b',
+        description: 'Ministral 3 14B - Powerful (free)'
       },
-      'neural-chat': { 
-        provider: 'ollama', 
-        model: 'neural-chat:7b',
-        description: 'Neural Chat - Optimized for conversations'
-      },
+      // Keep other Ollama models if desired, but ensure they exist; otherwise remove.
+      // 'phi3' is not in the list, so I'll omit it. You can add others if available.
       // DeepSeek model (kept for future)
       'deepseek-chat': { 
         provider: 'deepseek', 
@@ -87,7 +84,7 @@ class ChatEngine {
   async chat(prompt, options = {}) {
     try {
       const {
-        model = 'llama3.2',          // Default to a free Ollama model
+        model = 'ministral-3-3b',          // Default to a fast free Ollama model
         temperature = 0.7,
         maxTokens = 2000,
         sessionId = 'default',
@@ -107,7 +104,7 @@ class ChatEngine {
         { role: 'user', content: prompt }
       ];
 
-      const requestedConfig = this.models[model] || this.models['llama3.2'];
+      const requestedConfig = this.models[model] || this.models['ministral-3-3b'];
       const requestedProvider = requestedConfig.provider;
 
       // Build list of providers to try:
@@ -130,7 +127,8 @@ class ChatEngine {
 
       // Then add all available providers as fallbacks (prioritise free Ollama)
       if (this.ollamaApiKey && requestedProvider !== 'ollama') {
-        addProvider('ollama', true, this.callOllama.bind(this), 'llama3.2:3b');
+        // Use a fast free model as fallback
+        addProvider('ollama', true, this.callOllama.bind(this), 'gemma3:4b');
       }
       if (this.openaiApiKey && requestedProvider !== 'openai') {
         addProvider('openai', true, this.callOpenAI.bind(this), 'gpt-3.5-turbo');
@@ -173,7 +171,7 @@ class ChatEngine {
       return {
         success: true,
         content: this.getFallbackResponse(prompt, errorSummary, lastError),
-        model: options.model || 'llama3.2',
+        model: options.model || 'ministral-3-3b',
         provider: 'fallback',
         error: errorSummary,
         timestamp: new Date().toISOString()
@@ -184,7 +182,7 @@ class ChatEngine {
       return {
         success: true,
         content: this.getFallbackResponse(prompt, error.message, error),
-        model: options.model || 'llama3.2',
+        model: options.model || 'ministral-3-3b',
         provider: 'fallback',
         error: error.message,
         timestamp: new Date().toISOString()
@@ -192,7 +190,7 @@ class ChatEngine {
     }
   }
 
-  // ---------- Provider call methods (unchanged) ----------
+  // ---------- Provider call methods ----------
   async callOpenAI(model, messages, temperature, maxTokens) {
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -244,21 +242,35 @@ class ChatEngine {
     return { content: data.message.content, usage: { prompt_tokens: 0, completion_tokens: 0 }, provider: 'ollama' };
   }
 
-  // ---------- Streaming method (unchanged) ----------
+  // ---------- Streaming method ----------
   async *stream(prompt, options = {}) {
     try {
-      const { model = 'llama3.2', temperature = 0.7, maxTokens = 2000, systemPrompt = 'You are CephasGM AI...' } = options;
-      const modelConfig = this.models[model] || this.models['llama3.2'];
+      const {
+        model = 'ministral-3-3b',
+        temperature = 0.7,
+        maxTokens = 2000,
+        systemPrompt = 'You are CephasGM AI, an African-inspired artificial intelligence assistant.'
+      } = options;
 
+      const modelConfig = this.models[model] || this.models['ministral-3-3b'];
+
+      // OpenAI streaming
       if (modelConfig.provider === 'openai' && this.openaiApiKey) {
-        // OpenAI streaming (unchanged)
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${this.openaiApiKey}` },
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${this.openaiApiKey}`
+          },
           body: JSON.stringify({
             model: modelConfig.model,
-            messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: prompt }],
-            temperature, max_tokens: maxTokens, stream: true
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: prompt }
+            ],
+            temperature,
+            max_tokens: maxTokens,
+            stream: true
           })
         });
         if (!response.ok) {
@@ -280,15 +292,24 @@ class ChatEngine {
             }
           }
         }
-      } else if (modelConfig.provider === 'deepseek' && this.deepseekApiKey) {
-        // DeepSeek streaming (unchanged)
+      }
+      // DeepSeek streaming
+      else if (modelConfig.provider === 'deepseek' && this.deepseekApiKey) {
         const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${this.deepseekApiKey}` },
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${this.deepseekApiKey}`
+          },
           body: JSON.stringify({
             model: modelConfig.model,
-            messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: prompt }],
-            temperature, max_tokens: maxTokens, stream: true
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: prompt }
+            ],
+            temperature,
+            max_tokens: maxTokens,
+            stream: true
           })
         });
         if (!response.ok) {
@@ -310,9 +331,11 @@ class ChatEngine {
             }
           }
         }
-      } else if (this.ollamaApiKey) {
-        // Ollama simulation (no true streaming)
-        const result = await this.chat(prompt, { model, temperature, maxTokens, systemPrompt });
+      }
+      // Ollama simulation (no true streaming)
+      else if (this.ollamaApiKey) {
+        // Use a valid free model for simulation
+        const result = await this.chat(prompt, { model: 'gemma3:4b', temperature, maxTokens, systemPrompt });
         const words = result.content.split(' ');
         for (let i = 0; i < words.length; i++) {
           yield {
@@ -340,7 +363,7 @@ class ChatEngine {
     }
   }
 
-  // ---------- History methods (unchanged) ----------
+  // ---------- History methods ----------
   getHistory(sessionId) {
     if (!this.conversationHistory.has(sessionId)) this.conversationHistory.set(sessionId, []);
     return this.conversationHistory.get(sessionId).slice(-6);
