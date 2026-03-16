@@ -55,7 +55,7 @@ class ChatEngine {
         model: 'neural-chat:7b',
         description: 'Neural Chat - Optimized for conversations'
       },
-      // DeepSeek model (new)
+      // DeepSeek model
       'deepseek-chat': { 
         provider: 'deepseek', 
         model: 'deepseek-chat',
@@ -139,12 +139,12 @@ class ChatEngine {
       };
 
     } catch (error) {
-      console.error('Chat engine error:', error);
+      console.error('Chat engine error details:', error); // More detailed log
       
       // Fallback response with helpful message
       return {
         success: true,
-        content: this.getFallbackResponse(prompt, error.message),
+        content: this.getFallbackResponse(prompt, error.message, error),
         model: options.model || 'gpt-3.5-turbo',
         provider: 'fallback',
         error: error.message,
@@ -472,7 +472,10 @@ class ChatEngine {
   /**
    * Get fallback response when APIs are unavailable
    */
-  getFallbackResponse(prompt, errorMsg) {
+  getFallbackResponse(prompt, errorMsg, errorObj) {
+    // Log the full error for debugging (but not to user)
+    console.error('Full error object:', errorObj);
+    
     const isApiKeyError = errorMsg.includes('API key') || errorMsg.includes('401') || errorMsg.includes('403');
     
     if (isApiKeyError) {
