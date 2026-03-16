@@ -1,7 +1,6 @@
 /**
  * Main Server - CephasGM AI Phase 6
- * Updated with WebSocket support for real-time chat.
- * Added HTTP streaming endpoint /chat/stream for frontend compatibility.
+ * Updated with WebSocket support and new /chat/upload endpoint.
  */
 const express = require('express');
 const bodyParser = require('body-parser');
@@ -9,7 +8,9 @@ const cors = require('cors');
 const config = require('./config');
 const path = require('path');
 const fs = require('fs');
-const WebSocket = require('ws'); // Added for WebSockets
+const WebSocket = require('ws');
+const multer = require('multer');          // Added for file uploads
+const upload = multer({ dest: '/tmp/uploads/' }); // Temporary storage
 
 // ============================================
 // Monitoring & Error Tracking
@@ -187,11 +188,11 @@ app.post('/chat', async (req, res) => {
 });
 
 // ============================================
-// STREAMING CHAT ENDPOINT (HTTP) – ADDED
+// STREAMING CHAT ENDPOINT (HTTP)
 // ============================================
 app.post('/chat/stream', async (req, res) => {
   try {
-    const { prompt, model = 'gpt-3.5-turbo' } = req.body;
+    const { prompt, model = 'llama3.2' } = req.body;
     if (!prompt) return res.status(400).json({ error: 'Prompt is required' });
     
     res.setHeader('Content-Type', 'text/event-stream');
@@ -207,6 +208,52 @@ app.post('/chat/stream', async (req, res) => {
   } catch (error) {
     console.error('Stream error:', error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================
+// CHAT WITH FILE UPLOAD ENDPOINT (NEW)
+// ============================================
+app.post('/chat/upload', upload.array('files', 10), async (req, res) => {
+  try {
+    const { prompt, model = 'llama3.2' } = req.body;
+    const files = req.files;
+    let augmentedPrompt = prompt || '';
+
+    // Process uploaded files
+    if (files && files.length > 0) {
+      augmentedPrompt += '\n\nUser attached the following files:\n';
+      for (const file of files) {
+        // Read text content for text files; for others, just mention the name
+        if (file.mimetype.startsWith('text/') || file.originalname.endsWith('.txt')) {
+          const content = await fs.promises.readFile(file.path, 'utf8');
+          augmentedPrompt += `\n--- ${file.originalname} ---\n${content}\n`;
+        } else {
+          augmentedPrompt += `\n- ${file.originalname} (${file.mimetype}) – content not displayed\n`;
+        }
+        // Clean up temp file
+        await fs.promises.unlink(file.path).catch(() => {});
+      }
+    }
+
+    // Set headers for SSE
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    const stream = await chatEngine.stream(augmentedPrompt, { model });
+    for await (const chunk of stream) {
+      res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+    }
+    res.write('data: [DONE]\n\n');
+    res.end();
+  } catch (error) {
+    console.error('Upload chat error:', error);
+    // For SSE, we cannot send JSON error; instead we send an error chunk
+    if (!res.headersSent) {
+      res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
+      res.end();
+    }
   }
 });
 
@@ -384,7 +431,6 @@ app.get('/agents', (req, res) => {
 // ============================================
 // ADDITIONAL ROUTES FOR FRONTEND COMPATIBILITY
 // ============================================
-
 app.post('/generate/image', async (req, res) => {
   try {
     const { prompt } = req.body;
@@ -403,20 +449,6 @@ app.post('/generate/image', async (req, res) => {
     res.json(result);
   } catch (error) {
     console.error('Image generation error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.post('/upload', async (req, res) => {
-  try {
-    res.json({
-      success: true,
-      message: 'Upload endpoint ready',
-      fileName: req.body.filename || 'unknown',
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    console.error('Upload error:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -496,7 +528,6 @@ app.post('/task/enhanced', async (req, res) => {
 // ============================================
 // ROLE MANAGEMENT ENDPOINTS
 // ============================================
-
 app.get('/user/role', requireRole(), async (req, res) => {
   res.json({ role: req.user.role || 'user' });
 });
@@ -584,7 +615,8 @@ if (staticPath) {
         req.path === '/user/role' ||
         req.path === '/admin/updateRole' ||
         req.path === '/chat' ||
-        req.path === '/chat/stream' ||            // Added to skip
+        req.path === '/chat/stream' ||
+        req.path === '/chat/upload' ||          // Added new endpoint
         req.path.startsWith('/app')) {
       return next();
     }
@@ -611,7 +643,8 @@ if (staticPath) {
         req.path === '/user/role' ||
         req.path === '/admin/updateRole' ||
         req.path === '/chat' ||
-        req.path === '/chat/stream') {            // Added to skip
+        req.path === '/chat/stream' ||
+        req.path === '/chat/upload') {            // Added new endpoint
       return next();
     }
     res.status(404).json({ 
@@ -624,6 +657,7 @@ if (staticPath) {
         models: '/models',
         chat: 'POST /chat',
         'chat/stream': 'POST /chat/stream',
+        'chat/upload': 'POST /chat/upload (with files)',
         research: 'POST /research',
         code: 'POST /code',
         video: 'POST /video',
@@ -631,7 +665,6 @@ if (staticPath) {
         'task/enhanced': 'POST /task/enhanced',
         'generate/image': 'POST /generate/image',
         'generate/audio': 'POST /generate/audio',
-        upload: 'POST /upload',
         memory: '/memory/*',
         graph: '/graph/*',
         gpu: '/gpu/infer',
@@ -682,6 +715,7 @@ const server = app.listen(PORT, '0.0.0.0', () => {
 ║   🔐 Role Management: ✅ /user/role, /admin/updateRole     ║
 ║   🔌 WebSocket: ✅ Enabled on same port                    ║
 ║   🆕 Streaming HTTP: ✅ /chat/stream added                 ║
+║   📎 File Upload: ✅ /chat/upload added                    ║
 ║                                                          ║
 ╚══════════════════════════════════════════════════════════╝
   `);
@@ -693,8 +727,9 @@ const server = app.listen(PORT, '0.0.0.0', () => {
    • GET  /health          - System status
    • GET  /agents          - List all agents
    • GET  /models          - List available models
-   • POST /chat            - Chat with AI
+   • POST /chat            - Chat with AI (non‑streaming)
    • POST /chat/stream     - Streaming chat (HTTP)
+   • POST /chat/upload     - Chat with file uploads (streaming)
    • POST /research        - Research topics
    • POST /code            - Execute code
    • POST /video           - Generate video
@@ -702,7 +737,6 @@ const server = app.listen(PORT, '0.0.0.0', () => {
    • POST /task/enhanced   - Enhanced task routing
    • POST /generate/image  - Generate images
    • POST /generate/audio  - Generate audio
-   • POST /upload          - Upload files
    • POST /memory/*        - Vector memory operations
    • POST /graph/*         - Knowledge graph operations
    • GET  /user/role       - Get current user role
@@ -724,7 +758,7 @@ wss.on('connection', (ws) => {
     try {
       const data = JSON.parse(message);
       if (data.type === 'chat') {
-        const { prompt, model = 'gpt-3.5-turbo' } = data;
+        const { prompt, model = 'llama3.2' } = data;
         const stream = await chatEngine.stream(prompt, { model });
         
         for await (const chunk of stream) {
