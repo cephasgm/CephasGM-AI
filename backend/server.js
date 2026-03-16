@@ -1,6 +1,7 @@
 /**
  * Main Server - CephasGM AI Phase 6
  * Updated with WebSocket support for real-time chat.
+ * Added HTTP streaming endpoint /chat/stream for frontend compatibility.
  */
 const express = require('express');
 const bodyParser = require('body-parser');
@@ -181,6 +182,30 @@ app.post('/chat', async (req, res) => {
     res.json(result);
   } catch (error) {
     console.error('Chat error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================
+// STREAMING CHAT ENDPOINT (HTTP) – ADDED
+// ============================================
+app.post('/chat/stream', async (req, res) => {
+  try {
+    const { prompt, model = 'gpt-3.5-turbo' } = req.body;
+    if (!prompt) return res.status(400).json({ error: 'Prompt is required' });
+    
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    
+    const stream = await chatEngine.stream(prompt, { model });
+    for await (const chunk of stream) {
+      res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+    }
+    res.write('data: [DONE]\n\n');
+    res.end();
+  } catch (error) {
+    console.error('Stream error:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -544,11 +569,13 @@ if (staticPath) {
     console.log('⚠️ React app build not found at', reactAppPath);
   }
 
+  // Catch-all for SPA – but skip API, health, metrics, and important routes
   app.get('*', (req, res, next) => {
     if (req.path.startsWith('/api/') || 
         req.path === '/health' || 
         req.path === '/agents' ||
         req.path === '/models' ||
+        req.path === '/metrics' ||
         req.path.startsWith('/memory/') ||
         req.path.startsWith('/graph/') ||
         req.path.startsWith('/generate/') ||
@@ -556,6 +583,8 @@ if (staticPath) {
         req.path === '/task' ||
         req.path === '/user/role' ||
         req.path === '/admin/updateRole' ||
+        req.path === '/chat' ||
+        req.path === '/chat/stream' ||            // Added to skip
         req.path.startsWith('/app')) {
       return next();
     }
@@ -572,6 +601,7 @@ if (staticPath) {
     if (req.path === '/health' || 
         req.path === '/agents' || 
         req.path === '/models' ||
+        req.path === '/metrics' ||
         req.path.startsWith('/api/') ||
         req.path.startsWith('/memory/') ||
         req.path.startsWith('/graph/') ||
@@ -579,7 +609,9 @@ if (staticPath) {
         req.path === '/upload' ||
         req.path === '/task' ||
         req.path === '/user/role' ||
-        req.path === '/admin/updateRole') {
+        req.path === '/admin/updateRole' ||
+        req.path === '/chat' ||
+        req.path === '/chat/stream') {            // Added to skip
       return next();
     }
     res.status(404).json({ 
@@ -591,6 +623,7 @@ if (staticPath) {
         agents: '/agents',
         models: '/models',
         chat: 'POST /chat',
+        'chat/stream': 'POST /chat/stream',
         research: 'POST /research',
         code: 'POST /code',
         video: 'POST /video',
@@ -648,6 +681,7 @@ const server = app.listen(PORT, '0.0.0.0', () => {
 ║   📈 Monitoring: ✅ /metrics enabled, Sentry ready         ║
 ║   🔐 Role Management: ✅ /user/role, /admin/updateRole     ║
 ║   🔌 WebSocket: ✅ Enabled on same port                    ║
+║   🆕 Streaming HTTP: ✅ /chat/stream added                 ║
 ║                                                          ║
 ╚══════════════════════════════════════════════════════════╝
   `);
@@ -660,6 +694,7 @@ const server = app.listen(PORT, '0.0.0.0', () => {
    • GET  /agents          - List all agents
    • GET  /models          - List available models
    • POST /chat            - Chat with AI
+   • POST /chat/stream     - Streaming chat (HTTP)
    • POST /research        - Research topics
    • POST /code            - Execute code
    • POST /video           - Generate video
@@ -678,7 +713,7 @@ const server = app.listen(PORT, '0.0.0.0', () => {
 });
 
 // ============================================
-// WebSocket Server for real‑time chat
+// WebSocket Server for real‑time chat (optional)
 // ============================================
 const wss = new WebSocket.Server({ server });
 
