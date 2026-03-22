@@ -1,6 +1,6 @@
 /**
  * Main Server - CephasGM AI Phase 6
- * Updated with WebSocket support and enhanced /chat/upload endpoint (PDF parsing).
+ * Updated with WebSocket support and enhanced /chat/upload endpoint (PDF, Excel, Word, images).
  */
 const express = require('express');
 const bodyParser = require('body-parser');
@@ -10,7 +10,10 @@ const path = require('path');
 const fs = require('fs');
 const WebSocket = require('ws');
 const multer = require('multer');
-const pdfParse = require('pdf-parse');          // Added for PDF parsing
+const pdfParse = require('pdf-parse');
+const XLSX = require('xlsx');           // Excel parsing
+const mammoth = require('mammoth');     // Word parsing
+const sharp = require('sharp');         // Image dimensions (optional)
 const upload = multer({ dest: '/tmp/uploads/' });
 
 // ============================================
@@ -213,7 +216,7 @@ app.post('/chat/stream', async (req, res) => {
 });
 
 // ============================================
-// CHAT WITH FILE UPLOAD ENDPOINT (with PDF parsing)
+// CHAT WITH FILE UPLOAD ENDPOINT (with PDF, Excel, Word, image parsing)
 // ============================================
 app.post('/chat/upload', upload.array('files', 10), async (req, res) => {
   try {
@@ -224,22 +227,69 @@ app.post('/chat/upload', upload.array('files', 10), async (req, res) => {
     if (files && files.length > 0) {
       augmentedPrompt += '\n\nUser attached the following files:\n';
       for (const file of files) {
-        // Read text content for text/plain files
+        // -------------------- PDF --------------------
         if (file.mimetype === 'application/pdf' || file.originalname.endsWith('.pdf')) {
           try {
             const dataBuffer = await fs.promises.readFile(file.path);
             const pdfData = await pdfParse(dataBuffer);
             const text = pdfData.text;
-            // Limit to 5000 characters to avoid overloading the model
             augmentedPrompt += `\n--- ${file.originalname} (PDF) ---\n${text.substring(0, 5000)}\n`;
           } catch (err) {
             console.warn(`Failed to parse PDF ${file.originalname}:`, err);
             augmentedPrompt += `\n- ${file.originalname} (PDF could not be parsed)\n`;
           }
-        } else if (file.mimetype.startsWith('text/') || file.originalname.endsWith('.txt')) {
+        }
+        // -------------------- Excel (.xlsx, .xls) --------------------
+        else if (file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+                 file.originalname.endsWith('.xlsx') || file.originalname.endsWith('.xls')) {
+          try {
+            const workbook = XLSX.readFile(file.path);
+            const sheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[sheetName];
+            // Convert to CSV (tab‑separated for readability)
+            const csv = XLSX.utils.sheet_to_csv(worksheet, { FS: '\t' });
+            augmentedPrompt += `\n--- ${file.originalname} (Excel) ---\n${csv.substring(0, 5000)}\n`;
+          } catch (err) {
+            console.warn(`Failed to parse Excel ${file.originalname}:`, err);
+            augmentedPrompt += `\n- ${file.originalname} (Excel could not be parsed)\n`;
+          }
+        }
+        // -------------------- Word (.docx) --------------------
+        else if (file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+                 file.originalname.endsWith('.docx')) {
+          try {
+            const result = await mammoth.extractRawText({ path: file.path });
+            const text = result.value;
+            augmentedPrompt += `\n--- ${file.originalname} (Word) ---\n${text.substring(0, 5000)}\n`;
+          } catch (err) {
+            console.warn(`Failed to parse Word ${file.originalname}:`, err);
+            augmentedPrompt += `\n- ${file.originalname} (Word could not be parsed)\n`;
+          }
+        }
+        // -------------------- Images --------------------
+        else if (file.mimetype.startsWith('image/')) {
+          try {
+            const metadata = await sharp(file.path).metadata();
+            augmentedPrompt += `\n- ${file.originalname} (${file.mimetype}) – ${metadata.width}x${metadata.height} pixels\n`;
+          } catch {
+            augmentedPrompt += `\n- ${file.originalname} (${file.mimetype})\n`;
+          }
+          // Optional OCR (uncomment if you install tesseract.js)
+          /*
+          const { createWorker } = require('tesseract.js');
+          const worker = await createWorker('eng');
+          const { data: { text } } = await worker.recognize(file.path);
+          await worker.terminate();
+          augmentedPrompt += `\n--- OCR text from ${file.originalname} ---\n${text.substring(0, 5000)}\n`;
+          */
+        }
+        // -------------------- Plain text --------------------
+        else if (file.mimetype.startsWith('text/') || file.originalname.endsWith('.txt')) {
           const content = await fs.promises.readFile(file.path, 'utf8');
           augmentedPrompt += `\n--- ${file.originalname} ---\n${content}\n`;
-        } else {
+        }
+        // -------------------- Unknown types --------------------
+        else {
           augmentedPrompt += `\n- ${file.originalname} (${file.mimetype}) – content not displayed\n`;
         }
         // Clean up temp file
@@ -731,7 +781,7 @@ const server = app.listen(PORT, '0.0.0.0', () => {
 ║   🔐 Role Management: ✅ /user/role, /admin/updateRole     ║
 ║   🔌 WebSocket: ✅ Enabled on same port                    ║
 ║   🆕 Streaming HTTP: ✅ /chat/stream added                 ║
-║   📎 File Upload: ✅ /chat/upload added (PDF parsing)      ║
+║   📎 File Upload: ✅ /chat/upload added (PDF, Excel, Word, images) ║
 ║                                                          ║
 ╚══════════════════════════════════════════════════════════╝
   `);
@@ -745,7 +795,7 @@ const server = app.listen(PORT, '0.0.0.0', () => {
    • GET  /models          - List available models
    • POST /chat            - Chat with AI (non‑streaming)
    • POST /chat/stream     - Streaming chat (HTTP)
-   • POST /chat/upload     - Chat with file uploads (streaming, PDF parsing)
+   • POST /chat/upload     - Chat with file uploads (PDF, Excel, Word, images)
    • POST /research        - Research topics
    • POST /code            - Execute code
    • POST /video           - Generate video
