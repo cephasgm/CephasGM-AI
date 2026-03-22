@@ -49,6 +49,7 @@
     "helmet": "^7.1.0",
     "helmet-csp": "^3.3.0",
     "jsonwebtoken": "^9.0.2",
+    "mammoth": "^1.4.21",
     "mongodb": "^6.3.0",
     "multer": "^1.4.5-lts.1",
     "node-fetch": "^2.7.0",
@@ -57,12 +58,14 @@
     "pdf-parse": "^1.1.1",
     "prom-client": "^15.1.3",
     "redis": "^4.6.10",
+    "sharp": "^0.33.5",
     "socket.io": "^4.7.2",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.0",
     "uuid": "^9.0.1",
     "winston": "^3.11.0",
-    "ws": "^8.14.2"
+    "ws": "^8.14.2",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",
