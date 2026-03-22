@@ -1,6 +1,6 @@
 /**
  * Main Server - CephasGM AI Phase 6
- * Updated with WebSocket support and enhanced /chat/upload endpoint (PDF, Excel, Word, images, text).
+ * Updated with WebSocket support and enhanced /chat/upload endpoint (PDF, Excel, Word, images).
  */
 const express = require('express');
 const bodyParser = require('body-parser');
@@ -11,9 +11,9 @@ const fs = require('fs');
 const WebSocket = require('ws');
 const multer = require('multer');
 const pdfParse = require('pdf-parse');
-const XLSX = require('xlsx');
-const mammoth = require('mammoth');
-const sharp = require('sharp');
+const XLSX = require('xlsx');           // Excel parsing
+const mammoth = require('mammoth');     // Word parsing
+const sharp = require('sharp');         // Image dimensions (optional)
 const upload = multer({ dest: '/tmp/uploads/' });
 
 // ============================================
@@ -222,77 +222,96 @@ app.post('/chat/upload', upload.array('files', 10), async (req, res) => {
   try {
     const { prompt, model = 'ministral-3-3b' } = req.body;
     const files = req.files;
-    
+    let augmentedPrompt = prompt || '';
+
     console.log(`📎 Received ${files ? files.length : 0} file(s) for upload`);
-    
-    let augmentedPrompt = prompt || 'Please analyze the attached file(s).';
-    
+
     if (files && files.length > 0) {
       augmentedPrompt += '\n\nUser attached the following files:\n';
-      
       for (const file of files) {
-        console.log(`Processing file: ${file.originalname} (${file.mimetype})`);
+        console.log(`📄 Processing file: ${file.originalname} (${file.mimetype}, ${file.size} bytes)`);
         
-        try {
-          // -------------------- PDF --------------------
-          if (file.mimetype === 'application/pdf' || file.originalname.endsWith('.pdf')) {
+        // -------------------- PDF --------------------
+        if (file.mimetype === 'application/pdf' || file.originalname.endsWith('.pdf')) {
+          try {
             const dataBuffer = await fs.promises.readFile(file.path);
+            console.log(`📄 PDF file size: ${dataBuffer.length} bytes`);
             const pdfData = await pdfParse(dataBuffer);
             const text = pdfData.text;
-            augmentedPrompt += `\n--- ${file.originalname} (PDF) ---\n${text.substring(0, 10000)}\n`;
-            console.log(`✅ Extracted ${text.length} characters from PDF`);
+            console.log(`📄 PDF extracted text length: ${text.length} characters`);
+            augmentedPrompt += `\n--- ${file.originalname} (PDF) ---\n${text.substring(0, 5000)}\n`;
+          } catch (err) {
+            console.error(`Failed to parse PDF ${file.originalname}:`, err);
+            augmentedPrompt += `\n- ${file.originalname} (PDF could not be parsed: ${err.message})\n`;
           }
-          // -------------------- Excel (.xlsx, .xls) --------------------
-          else if (file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
-                   file.originalname.endsWith('.xlsx') || file.originalname.endsWith('.xls')) {
+        }
+        // -------------------- Excel (.xlsx, .xls) --------------------
+        else if (file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+                 file.originalname.endsWith('.xlsx') || file.originalname.endsWith('.xls')) {
+          try {
             const workbook = XLSX.readFile(file.path);
             const sheetName = workbook.SheetNames[0];
             const worksheet = workbook.Sheets[sheetName];
             const csv = XLSX.utils.sheet_to_csv(worksheet, { FS: '\t' });
-            augmentedPrompt += `\n--- ${file.originalname} (Excel) ---\n${csv.substring(0, 10000)}\n`;
-            console.log(`✅ Extracted ${csv.length} characters from Excel`);
+            console.log(`📊 Excel extracted content length: ${csv.length} characters`);
+            augmentedPrompt += `\n--- ${file.originalname} (Excel) ---\n${csv.substring(0, 5000)}\n`;
+          } catch (err) {
+            console.error(`Failed to parse Excel ${file.originalname}:`, err);
+            augmentedPrompt += `\n- ${file.originalname} (Excel could not be parsed: ${err.message})\n`;
           }
-          // -------------------- Word (.docx) --------------------
-          else if (file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
-                   file.originalname.endsWith('.docx')) {
+        }
+        // -------------------- Word (.docx) --------------------
+        else if (file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+                 file.originalname.endsWith('.docx')) {
+          try {
             const result = await mammoth.extractRawText({ path: file.path });
             const text = result.value;
-            augmentedPrompt += `\n--- ${file.originalname} (Word) ---\n${text.substring(0, 10000)}\n`;
-            console.log(`✅ Extracted ${text.length} characters from Word document`);
+            console.log(`📝 Word extracted text length: ${text.length} characters`);
+            augmentedPrompt += `\n--- ${file.originalname} (Word) ---\n${text.substring(0, 5000)}\n`;
+          } catch (err) {
+            console.error(`Failed to parse Word ${file.originalname}:`, err);
+            augmentedPrompt += `\n- ${file.originalname} (Word could not be parsed: ${err.message})\n`;
           }
-          // -------------------- Images --------------------
-          else if (file.mimetype.startsWith('image/')) {
-            try {
-              const metadata = await sharp(file.path).metadata();
-              augmentedPrompt += `\n- ${file.originalname} (${file.mimetype}) – ${metadata.width}x${metadata.height} pixels\n`;
-              console.log(`✅ Image metadata extracted: ${metadata.width}x${metadata.height}`);
-            } catch {
-              augmentedPrompt += `\n- ${file.originalname} (${file.mimetype})\n`;
-            }
-          }
-          // -------------------- Plain text --------------------
-          else if (file.mimetype.startsWith('text/') || file.originalname.endsWith('.txt')) {
-            const content = await fs.promises.readFile(file.path, 'utf8');
-            augmentedPrompt += `\n--- ${file.originalname} ---\n${content.substring(0, 10000)}\n`;
-            console.log(`✅ Extracted ${content.length} characters from text file`);
-          }
-          // -------------------- Unknown types --------------------
-          else {
-            augmentedPrompt += `\n- ${file.originalname} (${file.mimetype}) – content not displayed\n`;
-            console.log(`⚠️ Unknown file type: ${file.mimetype}`);
-          }
-        } catch (parseError) {
-          console.error(`Error parsing ${file.originalname}:`, parseError.message);
-          augmentedPrompt += `\n- ${file.originalname} – Error: ${parseError.message}\n`;
-        } finally {
-          // Clean up temp file
-          await fs.promises.unlink(file.path).catch(() => {});
         }
+        // -------------------- Images --------------------
+        else if (file.mimetype.startsWith('image/')) {
+          try {
+            const metadata = await sharp(file.path).metadata();
+            console.log(`🖼️ Image dimensions: ${metadata.width}x${metadata.height}`);
+            augmentedPrompt += `\n- ${file.originalname} (${file.mimetype}) – ${metadata.width}x${metadata.height} pixels\n`;
+          } catch (err) {
+            console.error(`Failed to read image ${file.originalname}:`, err);
+            augmentedPrompt += `\n- ${file.originalname} (${file.mimetype})\n`;
+          }
+        }
+        // -------------------- Plain text --------------------
+        else if (file.mimetype.startsWith('text/') || file.originalname.endsWith('.txt')) {
+          try {
+            const content = await fs.promises.readFile(file.path, 'utf8');
+            console.log(`📄 Text file content length: ${content.length} characters`);
+            augmentedPrompt += `\n--- ${file.originalname} ---\n${content}\n`;
+          } catch (err) {
+            console.error(`Failed to read text file ${file.originalname}:`, err);
+            augmentedPrompt += `\n- ${file.originalname} (Text file could not be read)\n`;
+          }
+        }
+        // -------------------- Unknown types --------------------
+        else {
+          console.log(`⚠️ Unknown file type: ${file.originalname} (${file.mimetype})`);
+          augmentedPrompt += `\n- ${file.originalname} (${file.mimetype}) – content not displayed\n`;
+        }
+        // Clean up temp file
+        await fs.promises.unlink(file.path).catch(() => {});
       }
     }
-    
-    console.log(`📝 Sending augmented prompt to AI (length: ${augmentedPrompt.length} chars)`);
-    
+
+    // If no prompt but only files, we need to ask the AI to analyze
+    if (!augmentedPrompt.trim()) {
+      augmentedPrompt = "Please analyze the attached file(s).";
+    }
+
+    console.log(`📝 Final prompt length: ${augmentedPrompt.length} characters`);
+
     // Set headers for SSE
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
@@ -304,7 +323,6 @@ app.post('/chat/upload', upload.array('files', 10), async (req, res) => {
     }
     res.write('data: [DONE]\n\n');
     res.end();
-    
   } catch (error) {
     console.error('Upload chat error:', error);
     if (!res.headersSent) {
