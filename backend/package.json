@@ -41,7 +41,10 @@
     "express-validator": "^7.0.1",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.0",
-    "@supabase/supabase-js": "^2.39.0"
+    "@supabase/supabase-js": "^2.39.0",
+    "xlsx": "^0.18.5",
+    "mammoth": "^1.4.21",
+    "sharp": "^0.33.5"
   },
   "devDependencies": {
     "nodemon": "^3.0.1",
