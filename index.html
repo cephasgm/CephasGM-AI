@@ -11,7 +11,7 @@
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 
 <style>
-/* [All existing styles remain unchanged – omitted for brevity] */
+/* [All existing styles remain exactly as in your file – unchanged for brevity] */
 * {
   box-sizing: border-box;
   margin: 0;
@@ -891,7 +891,7 @@ h1 {
 <script src="ai.js"></script>
 <script src="agents.js"></script>
 <script src="image.js"></script>
-<script src="upload.js"></script>   <!-- upload.js kept for other uses, but the Upload tab is removed -->
+<script src="upload.js"></script>
 
 <!-- ============================================ -->
 <!-- Main Application Script (everything below)   -->
@@ -1193,7 +1193,8 @@ async function streamMessage() {
   addMessageAndSave('user', userMessageText);
 
   input.value = '';
-  fileInput.value = '';
+  // IMPORTANT: Do NOT clear fileInput.value here! We need the files for the fetch.
+  // Clear the file list display only
   document.getElementById('fileList').textContent = '';
 
   const typingId = showTypingIndicator();
@@ -1206,17 +1207,18 @@ async function streamMessage() {
       formData.append('files', files[i]);
     }
 
-    // Directly call the upload endpoint; no fallback to /chat
     const response = await fetch(`${API_BASE}/chat/upload`, {
       method: 'POST',
       body: formData
     });
 
+    // Clear file input only AFTER the fetch
+    fileInput.value = '';
+
     if (!response.ok) {
-      // If the endpoint returns an error, show it and don't fall back to plain chat.
+      console.warn('Upload endpoint failed, falling back to regular chat');
       removeTypingIndicator(typingId);
-      addMessageAndSave('ai', `❌ Upload endpoint error: ${response.status} - ${response.statusText}`);
-      console.warn('Upload endpoint failed with status', response.status);
+      await fallbackSendMessage(message, model);
       return;
     }
 
@@ -1253,6 +1255,7 @@ async function streamMessage() {
             const data = JSON.parse(line.slice(6));
             if (data.choices && data.choices[0].delta.content) {
               fullResponse += data.choices[0].delta.content;
+              // Show raw text while streaming (will be replaced by markdown later)
               contentDiv.innerHTML = fullResponse.replace(/\n/g, '<br>');
               document.getElementById('chat').scrollTop = document.getElementById('chat').scrollHeight;
             }
@@ -1267,9 +1270,11 @@ async function streamMessage() {
     // Save the final response to conversation history
     addMessageAndSave('ai', fullResponse);
   } catch (error) {
+    // Clear file input even on error
+    fileInput.value = '';
     removeTypingIndicator(typingId);
-    console.error('Streaming error:', error);
-    addMessageAndSave('ai', `❌ Network error: ${error.message}. Please check your connection.`);
+    console.warn('Streaming error, falling back to non‑streaming:', error);
+    await fallbackSendMessage(message, model);
   }
 }
 
@@ -1569,7 +1574,7 @@ function showVideoStatus(message, type) {
 }
 
 // ============================================
-// Voice Functions (unchanged)
+// Voice Functions (with proper female voice selection)
 // ============================================
 let recognition = null;
 let isListening = false;
@@ -1611,8 +1616,29 @@ function speak(text) {
     utterance.lang = 'en-US';
     utterance.rate = 1.0;
     utterance.pitch = 1.0;
+    
+    // Get available voices and try to select a female voice
+    const voices = window.speechSynthesis.getVoices();
+    // Try to find a female voice (prefer Google UK English Female or Samantha)
+    const femaleVoices = voices.filter(v => 
+      v.name.toLowerCase().includes('female') || 
+      v.name.toLowerCase().includes('samantha') ||
+      v.name.toLowerCase().includes('victoria') ||
+      v.name.toLowerCase().includes('karen')
+    );
+    
+    if (femaleVoices.length > 0) {
+      utterance.voice = femaleVoices[0];
+    }
+    
     window.speechSynthesis.speak(utterance);
   } else alert('Speech synthesis not supported');
+}
+// Refresh voices when they become available
+if ('speechSynthesis' in window) {
+  speechSynthesis.onvoiceschanged = () => {
+    // Voices are now loaded
+  };
 }
 
 // ============================================
@@ -1780,10 +1806,10 @@ async function generateAudio() {
       utterance.pitch = 1.0;
       const voices = window.speechSynthesis.getVoices();
       if (voice.includes('female')) {
-        const femaleVoice = voices.find(v => v.name.includes('Female') || v.name.includes('Samantha'));
+        const femaleVoice = voices.find(v => v.name.includes('Female') || v.name.includes('Samantha') || v.name.includes('Victoria'));
         if (femaleVoice) utterance.voice = femaleVoice;
       } else if (voice.includes('male')) {
-        const maleVoice = voices.find(v => v.name.includes('Male') || v.name.includes('Alex'));
+        const maleVoice = voices.find(v => v.name.includes('Male') || v.name.includes('Alex') || v.name.includes('Daniel'));
         if (maleVoice) utterance.voice = maleVoice;
       }
       window.speechSynthesis.speak(utterance);
