@@ -1,6 +1,6 @@
 /**
  * Main Server - CephasGM AI Phase 6
- * Updated with WebSocket support and new /chat/upload endpoint.
+ * Updated with WebSocket support and enhanced /chat/upload endpoint (PDF parsing).
  */
 const express = require('express');
 const bodyParser = require('body-parser');
@@ -9,8 +9,9 @@ const config = require('./config');
 const path = require('path');
 const fs = require('fs');
 const WebSocket = require('ws');
-const multer = require('multer');          // Added for file uploads
-const upload = multer({ dest: '/tmp/uploads/' }); // Temporary storage
+const multer = require('multer');
+const pdfParse = require('pdf-parse');          // Added for PDF parsing
+const upload = multer({ dest: '/tmp/uploads/' });
 
 // ============================================
 // Monitoring & Error Tracking
@@ -192,7 +193,7 @@ app.post('/chat', async (req, res) => {
 // ============================================
 app.post('/chat/stream', async (req, res) => {
   try {
-    const { prompt, model = 'llama3.2' } = req.body;
+    const { prompt, model = 'ministral-3-3b' } = req.body;
     if (!prompt) return res.status(400).json({ error: 'Prompt is required' });
     
     res.setHeader('Content-Type', 'text/event-stream');
@@ -212,20 +213,30 @@ app.post('/chat/stream', async (req, res) => {
 });
 
 // ============================================
-// CHAT WITH FILE UPLOAD ENDPOINT (NEW)
+// CHAT WITH FILE UPLOAD ENDPOINT (with PDF parsing)
 // ============================================
 app.post('/chat/upload', upload.array('files', 10), async (req, res) => {
   try {
-    const { prompt, model = 'llama3.2' } = req.body;
+    const { prompt, model = 'ministral-3-3b' } = req.body;
     const files = req.files;
     let augmentedPrompt = prompt || '';
 
-    // Process uploaded files
     if (files && files.length > 0) {
       augmentedPrompt += '\n\nUser attached the following files:\n';
       for (const file of files) {
-        // Read text content for text files; for others, just mention the name
-        if (file.mimetype.startsWith('text/') || file.originalname.endsWith('.txt')) {
+        // Read text content for text/plain files
+        if (file.mimetype === 'application/pdf' || file.originalname.endsWith('.pdf')) {
+          try {
+            const dataBuffer = await fs.promises.readFile(file.path);
+            const pdfData = await pdfParse(dataBuffer);
+            const text = pdfData.text;
+            // Limit to 5000 characters to avoid overloading the model
+            augmentedPrompt += `\n--- ${file.originalname} (PDF) ---\n${text.substring(0, 5000)}\n`;
+          } catch (err) {
+            console.warn(`Failed to parse PDF ${file.originalname}:`, err);
+            augmentedPrompt += `\n- ${file.originalname} (PDF could not be parsed)\n`;
+          }
+        } else if (file.mimetype.startsWith('text/') || file.originalname.endsWith('.txt')) {
           const content = await fs.promises.readFile(file.path, 'utf8');
           augmentedPrompt += `\n--- ${file.originalname} ---\n${content}\n`;
         } else {
@@ -234,6 +245,11 @@ app.post('/chat/upload', upload.array('files', 10), async (req, res) => {
         // Clean up temp file
         await fs.promises.unlink(file.path).catch(() => {});
       }
+    }
+
+    // If no prompt but only files, we need to ask the AI to analyze
+    if (!augmentedPrompt.trim()) {
+      augmentedPrompt = "Please analyze the attached file(s).";
     }
 
     // Set headers for SSE
@@ -249,7 +265,6 @@ app.post('/chat/upload', upload.array('files', 10), async (req, res) => {
     res.end();
   } catch (error) {
     console.error('Upload chat error:', error);
-    // For SSE, we cannot send JSON error; instead we send an error chunk
     if (!res.headersSent) {
       res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
       res.end();
@@ -431,6 +446,7 @@ app.get('/agents', (req, res) => {
 // ============================================
 // ADDITIONAL ROUTES FOR FRONTEND COMPATIBILITY
 // ============================================
+
 app.post('/generate/image', async (req, res) => {
   try {
     const { prompt } = req.body;
@@ -710,12 +726,12 @@ const server = app.listen(PORT, '0.0.0.0', () => {
 ║   📁 Frontend: ${staticPath ? '✅ Found' : '❌ Not Found'}                 ║
 ║   📊 Mode: ${staticPath ? 'Full Stack' : 'API Only'}                      ║
 ║   🌐 CORS: ✅ Configured for Firebase                      ║
-║   🆕 Added Routes: Image, Audio, Upload, Enhanced Tasks   ║
+║   🆕 Added Routes: Image, Audio, Enhanced Tasks            ║
 ║   📈 Monitoring: ✅ /metrics enabled, Sentry ready         ║
 ║   🔐 Role Management: ✅ /user/role, /admin/updateRole     ║
 ║   🔌 WebSocket: ✅ Enabled on same port                    ║
 ║   🆕 Streaming HTTP: ✅ /chat/stream added                 ║
-║   📎 File Upload: ✅ /chat/upload added                    ║
+║   📎 File Upload: ✅ /chat/upload added (PDF parsing)      ║
 ║                                                          ║
 ╚══════════════════════════════════════════════════════════╝
   `);
@@ -729,7 +745,7 @@ const server = app.listen(PORT, '0.0.0.0', () => {
    • GET  /models          - List available models
    • POST /chat            - Chat with AI (non‑streaming)
    • POST /chat/stream     - Streaming chat (HTTP)
-   • POST /chat/upload     - Chat with file uploads (streaming)
+   • POST /chat/upload     - Chat with file uploads (streaming, PDF parsing)
    • POST /research        - Research topics
    • POST /code            - Execute code
    • POST /video           - Generate video
@@ -758,7 +774,7 @@ wss.on('connection', (ws) => {
     try {
       const data = JSON.parse(message);
       if (data.type === 'chat') {
-        const { prompt, model = 'llama3.2' } = data;
+        const { prompt, model = 'ministral-3-3b' } = data;
         const stream = await chatEngine.stream(prompt, { model });
         
         for await (const chunk of stream) {
