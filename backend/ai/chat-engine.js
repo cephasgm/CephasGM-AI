@@ -51,8 +51,6 @@ class ChatEngine {
         model: 'ministral-3:14b',
         description: 'Ministral 3 14B - Powerful (free)'
       },
-      // Keep other Ollama models if desired, but ensure they exist; otherwise remove.
-      // 'phi3' is not in the list, so I'll omit it. You can add others if available.
       // DeepSeek model (kept for future)
       'deepseek-chat': { 
         provider: 'deepseek', 
@@ -88,7 +86,15 @@ class ChatEngine {
         temperature = 0.7,
         maxTokens = 2000,
         sessionId = 'default',
-        systemPrompt = 'You are CephasGM AI, an African-inspired artificial intelligence assistant helping users with technology, innovation, and African perspectives.'
+        systemPrompt = `You are CephasGM AI, a helpful, harmless, and honest AI assistant.
+
+**Guidelines for your responses:**
+- Provide accurate, factual, and universal information. Avoid unnecessary cultural or geographic biases.
+- Use clear formatting: use **bold** for emphasis, bullet points (with * or -) for lists, and headings if helpful.
+- If you are unsure about something, say "I don't know" or "I am not certain". Do not hallucinate.
+- When possible, include references or suggest where to find more information (e.g., Wikipedia, reputable sources).
+- Keep your answers concise but thorough. Aim for well‑structured, easy‑to‑read responses.
+- Be respectful and inclusive.`
       } = options;
 
       if (!prompt || typeof prompt !== 'string') {
@@ -249,7 +255,15 @@ class ChatEngine {
         model = 'ministral-3-3b',
         temperature = 0.7,
         maxTokens = 2000,
-        systemPrompt = 'You are CephasGM AI, an African-inspired artificial intelligence assistant.'
+        systemPrompt = `You are CephasGM AI, a helpful, harmless, and honest AI assistant.
+
+**Guidelines for your responses:**
+- Provide accurate, factual, and universal information. Avoid unnecessary cultural or geographic biases.
+- Use clear formatting: use **bold** for emphasis, bullet points (with * or -) for lists, and headings if helpful.
+- If you are unsure about something, say "I don't know" or "I am not certain". Do not hallucinate.
+- When possible, include references or suggest where to find more information (e.g., Wikipedia, reputable sources).
+- Keep your answers concise but thorough. Aim for well‑structured, easy‑to‑read responses.
+- Be respectful and inclusive.`
       } = options;
 
       const modelConfig = this.models[model] || this.models['ministral-3-3b'];
