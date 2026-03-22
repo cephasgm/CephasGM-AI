@@ -7,6 +7,9 @@
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🤖</text></svg>">
 
+<!-- Markdown rendering library -->
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
 <style>
 /* [All existing styles remain exactly as in your file – unchanged for brevity] */
 * {
@@ -143,6 +146,60 @@ h1 {
 .tab-content.active {
   display: block;
 }
+.chat-layout {
+  display: flex;
+  gap: 20px;
+  width: 100%;
+}
+.sidebar {
+  width: 250px;
+  background: rgba(0,0,0,0.5);
+  border-radius: 20px;
+  padding: 15px;
+  backdrop-filter: blur(10px);
+  flex-shrink: 0;
+}
+.sidebar h3 {
+  color: #ffb300;
+  margin-top: 0;
+  margin-bottom: 10px;
+}
+.conversation-list {
+  list-style: none;
+  padding: 0;
+  margin: 10px 0;
+  max-height: 400px;
+  overflow-y: auto;
+}
+.conversation-item {
+  padding: 8px 12px;
+  margin: 5px 0;
+  background: rgba(255,255,255,0.1);
+  border-radius: 30px;
+  cursor: pointer;
+  transition: 0.2s;
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.conversation-item:hover {
+  background: rgba(255,179,0,0.3);
+}
+.conversation-item.active {
+  background: #ffb300;
+  color: black;
+}
+.new-chat-btn {
+  width: 100%;
+  padding: 10px;
+  background: #ffb300;
+  border: none;
+  border-radius: 30px;
+  margin-top: 10px;
+  cursor: pointer;
+  font-weight: bold;
+}
 .chat-box {
   height: 400px;
   overflow-y: auto;
@@ -183,7 +240,30 @@ h1 {
   line-height: 1.5;
   white-space: pre-wrap;
 }
-/* New input area styles – will be inline in HTML */
+.message-content p {
+  margin: 0 0 10px 0;
+}
+.message-content ul, .message-content ol {
+  margin: 5px 0 10px 20px;
+}
+.message-content li {
+  margin: 2px 0;
+}
+.message-content h1, .message-content h2, .message-content h3 {
+  margin: 10px 0 5px;
+}
+.message-content code {
+  background: rgba(0,0,0,0.3);
+  padding: 2px 5px;
+  border-radius: 5px;
+  font-family: monospace;
+}
+.message-content pre {
+  background: #1e1e1e;
+  padding: 10px;
+  border-radius: 5px;
+  overflow-x: auto;
+}
 .voice-btn {
   background: #28a745 !important;
   color: white !important;
@@ -238,9 +318,6 @@ h1 {
   background: #ffb300;
   color: black;
   font-weight: bold;
-}
-.image-actions button:hover, .video-actions button:hover {
-  opacity: 0.9;
 }
 .status {
   margin-top: 10px;
@@ -528,20 +605,6 @@ h1 {
   animation: pulse 1s infinite;
   display: inline-block;
 }
-.message-content {
-  white-space: pre-wrap;
-  word-wrap: break-word;
-  line-height: 1.6;
-}
-.message-content pre {
-  background: rgba(0,0,0,0.3);
-  padding: 10px;
-  border-radius: 5px;
-  overflow-x: auto;
-}
-/* ============================================ */
-/* STREAMING CURSOR STYLES */
-/* ============================================ */
 .streaming-message .message-content {
   border-right: 2px solid #ffb300;
   animation: blink 0.7s step-end infinite;
@@ -568,7 +631,6 @@ h1 {
 .footer a:hover {
   text-decoration: underline;
 }
-/* Responsive */
 @media (max-width: 768px) {
   h1 { font-size: 2rem; }
   .tab-nav { flex-direction: column; border-radius: 20px; }
@@ -577,6 +639,8 @@ h1 {
   .user-info { position: fixed; top: 10px; right: 10px; }
   .research-input-area { flex-direction: column; }
   .audio-controls { flex-direction: column; }
+  .chat-layout { flex-direction: column; }
+  .sidebar { width: 100%; }
 }
 </style>
 </head>
@@ -609,39 +673,46 @@ h1 {
       <!-- Admin tab will be added dynamically if user is admin -->
     </div>
     
-    <!-- Chat Tab (with file upload) -->
+    <!-- Chat Tab -->
     <div id="chatTab" class="tab-content active">
-      <div class="chat-box" id="chat"></div>
-      <!-- New input area with file attachment -->
-      <div class="input-area">
-        <div style="display: flex; flex-direction: column; gap: 10px; width: 100%;">
-          <div style="display: flex; gap: 10px; align-items: center;">
-            <input type="text" id="userInput" placeholder="Ask CephasGM AI anything..." autocomplete="off" style="flex: 1; padding: 15px; border-radius: 30px; border: none; font-size: 16px; background: rgba(255,255,255,0.9);">
-            <button class="voice-btn" id="voiceBtn" onclick="toggleVoice()">🎤</button>
-          </div>
-          <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-            <!-- File attachment button -->
-            <label for="chatFileInput" style="padding: 10px 20px; background: #ffb300; border-radius: 30px; cursor: pointer; color: black; font-weight: bold;">
-              📎 Attach Files
-            </label>
-            <input type="file" id="chatFileInput" multiple accept=".txt,.pdf,.doc,.docx,.jpg,.png" style="display: none;">
-            <span id="fileList" style="color: #ccc; font-size: 0.9rem;"></span>
-            <!-- Model selector grouped -->
-            <select id="modelSelect" style="padding: 10px 20px; border-radius: 30px; border: none; background: #ffb300; color: black; font-weight: bold;">
-              <optgroup label="Free Models (Ollama)">
-                <option value="llama3.2">Llama 3.2</option>
-                <option value="mistral">Mistral</option>
-                <option value="phi3">Phi-3</option>
-                <option value="codellama">Code Llama</option>
-              </optgroup>
-              <optgroup label="Paid Models (Requires Credits)">
-                <option value="gpt-3.5-turbo">OpenAI GPT-3.5</option>
-                <option value="gpt-4">OpenAI GPT-4</option>
-                <option value="deepseek-chat">DeepSeek</option>
-              </optgroup>
-            </select>
-            <button onclick="streamMessage()" id="sendBtn" style="padding: 10px 30px; border: none; border-radius: 30px; background: #ffb300; color: black; font-weight: bold;">Send</button>
-            <button onclick="clearChat()" style="padding: 10px 20px; background: #dc3545; border: none; border-radius: 30px; color: white;">🗑️</button>
+      <div class="chat-layout">
+        <div class="sidebar">
+          <h3>Conversations</h3>
+          <ul class="conversation-list" id="conversationList"></ul>
+          <button class="new-chat-btn" id="newChatBtn">+ New Chat</button>
+        </div>
+        <div style="flex: 1;">
+          <div class="chat-box" id="chat"></div>
+          <div class="input-area">
+            <div style="display: flex; flex-direction: column; gap: 10px; width: 100%;">
+              <div style="display: flex; gap: 10px; align-items: center;">
+                <input type="text" id="userInput" placeholder="Ask CephasGM AI anything..." autocomplete="off" style="flex: 1; padding: 15px; border-radius: 30px; border: none; font-size: 16px; background: rgba(255,255,255,0.9);">
+                <button class="voice-btn" id="voiceBtn" onclick="toggleVoice()">🎤</button>
+              </div>
+              <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                <label for="chatFileInput" style="padding: 10px 20px; background: #ffb300; border-radius: 30px; cursor: pointer; color: black; font-weight: bold;">
+                  📎 Attach Files
+                </label>
+                <input type="file" id="chatFileInput" multiple accept=".txt,.pdf,.doc,.docx,.jpg,.png" style="display: none;">
+                <span id="fileList" style="color: #ccc; font-size: 0.9rem;"></span>
+                <select id="modelSelect" style="padding: 10px 20px; border-radius: 30px; border: none; background: #ffb300; color: black; font-weight: bold;">
+                  <optgroup label="Free Models (Ollama)">
+                    <option value="ministral-3-3b">Ministral 3 3B (fast)</option>
+                    <option value="gemma-3-4b">Gemma 3 4B</option>
+                    <option value="ministral-3-8b">Ministral 3 8B</option>
+                    <option value="gemma-3-12b">Gemma 3 12B</option>
+                    <option value="ministral-3-14b">Ministral 3 14B</option>
+                  </optgroup>
+                  <optgroup label="Paid Models (Requires Credits)">
+                    <option value="gpt-3.5-turbo">OpenAI GPT-3.5</option>
+                    <option value="gpt-4">OpenAI GPT-4</option>
+                    <option value="deepseek-chat">DeepSeek</option>
+                  </optgroup>
+                </select>
+                <button onclick="streamMessage()" id="sendBtn" style="padding: 10px 30px; border: none; border-radius: 30px; background: #ffb300; color: black; font-weight: bold;">Send</button>
+                <button onclick="clearChat()" style="padding: 10px 20px; background: #dc3545; border: none; border-radius: 30px; color: white;">🗑️</button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -820,7 +891,7 @@ h1 {
 <script src="ai.js"></script>
 <script src="agents.js"></script>
 <script src="image.js"></script>
-<script src="upload.js"></script>   <!-- upload.js kept for other uses, but the Upload tab is removed -->
+<script src="upload.js"></script>
 
 <!-- ============================================ -->
 <!-- Main Application Script (everything below)   -->
@@ -831,7 +902,8 @@ h1 {
 // ============================================
 let currentUser = null;
 let API_BASE = ''; // Will be set based on availability
-let chatHistory = [];
+let conversations = [];
+let currentConversationId = null;
 
 // ============================================
 // API Configuration
@@ -882,6 +954,127 @@ const firebaseConfig = window.CEPHASGM_CONFIG?.FIREBASE || {
 
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
+
+// ============================================
+// Conversation Management
+// ============================================
+function loadConversations() {
+  const saved = localStorage.getItem('cephasgm_conversations');
+  if (saved) {
+    conversations = JSON.parse(saved);
+  } else {
+    // Create default conversation
+    conversations = [{
+      id: Date.now(),
+      title: 'New Chat',
+      messages: []
+    }];
+    saveConversations();
+  }
+  const storedCurrent = localStorage.getItem('currentConvId');
+  if (storedCurrent && conversations.some(c => c.id == storedCurrent)) {
+    currentConversationId = parseInt(storedCurrent);
+  } else {
+    currentConversationId = conversations[0].id;
+  }
+  renderConversationList();
+  loadCurrentConversation();
+}
+
+function saveConversations() {
+  localStorage.setItem('cephasgm_conversations', JSON.stringify(conversations));
+  localStorage.setItem('currentConvId', currentConversationId);
+}
+
+function renderConversationList() {
+  const list = document.getElementById('conversationList');
+  if (!list) return;
+  list.innerHTML = '';
+  conversations.forEach(conv => {
+    const li = document.createElement('li');
+    li.className = 'conversation-item' + (conv.id === currentConversationId ? ' active' : '');
+    li.textContent = conv.title;
+    li.onclick = () => switchConversation(conv.id);
+    list.appendChild(li);
+  });
+}
+
+function switchConversation(id) {
+  currentConversationId = id;
+  saveConversations();
+  renderConversationList();
+  loadCurrentConversation();
+}
+
+function loadCurrentConversation() {
+  const conv = conversations.find(c => c.id === currentConversationId);
+  if (!conv) return;
+  const chatBox = document.getElementById('chat');
+  chatBox.innerHTML = '';
+  conv.messages.forEach(msg => {
+    _addMessageToChat(msg.sender, msg.content);
+  });
+}
+
+function createNewChat() {
+  const newId = Date.now();
+  conversations.unshift({
+    id: newId,
+    title: 'New Chat',
+    messages: []
+  });
+  currentConversationId = newId;
+  saveConversations();
+  renderConversationList();
+  // Clear chat box
+  const chatBox = document.getElementById('chat');
+  chatBox.innerHTML = '';
+  // Add a welcome message
+  const welcome = "Hello! I'm CephasGM AI. How can I help you?";
+  _addMessageToChat('ai', welcome);
+  // Save it
+  const conv = conversations.find(c => c.id === currentConversationId);
+  if (conv) {
+    conv.messages.push({ sender: 'ai', content: welcome, timestamp: new Date().toISOString() });
+    saveConversations();
+  }
+}
+
+function _addMessageToChat(sender, content) {
+  const chatBox = document.getElementById('chat');
+  const messageDiv = document.createElement('div');
+  messageDiv.className = `message ${sender}-message`;
+  const timestamp = new Date().toLocaleTimeString();
+
+  // Render markdown to HTML
+  const rawHtml = marked.parse(content);
+  // Simple sanitization (remove scripts)
+  const safeHtml = rawHtml.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+
+  messageDiv.innerHTML = `
+    <div class="message-header">
+      <span>${sender === 'user' ? 'You' : 'CephasGM AI'}</span>
+      <span class="timestamp">${timestamp}</span>
+    </div>
+    <div class="message-content">${safeHtml}</div>
+  `;
+  chatBox.appendChild(messageDiv);
+  chatBox.scrollTop = chatBox.scrollHeight;
+}
+
+function addMessageAndSave(sender, content) {
+  _addMessageToChat(sender, content);
+  const conv = conversations.find(c => c.id === currentConversationId);
+  if (conv) {
+    conv.messages.push({ sender, content, timestamp: new Date().toISOString() });
+    // If first user message, update title
+    if (sender === 'user' && conv.messages.filter(m => m.sender === 'user').length === 1) {
+      conv.title = content.substring(0, 30) + (content.length > 30 ? '...' : '');
+      renderConversationList();
+    }
+    saveConversations();
+  }
+}
 
 // ============================================
 // HELPER FUNCTIONS
@@ -955,13 +1148,13 @@ document.getElementById('chatFileInput').addEventListener('change', function(e) 
 });
 
 // ============================================
-// Chat Functions (non-streaming fallback)
+// Chat Functions
 // ============================================
 async function sendMessage() {
   const input = document.getElementById('userInput');
   const message = input.value.trim();
   if (!message) return;
-  addMessageToChat('user', message);
+  addMessageAndSave('user', message);
   input.value = '';
   const typingId = showTypingIndicator();
   try {
@@ -980,18 +1173,14 @@ async function sendMessage() {
       response = "I'm here to help! (Running in offline mode)";
     }
     removeTypingIndicator(typingId);
-    addMessageToChat('ai', response);
-    saveToMemory(message, response);
+    addMessageAndSave('ai', response);
   } catch (error) {
     removeTypingIndicator(typingId);
-    addMessageToChat('ai', `Error: ${error.message}. Please try again.`);
+    addMessageAndSave('ai', `Error: ${error.message}. Please try again.`);
     console.error('Chat error:', error);
   }
 }
 
-// ============================================
-// Streaming Chat with File Uploads
-// ============================================
 async function streamMessage() {
   const input = document.getElementById('userInput');
   const message = input.value.trim();
@@ -1010,7 +1199,7 @@ async function streamMessage() {
     const fileNames = Array.from(files).map(f => f.name).join(', ');
     userMessageText += `\n[Attached files: ${fileNames}]`;
   }
-  addMessageToChat('user', userMessageText);
+  addMessageAndSave('user', userMessageText);
 
   input.value = '';
   fileInput.value = '';
@@ -1070,6 +1259,7 @@ async function streamMessage() {
             const data = JSON.parse(line.slice(6));
             if (data.choices && data.choices[0].delta.content) {
               fullResponse += data.choices[0].delta.content;
+              // Simple newline replacement for streaming
               contentDiv.innerHTML = fullResponse.replace(/\n/g, '<br>');
               document.getElementById('chat').scrollTop = document.getElementById('chat').scrollHeight;
             }
@@ -1077,7 +1267,9 @@ async function streamMessage() {
         }
       }
     }
-    saveToMemory(message, fullResponse);
+    // After streaming, render full response as markdown
+    contentDiv.innerHTML = marked.parse(fullResponse);
+    addMessageAndSave('ai', fullResponse);
   } catch (error) {
     removeTypingIndicator(typingId);
     console.warn('Streaming error, falling back to non‑streaming:', error);
@@ -1085,7 +1277,6 @@ async function streamMessage() {
   }
 }
 
-// Helper fallback for non‑streaming chat
 async function fallbackSendMessage(message, model) {
   try {
     const res = await fetch(`${API_BASE}/chat`, {
@@ -1096,35 +1287,22 @@ async function fallbackSendMessage(message, model) {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     const response = formatAIResponse(data);
-    addMessageToChat('ai', response);
-    saveToMemory(message, response);
+    addMessageAndSave('ai', response);
   } catch (error) {
-    addMessageToChat('ai', `Error: ${error.message}. Please try again.`);
+    addMessageAndSave('ai', `Error: ${error.message}. Please try again.`);
   }
 }
 
-function addMessageToChat(sender, content) {
-  const chatBox = document.getElementById('chat');
-  const messageDiv = document.createElement('div');
-  messageDiv.className = `message ${sender}-message`;
-  const timestamp = new Date().toLocaleTimeString();
-  messageDiv.innerHTML = `
-    <div class="message-header">
-      <span>${sender === 'user' ? 'You' : 'CephasGM AI'}</span>
-      <span class="timestamp">${timestamp}</span>
-    </div>
-    <div class="message-content">${content}</div>
-  `;
-  chatBox.appendChild(messageDiv);
-  chatBox.scrollTop = chatBox.scrollHeight;
-  chatHistory.push({ sender, content, timestamp });
-}
-
 function clearChat() {
-  if (confirm('Clear chat history?')) {
-    document.getElementById('chat').innerHTML = '';
-    chatHistory = [];
-    localStorage.removeItem('chatHistory');
+  if (confirm('Clear this conversation?')) {
+    const conv = conversations.find(c => c.id === currentConversationId);
+    if (conv) {
+      conv.messages = [];
+      conv.title = 'New Chat';
+      saveConversations();
+      renderConversationList();
+      loadCurrentConversation();
+    }
   }
 }
 
@@ -1263,8 +1441,8 @@ function loadChatHistory() {
   const chatBox = document.getElementById('chat');
   chatBox.innerHTML = '';
   memories.forEach(memory => {
-    if (memory.prompt) addMessageToChat('user', memory.prompt);
-    if (memory.response) addMessageToChat('ai', memory.response);
+    if (memory.prompt) addMessageAndSave('user', memory.prompt);
+    if (memory.response) addMessageAndSave('ai', memory.response);
   });
 }
 
@@ -1280,7 +1458,7 @@ function switchTab(tabName) {
 }
 
 // ============================================
-// Image Generation
+// Image Generation (unchanged)
 // ============================================
 async function generateImage() {
   const prompt = document.getElementById('imagePrompt').value.trim();
@@ -1693,7 +1871,8 @@ function clearCode() {
 window.onload = async function() {
   await checkAPI();
   initVoice();
-  loadChatHistory();
+  loadConversations();  // Load conversations instead of plain chat history
+  document.getElementById('newChatBtn').addEventListener('click', createNewChat);
 };
 
 // Make functions globally available
