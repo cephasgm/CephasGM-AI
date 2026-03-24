@@ -1,6 +1,7 @@
 /**
  * Multimodal Image Engine - Image generation and processing with AI
  * Integrates OpenAI DALL‑E, Stability AI, and Ollama for prompt enhancement
+ * Enhanced with fallback to local chat engine for prompt refinement.
  */
 const fetch = require('node-fetch');
 const EventEmitter = require('events');
@@ -100,11 +101,18 @@ class ImageEngine extends EventEmitter {
       let finalPrompt = prompt;
       let promptMetadata = null;
       
-      if (enhancePrompt && this.ollamaApiKey) {
-        const enhanced = await this.enhanceImagePrompt(prompt, style);
+      if (enhancePrompt) {
+        let enhanced = null;
+        if (this.ollamaApiKey) {
+          enhanced = await this.enhanceImagePrompt(prompt, style);
+        }
+        if (!enhanced) {
+          // Fallback to chat engine if Ollama not available
+          enhanced = await this.enhancePromptWithChat(prompt, style);
+        }
         if (enhanced) {
-          finalPrompt = enhanced.prompt;
-          promptMetadata = enhanced.metadata;
+          finalPrompt = enhanced.prompt || enhanced;
+          promptMetadata = enhanced.metadata || { enhanced: true, provider: 'chat-engine' };
         }
       }
 
@@ -157,6 +165,28 @@ class ImageEngine extends EventEmitter {
         url: this.getPlaceholderUrl(prompt, size),
         timestamp: new Date().toISOString()
       };
+    }
+  }
+
+  /**
+   * Enhance prompt using local chat engine (free)
+   */
+  async enhancePromptWithChat(prompt, style) {
+    try {
+      // Dynamically load chat engine (avoid circular dependency)
+      const chatEngine = require('../backend/ai/chat-engine');
+      const systemPrompt = `You are a prompt engineer. Enhance the following image generation prompt to be more detailed, vivid, and specific. Include lighting, composition, mood, and relevant details. Do not add style instructions unless specified. Keep it under 200 words.`;
+      const enhanced = await chatEngine.chat(prompt, { systemPrompt, model: 'ministral-3-3b' });
+      if (enhanced && enhanced.content) {
+        return {
+          prompt: enhanced.content,
+          metadata: { enhanced: true, provider: 'chat-engine', model: 'ministral-3-3b' }
+        };
+      }
+      return null;
+    } catch (error) {
+      console.log('Chat enhancement failed:', error.message);
+      return null;
     }
   }
 
