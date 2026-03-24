@@ -11,7 +11,6 @@
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 
 <style>
-/* [All existing styles remain exactly as in your file – unchanged for brevity] */
 * {
   box-sizing: border-box;
   margin: 0;
@@ -41,6 +40,9 @@ body {
   width: 100%;
   max-width: 1200px;
   flex: 1;
+  /* NEW: flex column layout */
+  display: flex;
+  flex-direction: column;
 }
 h1 {
   font-size: 3rem;
@@ -142,9 +144,14 @@ h1 {
   margin-top: 20px;
   border: 1px solid rgba(255,179,0,0.3);
   width: 100%;
+  /* NEW: ensure min height and scroll */
+  min-height: 80vh;
+  overflow-y: auto;
 }
 .tab-content.active {
   display: block;
+  /* NEW: active tab expands */
+  flex: 1;
 }
 .chat-layout {
   display: flex;
@@ -555,9 +562,6 @@ h1 {
   font-weight: bold;
   cursor: pointer;
 }
-/* ============================================ */
-/* RESPONSE FORMATTING STYLES */
-/* ============================================ */
 .research-response {
   padding: 15px;
   background: rgba(0,0,0,0.2);
@@ -614,7 +618,6 @@ h1 {
   from, to { border-color: transparent; }
   50% { border-color: #ffb300; }
 }
-/* Footer */
 .footer {
   text-align: center;
   padding: 20px;
@@ -659,7 +662,7 @@ h1 {
       <a href="login-signup.html" style="color: #ffb300; text-decoration: none;">Login / Signup</a> to access all features
     </div>
     
-    <!-- Tab Navigation (Upload tab removed) -->
+    <!-- Tab Navigation -->
     <div class="tab-nav" id="tabNav" style="display: none;">
       <button class="tab-btn active" onclick="switchTab('chat')">💬 Chat</button>
       <button class="tab-btn" onclick="switchTab('image')">🎨 Image</button>
@@ -670,7 +673,6 @@ h1 {
       <button class="tab-btn" onclick="switchTab('research')">🔬 Research</button>
       <button class="tab-btn" onclick="switchTab('audio')">🔊 Audio</button>
       <button class="tab-btn" onclick="switchTab('software')">🏭 Software</button>
-      <!-- Admin tab will be added dynamically if user is admin -->
     </div>
     
     <!-- Chat Tab -->
