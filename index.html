@@ -742,19 +742,6 @@ h1 {
       <div class="status" id="videoStatus"></div>
     </div>
     
-    <!-- Voice Tab -->
-    <div id="voiceTab" class="tab-content">
-      <h2>🎤 Voice Commands</h2>
-      <p>Speak to CephasGM AI in your own voice</p>
-      <div class="voice-demo">
-        <button onclick="startVoice()" id="voiceDemoBtn">🎤 Start Speaking</button>
-        <button onclick="stopVoice()" id="voiceStopBtn" style="background: #dc3545;">⏹️ Stop</button>
-        <div class="voice-status" id="voiceStatus"></div>
-        <textarea class="voice-output" id="voiceOutput" rows="3" placeholder="Your speech will appear here..." readonly></textarea>
-        <button onclick="speak('Hello, I am CephasGM AI. How can I help you today?')" style="margin-top: 10px; background: #28a745;">🔊 Test Speech</button>
-      </div>
-    </div>
-    
     <!-- Agents Tab -->
     <div id="agentsTab" class="tab-content">
       <h2>🤖 AI Agents</h2>
@@ -796,19 +783,6 @@ h1 {
         <button onclick="runCustomAgent()">Run Agent</button>
       </div>
       <div class="agent-result" id="agentResult"></div>
-    </div>
-    
-    <!-- Memory Tab -->
-    <div id="memoryTab" class="tab-content">
-      <h2>🧠 Vector Memory</h2>
-      <p>Search through conversation history and memories</p>
-      <div class="search-memory">
-        <input type="text" id="memorySearch" placeholder="Search memories...">
-        <button onclick="searchMemory()">Search</button>
-        <button onclick="loadMemories()">Refresh</button>
-        <button onclick="clearLocalMemory()" style="background: #dc3545;">Clear</button>
-      </div>
-      <div class="memory-list" id="memoryList"></div>
     </div>
     
     <!-- Research Tab -->
