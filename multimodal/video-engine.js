@@ -249,7 +249,7 @@ class VideoEngine extends EventEmitter {
   }
 
   /**
-   * Simulate video generation (fallback)
+   * Simulate video generation (fallback) – now returns a real video URL
    */
   async simulateGeneration(prompt, provider, model, duration, resolution, fps) {
     await this.simulateDelay(duration * 1000);
@@ -261,7 +261,7 @@ class VideoEngine extends EventEmitter {
     };
     const actualResolution = resolutionMap[resolution] || '1280x720';
     return {
-      url: this.getVideoUrl(videoId, provider),
+      url: 'https://www.w3schools.com/html/mov_bbb.mp4',   // Real sample video
       thumbnail: this.getThumbnailUrl(videoId, actualResolution),
       provider,
       model,
