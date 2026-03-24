@@ -5,6 +5,7 @@ const cors = require("cors")({ origin: true });
 /**
  * Image Generation
  * Endpoint: https://us-central1-cephasgm-ai.cloudfunctions.net/image
+ * Enhanced with simple prompt improvement.
  */
 exports.image = functions.https.onRequest((req, res) => {
   cors(req, res, async () => {
@@ -26,11 +27,19 @@ exports.image = functions.https.onRequest((req, res) => {
     }
 
     try {
-      const { prompt, size = "512x512", n = 1, provider = "auto" } = req.body;
+      let { prompt, size = "512x512", n = 1, provider = "auto" } = req.body;
 
       if (!prompt) {
         res.status(400).json({ error: "Prompt is required" });
         return;
+      }
+
+      // ----- Simple Prompt Enhancement (no external API) -----
+      // This adds style and detail keywords to make the image more relevant.
+      const enhancedPrompt = enhancePrompt(prompt);
+      if (enhancedPrompt !== prompt) {
+        console.log(`✨ Enhanced prompt: "${prompt}" -> "${enhancedPrompt}"`);
+        prompt = enhancedPrompt;
       }
 
       let imageUrl;
@@ -132,3 +141,32 @@ exports.image = functions.https.onRequest((req, res) => {
     }
   });
 });
+
+/**
+ * Simple prompt enhancement without external calls.
+ * Adds common detail keywords based on context.
+ */
+function enhancePrompt(prompt) {
+  let enhanced = prompt;
+  
+  // If the prompt is very short, add a default style and detail
+  if (prompt.length < 30) {
+    enhanced = `${prompt}, high quality, detailed, vibrant colors, sharp focus`;
+  }
+  
+  // Check for keywords to add specific enhancements
+  const lowerPrompt = prompt.toLowerCase();
+  if (lowerPrompt.includes("wildlife") || lowerPrompt.includes("safari")) {
+    enhanced = `${prompt}, African savanna, golden hour lighting, acacia trees, detailed animal fur, natural environment`;
+  } else if (lowerPrompt.includes("portrait")) {
+    enhanced = `${prompt}, professional photography, soft lighting, depth of field, bokeh, high detail`;
+  } else if (lowerPrompt.includes("landscape")) {
+    enhanced = `${prompt}, breathtaking view, dramatic sky, vibrant colors, wide angle`;
+  } else if (lowerPrompt.includes("city")) {
+    enhanced = `${prompt}, urban scenery, realistic architecture, bustling streets, dynamic lighting`;
+  }
+  
+  // Remove any double spaces and trim
+  enhanced = enhanced.replace(/\s+/g, ' ').trim();
+  return enhanced;
+}
