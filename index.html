@@ -1574,10 +1574,11 @@ function showVideoStatus(message, type) {
 }
 
 // ============================================
-// Voice Functions (with proper female voice selection)
+// Voice Functions (UPGRADED with async voice loading and better female/male selection)
 // ============================================
 let recognition = null;
 let isListening = false;
+
 function initVoice() {
   if ('webkitSpeechRecognition' in window) {
     recognition = new webkitSpeechRecognition();
@@ -1610,37 +1611,100 @@ function initVoice() {
 function startVoice() { if (!recognition) initVoice(); if (recognition) recognition.start(); else alert('Voice recognition not supported'); }
 function stopVoice() { if (recognition && isListening) recognition.stop(); }
 function toggleVoice() { isListening ? stopVoice() : startVoice(); }
-function speak(text) {
-  if ('speechSynthesis' in window) {
+
+// Helper: wait for voices to be loaded
+function getVoicesAsync() {
+  return new Promise((resolve) => {
+    let voices = window.speechSynthesis.getVoices();
+    if (voices.length) {
+      resolve(voices);
+    } else {
+      window.speechSynthesis.onvoiceschanged = () => {
+        resolve(window.speechSynthesis.getVoices());
+      };
+    }
+  });
+}
+
+// Upgraded speak function with async voice loading and female preference
+async function speak(text) {
+  if (!window.speechSynthesis) {
+    alert('Speech synthesis not supported');
+    return;
+  }
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = 'en-US';
+  utterance.rate = 1.0;
+  utterance.pitch = 1.0;
+  
+  const voices = await getVoicesAsync();
+  // Try to find a female voice (prefer Google UK English Female, Samantha, Victoria, or any containing "female")
+  const femaleKeywords = ['samantha', 'victoria', 'karen', 'female', 'google uk english female', 'zira'];
+  let selectedVoice = voices.find(v => femaleKeywords.some(keyword => v.name.toLowerCase().includes(keyword)));
+  if (!selectedVoice) {
+    // Fallback: any English female voice
+    selectedVoice = voices.find(v => v.lang.includes('en') && v.name.toLowerCase().includes('female'));
+  }
+  if (!selectedVoice) {
+    // Last fallback: any English voice
+    selectedVoice = voices.find(v => v.lang.includes('en-US')) || voices[0];
+  }
+  if (selectedVoice) utterance.voice = selectedVoice;
+  
+  window.speechSynthesis.speak(utterance);
+}
+
+// Upgraded generateAudio function with proper mapping for voice options
+async function generateAudio() {
+  const text = document.getElementById('audioText').value.trim();
+  const voiceOption = document.getElementById('audioVoice').value;
+  if (!text) {
+    alert('Please enter text to convert to speech');
+    return;
+  }
+  const audioPlayer = document.getElementById('audioPlayer');
+  audioPlayer.innerHTML = '<p>🎙️ Preparing voice...</p>';
+  try {
+    if (!window.speechSynthesis) throw new Error('Speech synthesis not supported');
+    
+    const voices = await getVoicesAsync();
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = 'en-US';
     utterance.rate = 1.0;
     utterance.pitch = 1.0;
     
-    // Get available voices and try to select a female voice
-    const voices = window.speechSynthesis.getVoices();
-    // Try to find a female voice (prefer Google UK English Female or Samantha)
-    const femaleVoices = voices.filter(v => 
-      v.name.toLowerCase().includes('female') || 
-      v.name.toLowerCase().includes('samantha') ||
-      v.name.toLowerCase().includes('victoria') ||
-      v.name.toLowerCase().includes('karen')
-    );
-    
-    if (femaleVoices.length > 0) {
-      utterance.voice = femaleVoices[0];
+    let selectedVoice = null;
+    if (voiceOption === 'african-female') {
+      // Prefer voices with female and English; also try Samantha, Victoria, etc.
+      selectedVoice = voices.find(v => (v.name.toLowerCase().includes('samantha') || v.name.toLowerCase().includes('victoria') || v.name.toLowerCase().includes('female')) && v.lang.includes('en')) ||
+                     voices.find(v => v.name.toLowerCase().includes('female')) ||
+                     voices.find(v => v.lang.includes('en-US'));
+    } else if (voiceOption === 'african-male') {
+      selectedVoice = voices.find(v => (v.name.toLowerCase().includes('alex') || v.name.toLowerCase().includes('daniel') || v.name.toLowerCase().includes('male')) && v.lang.includes('en')) ||
+                     voices.find(v => v.name.toLowerCase().includes('male')) ||
+                     voices.find(v => v.lang.includes('en-US'));
+    } else if (voiceOption === 'standard-female') {
+      selectedVoice = voices.find(v => v.name.toLowerCase().includes('samantha') || v.name.toLowerCase().includes('victoria') || v.name.toLowerCase().includes('google uk english female')) ||
+                     voices.find(v => v.lang.includes('en-US') && v.name.toLowerCase().includes('female')) ||
+                     voices[0];
+    } else if (voiceOption === 'standard-male') {
+      selectedVoice = voices.find(v => v.name.toLowerCase().includes('alex') || v.name.toLowerCase().includes('google uk english male')) ||
+                     voices.find(v => v.lang.includes('en-US') && v.name.toLowerCase().includes('male')) ||
+                     voices[0];
     }
+    if (!selectedVoice && voices.length) selectedVoice = voices[0];
+    if (selectedVoice) utterance.voice = selectedVoice;
     
+    window.speechSynthesis.cancel(); // Stop any ongoing speech
     window.speechSynthesis.speak(utterance);
-  } else alert('Speech synthesis not supported');
+    audioPlayer.innerHTML = `
+      <p>🔊 Speaking: "${text.substring(0, 50)}..."</p>
+      <button onclick="window.speechSynthesis.cancel()" style="padding: 10px; background: #dc3545;">Stop Speaking</button>
+    `;
+  } catch (error) {
+    audioPlayer.innerHTML = `<p class="status error">Error: ${error.message}</p>`;
+  }
 }
-// Refresh voices when they become available
-if ('speechSynthesis' in window) {
-  speechSynthesis.onvoiceschanged = () => {
-    // Voices are now loaded
-  };
-}
-
 // ============================================
 // Agent Functions (unchanged)
 // ============================================
@@ -1786,42 +1850,6 @@ async function conductResearch() {
     }
   } catch (error) {
     resultsDiv.innerHTML = `<p class="status error">Error: ${error.message}</p>`;
-  }
-}
-
-// ============================================
-// Audio Functions (unchanged)
-// ============================================
-async function generateAudio() {
-  const text = document.getElementById('audioText').value.trim();
-  const voice = document.getElementById('audioVoice').value;
-  if (!text) { alert('Please enter text to convert to speech'); return; }
-  const audioPlayer = document.getElementById('audioPlayer');
-  audioPlayer.innerHTML = '<p>Generating audio...</p>';
-  try {
-    if (window.speechSynthesis) {
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'en-US';
-      utterance.rate = 1.0;
-      utterance.pitch = 1.0;
-      const voices = window.speechSynthesis.getVoices();
-      if (voice.includes('female')) {
-        const femaleVoice = voices.find(v => v.name.includes('Female') || v.name.includes('Samantha') || v.name.includes('Victoria'));
-        if (femaleVoice) utterance.voice = femaleVoice;
-      } else if (voice.includes('male')) {
-        const maleVoice = voices.find(v => v.name.includes('Male') || v.name.includes('Alex') || v.name.includes('Daniel'));
-        if (maleVoice) utterance.voice = maleVoice;
-      }
-      window.speechSynthesis.speak(utterance);
-      audioPlayer.innerHTML = `
-        <p>🔊 Speaking: "${text.substring(0, 50)}..."</p>
-        <button onclick="window.speechSynthesis.cancel()" style="padding: 10px; background: #dc3545;">Stop Speaking</button>
-      `;
-    } else {
-      audioPlayer.innerHTML = '<p>Audio generation not available</p>';
-    }
-  } catch (error) {
-    audioPlayer.innerHTML = `<p class="status error">Error: ${error.message}</p>`;
   }
 }
 
