@@ -5,36 +5,48 @@
 module.exports = (app, modelHost, vectorDb) => {
     
     // ============================================
-    // Image Generation Endpoint
+    // Image Generation Endpoint (main)
     // ============================================
-    app.post('/generate/image', async (req, res) => {
+    const handleImageGen = async (req, res) => {
         try {
             const { prompt } = req.body;
-            
             if (!prompt) {
                 return res.status(400).json({ error: 'Prompt is required' });
             }
-            
-            // Try to use image engine if available
-            let result;
+
+            // Load the image engine (path corrected)
+            let imageEngine;
             try {
-                const imageEngine = require('./multimodal/image-engine');
-                result = await imageEngine.generate(prompt);
-            } catch (e) {
-                // Fallback to simulated response
-                result = {
-                    url: `https://via.placeholder.com/512x512.png?text=${encodeURIComponent(prompt.substring(0, 30))}`,
-                    simulated: true
-                };
+                imageEngine = require('../multimodal/image-engine');
+            } catch (err) {
+                console.error('Failed to load image-engine:', err.message);
+                throw new Error('Image engine not available');
             }
-            
+
+            // Generate the image – enable prompt enhancement
+            const result = await imageEngine.generate(prompt, {
+                enhancePrompt: true,  // use Ollama or chat engine to refine prompt
+                model: 'dall-e-2',    // can be changed via options
+                size: '512x512'
+            });
+
             res.json(result);
-            
         } catch (error) {
             console.error('Image generation error:', error);
-            res.status(500).json({ error: error.message });
+            // Fallback to a simple placeholder
+            res.json({
+                url: `https://via.placeholder.com/512x512?text=${encodeURIComponent(prompt.substring(0, 30))}`,
+                simulated: true,
+                error: error.message
+            });
         }
-    });
+    };
+
+    // Main route (without /api)
+    app.post('/generate/image', handleImageGen);
+
+    // Additional route to match frontend's first attempt
+    app.post('/api/generate/image', handleImageGen);
     
     // ============================================
     // Upload Endpoint
