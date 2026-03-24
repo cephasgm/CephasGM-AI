@@ -1,6 +1,6 @@
 /**
  * Image Generation
- * Fixed - Uses global namespace pattern
+ * Simplified – uses backend endpoint directly
  */
 
 window.ImageModule = window.ImageModule || (function() {
@@ -46,23 +46,17 @@ window.ImageModule = window.ImageModule || (function() {
         showStatus("Generating image...", "info");
 
         try {
-            // First try the local backend
-            const response = await fetch(`${API_URL}/api/generate/image`, {
+            // Directly call the backend (no /api prefix)
+            const response = await fetch(`${API_URL}/generate/image`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json"
                 },
-                body: JSON.stringify({ 
-                    prompt: prompt,
-                    model: "dall-e-2",
-                    size: "512x512",
-                    n: 1
-                })
+                body: JSON.stringify({ prompt })
             });
 
             if (!response.ok) {
-                // Fallback to Firebase function
-                return await fallbackGenerateImage(prompt);
+                throw new Error(`HTTP ${response.status}`);
             }
 
             const data = await response.json();
@@ -71,57 +65,23 @@ window.ImageModule = window.ImageModule || (function() {
                 displayImage(data.url, prompt);
                 showStatus("Image generated successfully!", "success");
             } else {
-                showStatus("Failed to generate image", "error");
+                throw new Error("No image URL in response");
             }
 
         } catch (error) {
             console.error("Image generation error:", error);
-            // Try fallback
-            await fallbackGenerateImage(prompt);
-            
-        } finally {
-            // Re-enable button
-            if (generateBtn) {
-                generateBtn.disabled = false;
-                generateBtn.textContent = "Generate Image";
-            }
-        }
-    }
-    
-    async function fallbackGenerateImage(prompt) {
-        try {
-            const response = await fetch("https://us-central1-cephasgm-ai.cloudfunctions.net/image", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({ 
-                    prompt: prompt,
-                    size: "512x512",
-                    n: 1
-                })
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const data = await response.json();
-            
-            if (data.url && imageResult) {
-                displayImage(data.url, prompt);
-                showStatus("Image generated successfully (via fallback)!", "success");
-            }
-            
-        } catch (fallbackError) {
-            console.error("Fallback also failed:", fallbackError);
             showStatus("Error generating image. Please try again.", "error");
             
             if (imageResult) {
                 imageResult.innerHTML = `<div class="error-placeholder">
                     <p>😕 Image generation failed</p>
-                    <small>${fallbackError.message}</small>
+                    <small>${error.message}</small>
                 </div>`;
+            }
+        } finally {
+            if (generateBtn) {
+                generateBtn.disabled = false;
+                generateBtn.textContent = "Generate Image";
             }
         }
     }
