@@ -1,6 +1,7 @@
 /**
  * Video Generator - Create videos from text prompts
  * Now integrated with Ollama Cloud for script generation and planning
+ * Fixed to return a real video URL when using mock mode.
  */
 const fetch = require('node-fetch');
 const fs = require('fs').promises;
@@ -314,20 +315,27 @@ Return a JSON object with:
   }
 
   /**
-   * Generate mock video for demo
+   * Generate mock video for demo – now returns a real video URL
    */
   async generateMockVideo(prompt, duration, resolution) {
-    // Simulate video generation
-    await this.simulateDelay(2000);
+    // Simulate a realistic video generation delay (3-5 seconds)
+    await this.simulateDelay(4000);
     
     const videoId = this.generateId();
-    const [width, height] = resolution.split('x').map(Number);
-    const encodedPrompt = encodeURIComponent(prompt.substring(0, 30));
+    
+    // Use a publicly accessible sample video from W3Schools (small, 5 seconds)
+    // This ensures the frontend receives a valid .mp4 file.
+    const sampleVideoUrl = 'https://www.w3schools.com/html/mov_bbb.mp4';
+    
+    // Optionally, you could add a query parameter to make it look "unique"
+    const url = `${sampleVideoUrl}?id=${videoId}`;
     
     return {
-      url: `https://via.placeholder.com/${resolution}.mp4?text=${encodedPrompt}`,
+      url: url,
       id: videoId,
-      message: 'Demo video generated (placeholder)'
+      message: 'Video generated (sample video) – add API keys for real AI videos',
+      duration: duration,
+      resolution: resolution
     };
   }
 
@@ -335,8 +343,8 @@ Return a JSON object with:
    * Get fallback video URL
    */
   getFallbackVideoUrl(prompt, resolution) {
-    const encodedPrompt = encodeURIComponent(prompt.substring(0, 30));
-    return `https://via.placeholder.com/${resolution}.png?text=${encodedPrompt}`;
+    // Still a video, but static
+    return 'https://www.w3schools.com/html/mov_bbb.mp4';
   }
 
   /**
