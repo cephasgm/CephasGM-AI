@@ -1,192 +1,245 @@
 /**
- * Main Application - Chat Interface
- * Connected to backend API at https://cephasgm-ai.onrender.com
+ * CephasGM SI — app.js
+ * ----------------------------------------------------------------------------
+ * Compatibility + utility layer for the chat interface.
+ *
+ * Architecture note
+ * -----------------
+ * The new index.html bootstrap owns the canonical chat pipeline:
+ *   - conversations[] / currentConversationId
+ *   - sendMessage() / streamMessage() / clearChat()
+ *   - addMessageAndSave() / _addMessageToChat() / showTypingIndicator()
+ *   - localStorage schema: 'cephasgm_conversations' + 'currentConvId'
+ *
+ * This module's ONLY jobs are:
+ *   1. Preserve the `window.ChatApp` namespace that legacy code imports.
+ *   2. Delegate its methods to the canonical window.* functions.
+ *   3. Migrate old `chatHistory` localStorage into the new schema (one-time).
+ *   4. Provide small helpers (isReady, getCurrentConversation, exportChat).
+ *
+ * It must NOT bind DOM listeners, define a second sendMessage, or write to
+ * localStorage under a different key — doing so caused double-sends and
+ * split-brain persistence in the previous build.
+ * ----------------------------------------------------------------------------
  */
 
-// Use namespace to avoid globals
-window.ChatApp = window.ChatApp || (function() {
-    const API_URL = window.CEPHASGM_CONFIG?.API_URL || "https://cephasgm-ai.onrender.com";
-    
-    // DOM elements
-    let chatBox, input, sendBtn;
-    
-    // Initialize when DOM is ready
-    function init() {
-        chatBox = document.getElementById("chat");
-        input = document.getElementById("userInput");
-        sendBtn = document.getElementById("sendBtn");
-        
-        // Note: voiceBtn is handled in voice.js now
-        
-        if (sendBtn) {
-            sendBtn.addEventListener('click', sendMessage);
-        }
-        
-        if (input) {
-            input.addEventListener('keypress', function(e) {
-                if (e.key === 'Enter') {
-                    sendMessage();
-                }
-            });
-        }
-        
-        loadChatHistory();
+window.ChatApp = window.ChatApp || (function () {
+    'use strict';
+
+    const MIGRATION_FLAG = 'cephasgm_app_js_migrated_v6';
+    const LEGACY_KEY     = 'chatHistory';
+    const NEW_KEY        = 'cephasgm_conversations';
+
+    /* ======================================================================
+     * Delegates — prefer canonical implementations on window
+     * ==================================================================== */
+    function sendMessage() {
+        if (typeof window.streamMessage === 'function') return window.streamMessage();
+        if (typeof window.sendMessage === 'function')   return window.sendMessage();
+        console.warn('[ChatApp] No canonical sendMessage available');
     }
-    
-    async function sendMessage() {
-        if (!input) return;
-        
-        const message = input.value.trim();
-        if (!message) return;
-        
-        addMessage("You", message);
-        input.value = "";
-        
-        const typingId = showTypingIndicator();
-        
-        try {
-            const response = await fetch(`${API_URL}/chat`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({ 
-                    prompt: message,
-                    model: "llama3.2"
-                })
-            });
-            
-            if (!response.ok) {
-                throw new Error(`API error: ${response.status}`);
-            }
-            
-            const data = await response.json();
-            
-            removeTypingIndicator(typingId);
-            
-            const aiResponse = data.content || data.response || "No response received";
-            addMessage("CephasGM AI", aiResponse);
-            
-            if (window.saveMemory) {
-                window.saveMemory(message, aiResponse);
-            }
-            
-        } catch (error) {
-            removeTypingIndicator(typingId);
-            addMessage("CephasGM AI", "Sorry, I encountered an error. Please try again.");
-            console.error("Send message error:", error);
-        }
-    }
-    
-    function addMessage(sender, text) {
-        if (!chatBox) return;
-        
-        const msg = document.createElement("div");
-        msg.className = `message ${sender === "You" ? "user-message" : "ai-message"}`;
-        
-        const timestamp = new Date().toLocaleTimeString();
-        
-        msg.innerHTML = `
-            <div class="message-header">
-                <b>${sender}:</b>
-                <span class="timestamp">${timestamp}</span>
-            </div>
-            <div class="message-content">${text}</div>
-        `;
-        
-        chatBox.appendChild(msg);
-        chatBox.scrollTop = chatBox.scrollHeight;
-        
-        saveChatToStorage(sender, text, timestamp);
-    }
-    
-    function showTypingIndicator() {
-        const id = 'typing-' + Date.now();
-        const div = document.createElement("div");
-        div.id = id;
-        div.className = "message ai-message typing-indicator";
-        div.innerHTML = `
-            <div class="message-header">
-                <b>CephasGM AI:</b>
-            </div>
-            <div class="message-content">
-                <span class="dot">.</span><span class="dot">.</span><span class="dot">.</span>
-            </div>
-        `;
-        chatBox.appendChild(div);
-        chatBox.scrollTop = chatBox.scrollHeight;
-        return id;
-    }
-    
-    function removeTypingIndicator(id) {
-        const indicator = document.getElementById(id);
-        if (indicator) indicator.remove();
-    }
-    
-    function saveChatToStorage(sender, text, timestamp) {
-        try {
-            const history = JSON.parse(localStorage.getItem('chatHistory') || '[]');
-            history.push({ sender, text, timestamp });
-            
-            if (history.length > 50) history.shift();
-            
-            localStorage.setItem('chatHistory', JSON.stringify(history));
-        } catch (error) {
-            console.error("Error saving chat history:", error);
-        }
-    }
-    
-    function loadChatHistory() {
-        try {
-            const history = JSON.parse(localStorage.getItem('chatHistory') || '[]');
-            
-            if (chatBox) {
-                chatBox.innerHTML = '';
-                
-                if (history.length === 0) {
-                    addMessage("CephasGM AI", "Hello! I'm CephasGM AI. How can I help you today?");
-                } else {
-                    history.forEach(msg => {
-                        const msgDiv = document.createElement("div");
-                        msgDiv.className = `message ${msg.sender === "You" ? "user-message" : "ai-message"}`;
-                        msgDiv.innerHTML = `
-                            <div class="message-header">
-                                <b>${msg.sender}:</b>
-                                <span class="timestamp">${msg.timestamp}</span>
-                            </div>
-                            <div class="message-content">${msg.text}</div>
-                        `;
-                        chatBox.appendChild(msgDiv);
-                    });
-                    chatBox.scrollTop = chatBox.scrollHeight;
-                }
-            }
-        } catch (error) {
-            console.error("Error loading chat history:", error);
-        }
-    }
-    
+
     function clearChat() {
-        if (confirm("Clear all chat history?")) {
-            localStorage.removeItem('chatHistory');
-            if (chatBox) {
-                chatBox.innerHTML = '';
-                addMessage("CephasGM AI", "Chat history cleared. How can I help you?");
+        if (typeof window.clearChat === 'function') return window.clearChat();
+        console.warn('[ChatApp] No canonical clearChat available');
+    }
+
+    /**
+     * Legacy signature: addMessage(senderLabel, text).
+     * Accepts 'You' / 'CephasGM AI' (old) or 'user' / 'ai' (new).
+     * Delegates to window._addMessageToChat which handles markdown + sanitize.
+     */
+    function addMessage(sender, text) {
+        const normalized = normalizeSender(sender);
+        if (typeof window._addMessageToChat === 'function') {
+            window._addMessageToChat(normalized, text, new Date().toISOString(), true);
+            // Persist if a conversation is active
+            if (typeof window.addMessageAndSave === 'function') {
+                // addMessageAndSave re-renders; avoid double render by pushing directly
+                const conv = getCurrentConversation();
+                if (conv) {
+                    conv.messages.push({
+                        sender: normalized,
+                        content: text,
+                        timestamp: new Date().toISOString()
+                    });
+                    try {
+                        localStorage.setItem(NEW_KEY, JSON.stringify(window.conversations || []));
+                    } catch (e) { console.warn('[ChatApp] persist failed', e); }
+                }
             }
+            return;
+        }
+        console.warn('[ChatApp] No canonical addMessage renderer available');
+    }
+
+    function normalizeSender(sender) {
+        if (!sender) return 'ai';
+        const s = String(sender).toLowerCase();
+        if (s === 'you' || s === 'user' || s === 'me') return 'user';
+        return 'ai';
+    }
+
+    /* ======================================================================
+     * Read-only utilities (safe for ai.js / agents.js / memory.js)
+     * ==================================================================== */
+    function isReady() {
+        return typeof window.streamMessage === 'function'
+            && Array.isArray(window.conversations);
+    }
+
+    function getCurrentConversation() {
+        if (!Array.isArray(window.conversations)) return null;
+        return window.conversations.find(c => c.id === window.currentConversationId) || null;
+    }
+
+    function getConversations() {
+        return Array.isArray(window.conversations) ? window.conversations.slice() : [];
+    }
+
+    /**
+     * Export the active conversation as JSON (or all, if all=true).
+     * Used by future "Download chat" and by memory indexing.
+     */
+    function exportChat(all = false) {
+        const payload = all ? getConversations() : (getCurrentConversation() || null);
+        return JSON.stringify(payload, null, 2);
+    }
+
+    /**
+     * Import a previously exported conversation object/array.
+     * Merges without clobbering existing IDs.
+     */
+    function importChat(json) {
+        try {
+            const data = typeof json === 'string' ? JSON.parse(json) : json;
+            const incoming = Array.isArray(data) ? data : [data];
+            const existingIds = new Set((window.conversations || []).map(c => String(c.id)));
+            let added = 0;
+            incoming.forEach(conv => {
+                if (!conv || !Array.isArray(conv.messages)) return;
+                if (existingIds.has(String(conv.id))) return;
+                window.conversations.push({
+                    id: conv.id || Date.now() + Math.floor(Math.random() * 1000),
+                    title: conv.title || 'Imported chat',
+                    messages: conv.messages,
+                    createdAt: conv.createdAt || new Date().toISOString()
+                });
+                added++;
+            });
+            if (added) {
+                localStorage.setItem(NEW_KEY, JSON.stringify(window.conversations));
+                if (typeof window.loadConversations === 'function') window.loadConversations();
+            }
+            return added;
+        } catch (e) {
+            console.error('[ChatApp] importChat failed', e);
+            return 0;
         }
     }
-    
-    // Auto-initialize
+
+    /* ======================================================================
+     * One-time migration from legacy 'chatHistory' → new schema
+     * ==================================================================== */
+    function migrateLegacyHistory() {
+        if (localStorage.getItem(MIGRATION_FLAG)) return;
+
+        let legacy = [];
+        try {
+            legacy = JSON.parse(localStorage.getItem(LEGACY_KEY) || '[]');
+        } catch {
+            legacy = [];
+        }
+
+        if (Array.isArray(legacy) && legacy.length > 0) {
+            let existing = [];
+            try {
+                existing = JSON.parse(localStorage.getItem(NEW_KEY) || '[]');
+            } catch { existing = []; }
+
+            // Only migrate if new store is empty, to avoid duplicating
+            if (!Array.isArray(existing) || existing.length === 0) {
+                const messages = legacy
+                    .filter(m => m && (m.text || m.content))
+                    .map(m => ({
+                        sender: normalizeSender(m.sender),
+                        content: m.text || m.content,
+                        timestamp: m.timestamp || new Date().toISOString()
+                    }));
+
+                if (messages.length) {
+                    const firstUser = messages.find(m => m.sender === 'user');
+                    const title = firstUser
+                        ? firstUser.content.slice(0, 42) + (firstUser.content.length > 42 ? '…' : '')
+                        : 'Imported chat';
+
+                    const migrated = [{
+                        id: Date.now(),
+                        title,
+                        messages,
+                        createdAt: new Date().toISOString()
+                    }];
+
+                    try {
+                        localStorage.setItem(NEW_KEY, JSON.stringify(migrated));
+                        localStorage.setItem('currentConvId', String(migrated[0].id));
+                        console.info(`[ChatApp] Migrated ${messages.length} legacy messages.`);
+                    } catch (e) {
+                        console.warn('[ChatApp] migration write failed', e);
+                    }
+                }
+            }
+        }
+
+        localStorage.setItem(MIGRATION_FLAG, '1');
+    }
+
+    /* ======================================================================
+     * init() — idempotent, safe to call multiple times
+     * ==================================================================== */
+    let initialized = false;
+    function init() {
+        if (initialized) return;
+        initialized = true;
+
+        migrateLegacyHistory();
+
+        // If the canonical bootstrap hasn't rendered yet (e.g. async load order),
+        // reload conversations so the migrated data appears.
+        if (typeof window.loadConversations === 'function') {
+            try { window.loadConversations(); } catch (e) { console.warn(e); }
+        }
+    }
+
+    /* ======================================================================
+     * Auto-init
+     * ==================================================================== */
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
+        document.addEventListener('DOMContentLoaded', init, { once: true });
     } else {
         init();
     }
-    
-    // Public API
+
+    /* ======================================================================
+     * Public API — preserves legacy surface
+     * ==================================================================== */
     return {
+        // delegates
         sendMessage,
         addMessage,
-        clearChat
+        clearChat,
+
+        // utilities
+        init,
+        isReady,
+        getCurrentConversation,
+        getConversations,
+        exportChat,
+        importChat,
+
+        // exposed for tests / debugging
+        _normalizeSender: normalizeSender,
+        _migrateLegacyHistory: migrateLegacyHistory,
+        version: '6.0.0-si'
     };
 })();
