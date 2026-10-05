@@ -1,71 +1,42 @@
 {
   "name": "cephasgm-ai",
   "version": "6.0.0",
-  "description": "CephasGM AI - Complete AI Ecosystem (Phases 1-6)",
-  "main": "backend/server.js",
+  "description": "CephasGM SI — Superintelligence platform for Africa",
+  "main": "api/server.js",
   "scripts": {
-    "start": "node backend/server.js",
-    "dev": "nodemon backend/server.js",
-    "prod": "NODE_ENV=production node backend/server.js",
-    "frontend": "cd frontend && python3 -m http.server 8000",
-    "backend": "node backend/server.js",
+    "start": "node api/server.js",
+    "dev": "nodemon api/server.js",
+    "prod": "NODE_ENV=production node api/server.js",
+    "backend": "node api/server.js",
+    "frontend": "cd client && npm run dev",
     "functions": "cd functions && npm run serve",
     "cluster": "node cluster/node-manager.js",
     "test": "jest",
     "test:watch": "jest --watch",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "build": "echo 'No build step required'",
+    "build": "npm run build:react",
     "deploy": "echo 'Deployment handled by Render'",
-    "build:react": "cd client && npm install && npm run build && mkdir -p ../frontend/app && cp -r dist/* ../frontend/app/ && echo '✅ React build complete'",
-    "phase1": "echo 'Running Phase 1: Basic PWA with Firebase Auth'",
-    "phase2": "echo 'Running Phase 2: AI Features with Firebase Functions'",
-    "phase3": "echo 'Running Phase 3: Multi-Agent System'",
-    "phase4": "echo 'Running Phase 4: AI Operating System'",
-    "phase5": "echo 'Running Phase 5: AI Infrastructure Platform'",
-    "phase6": "echo 'Running Phase 6: Complete AI Ecosystem'",
+    "build:react": "cd client && npm install && npm run build",
     "status": "node -e \"console.log(require('./package.json').description)\"",
     "postinstall": "echo 'Dependencies installed successfully'"
   },
   "dependencies": {
     "@pinecone-database/pinecone": "^2.0.0",
     "@sentry/node": "^7.114.0",
-    "@supabase/supabase-js": "^2.39.0",
-    "axios": "^1.6.0",
-    "bcryptjs": "^2.4.3",
-    "body-parser": "^1.20.2",
-    "bull": "^4.12.0",
-    "busboy": "^1.6.0",
     "compression": "^1.7.4",
-    "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
     "express-rate-limit": "^7.1.5",
-    "express-session": "^1.17.3",
     "express-validator": "^7.0.1",
     "firebase-admin": "^12.0.0",
-    "form-data": "^4.0.0",
     "helmet": "^7.1.0",
-    "helmet-csp": "^3.3.0",
     "jsonwebtoken": "^9.0.2",
-    "mammoth": "^1.4.21",
-    "mongodb": "^6.3.0",
     "multer": "^1.4.5-lts.1",
-    "node-fetch": "^2.7.0",
-    "passport": "^0.7.0",
-    "passport-jwt": "^4.0.1",
-    "pdf-parse": "^1.1.1",
     "prom-client": "^15.1.3",
-    "redis": "^4.6.10",
-    "sharp": "^0.33.5",
-    "socket.io": "^4.7.2",
-    "swagger-jsdoc": "^6.2.8",
-    "swagger-ui-express": "^5.0.0",
     "uuid": "^9.0.1",
-    "winston": "^3.11.0",
-    "ws": "^8.14.2",
-    "xlsx": "^0.18.5"
+    "winston": "^3.11.0"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",
@@ -80,91 +51,19 @@
     "npm": ">=9.0.0"
   },
   "keywords": [
-    "ai",
-    "artificial-intelligence",
-    "machine-learning",
-    "ecosystem",
-    "pwa",
-    "firebase",
-    "multimodal",
-    "gpu-cluster",
-    "vector-database",
-    "knowledge-graph",
-    "agent-framework",
-    "llm"
+    "ai", "superintelligence", "si", "multimodal",
+    "pwa", "firebase", "vector-database", "agent-framework", "llm", "africa"
   ],
   "author": "CephasGM",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/cephasgm/cephasgm-ai.git"
+    "url": "https://github.com/cephasgm/CephasGM-AI.git"
   },
-  "bugs": {
-    "url": "https://github.com/cephasgm/cephasgm-ai/issues"
-  },
-  "homepage": "https://cephasgm.ai",
+  "bugs": { "url": "https://github.com/cephasgm/CephasGM-AI/issues" },
+  "homepage": "https://cephasgm-ai.onrender.com",
   "jest": {
     "testEnvironment": "node",
-    "coveragePathIgnorePatterns": [
-      "/node_modules/",
-      "/frontend/",
-      "/functions/"
-    ]
-  },
-  "phase1": {
-    "name": "Basic PWA with Firebase Auth",
-    "files": [
-      "index.html",
-      "manifest.json",
-      "sw.js",
-      "login-signup.html"
-    ]
-  },
-  "phase2": {
-    "name": "AI Features with Firebase Functions",
-    "files": [
-      "app.js",
-      "ai.js",
-      "upload.js",
-      "voice.js",
-      "image.js",
-      "memory.js",
-      "agents.js"
-    ]
-  },
-  "phase3": {
-    "name": "Multi-Agent System",
-    "files": [
-      "backend/agents/",
-      "backend/ai/",
-      "gpu/",
-      "memory/"
-    ]
-  },
-  "phase4": {
-    "name": "AI Operating System",
-    "files": [
-      "core/",
-      "agents/planner-agent.js",
-      "agents/research-agent.js",
-      "agents/coding-agent.js",
-      "agents/automation-agent.js"
-    ]
-  },
-  "phase5": {
-    "name": "AI Infrastructure Platform",
-    "files": [
-      "platform/",
-      "cloud/",
-      "cluster/"
-    ]
-  },
-  "phase6": {
-    "name": "Complete AI Ecosystem",
-    "files": [
-      "ecosystem/",
-      "multimodal/",
-      "learning/"
-    ]
+    "coveragePathIgnorePatterns": ["/node_modules/", "/client/", "/functions/"]
   }
 }
