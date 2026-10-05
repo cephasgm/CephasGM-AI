@@ -1,210 +1,780 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Login - CephasGM AI</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0b0d10">
+<meta name="description" content="Sign in to CephasGM SI — Superintelligence for Africa">
+<title>Sign in — CephasGM SI</title>
 <link rel="manifest" href="manifest.json">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🤖</text></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2222%22 fill=%22%230b0d10%22/><text x=%2250%22 y=%2268%22 font-size=%2260%22 font-family=%22Georgia,serif%22 fill=%22%23f5b301%22 text-anchor=%22middle%22>SI</text></svg>">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Cephas SI">
+
 <style>
-body{
-margin:0;
-font-family:Arial, Helvetica, sans-serif;
-background-image:url("https://images.unsplash.com/photo-1508672019048-805c876b67e2");
-background-size:cover;
-background-position:center;
-color:white;
+:root {
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-serif: Georgia, "Times New Roman", serif;
+  --accent: #f5b301;
+  --accent-hover: #ffc72c;
+  --accent-soft: rgba(245, 179, 1, 0.12);
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 22px;
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur: 180ms;
 }
-.overlay{
-background:rgba(0,0,0,0.7);
-min-height:100vh;
-display:flex;
-flex-direction:column;
-align-items:center;
-justify-content:center;
-padding:20px;
+
+html[data-theme="dark"] {
+  --bg: #0b0d10;
+  --bg-elev: #12151a;
+  --bg-elev-2: #171b22;
+  --surface: #1a1f27;
+  --surface-hover: #222834;
+  --border: #232a35;
+  --border-strong: #2e3645;
+  --text: #e8eaed;
+  --text-muted: #9aa3b2;
+  --text-dim: #6b7382;
 }
-.auth-box{
-background:rgba(0,0,0,0.5);
-backdrop-filter:blur(10px);
-padding:40px;
-border-radius:20px;
-width:90%;
-max-width:400px;
-text-align:center;
-border:1px solid rgba(255,179,0,0.3);
+
+html[data-theme="light"] {
+  --bg: #ffffff;
+  --bg-elev: #f7f8fa;
+  --bg-elev-2: #eef0f4;
+  --surface: #ffffff;
+  --surface-hover: #f2f3f7;
+  --border: #e3e6eb;
+  --border-strong: #d0d5dd;
+  --text: #14181f;
+  --text-muted: #5b6472;
+  --text-dim: #8a92a0;
 }
-h2{
-color:#ffb300;
-font-size:2.5rem;
-margin:0 0 10px 0;
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+
+body {
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.5;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
 }
-h3{
-margin:0 0 30px 0;
-font-weight:normal;
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+button { font-family: inherit; cursor: pointer; }
+button:disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* Focus ring */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
 }
-input{
-width:100%;
-padding:15px;
-margin:10px 0;
-border-radius:30px;
-border:none;
-font-size:16px;
-box-sizing:border-box;
+
+/* ============================================================
+   Layout
+   ============================================================ */
+.auth-shell {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 20px;
+  background:
+    radial-gradient(1200px 600px at 50% -20%, rgba(245, 179, 1, 0.05), transparent 60%),
+    var(--bg);
 }
-input:focus{
-outline:2px solid #ffb300;
+
+.auth-card {
+  width: 100%;
+  max-width: 420px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  padding: 36px 32px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
 }
-.button-group{
-display:flex;
-gap:10px;
-justify-content:center;
-margin-top:20px;
+
+/* Brand */
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 6px;
+  justify-content: center;
 }
-button{
-flex:1;
-padding:12px 20px;
-font-size:16px;
-border:none;
-border-radius:30px;
-cursor:pointer;
-background:#ffb300;
-color:black;
-font-weight:bold;
-max-width:150px;
-transition:all 0.3s;
+.brand-mark {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--accent) 0%, #c98f00 100%);
+  display: grid;
+  place-items: center;
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: 17px;
+  color: #0b0d10;
+  letter-spacing: -0.5px;
 }
-button:hover{
-transform:scale(1.05);
-background:#ffa000;
+.brand-name {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.4px;
+  color: var(--text);
 }
-.back-link{
-margin-top:20px;
+.brand-name span { color: var(--accent); }
+
+.tagline {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13.5px;
+  margin-bottom: 28px;
 }
-.back-link a{
-color:#ffb300;
-text-decoration:none;
+
+/* Tabs (Sign in / Sign up) */
+.mode-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--bg-elev-2);
+  border-radius: var(--radius-md);
+  margin-bottom: 22px;
 }
-.back-link a:hover{
-text-decoration:underline;
+.mode-tab {
+  flex: 1;
+  padding: 9px 12px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 13.5px;
+  font-weight: 500;
+  border-radius: var(--radius-sm);
+  transition: all var(--dur) var(--ease);
 }
-.message{
-margin-top:15px;
-padding:10px;
-border-radius:5px;
-display:none;
+.mode-tab:hover { color: var(--text); }
+.mode-tab.active {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
-.message.show{
-display:block;
+
+/* Form */
+.field {
+  display: block;
+  margin-bottom: 14px;
 }
-.message.error{
-background:rgba(220,53,69,0.3);
-color:#ffb3b3;
+.field-label {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-bottom: 6px;
 }
-.message.success{
-background:rgba(40,167,69,0.3);
-color:#b3ffb3;
+.field-wrap { position: relative; }
+
+.field input {
+  width: 100%;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  color: var(--text);
+  font-size: 14.5px;
+  transition: all var(--dur) var(--ease);
+}
+.field input::placeholder { color: var(--text-dim); }
+.field input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.field input[aria-invalid="true"] {
+  border-color: #e74c3c;
+  box-shadow: 0 0 0 3px rgba(231, 76, 60, 0.12);
+}
+
+.toggle-pw {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+.toggle-pw:hover { color: var(--text); background: var(--surface-hover); }
+
+.hint {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-top: 6px;
+  min-height: 15px;
+}
+
+/* Password strength */
+.strength {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+  margin-top: 8px;
+  overflow: hidden;
+}
+.strength-bar {
+  height: 100%;
+  width: 0;
+  background: #e74c3c;
+  transition: width var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+.strength-label {
+  font-size: 11.5px;
+  color: var(--text-dim);
+  margin-top: 5px;
+}
+
+/* Submit */
+.submit-btn {
+  width: 100%;
+  background: var(--accent);
+  color: #0b0d10;
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 12px 18px;
+  font-size: 14.5px;
+  font-weight: 600;
+  margin-top: 6px;
+  transition: all var(--dur) var(--ease);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.submit-btn:hover:not(:disabled) { background: var(--accent-hover); }
+
+.spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(11, 13, 16, 0.3);
+  border-top-color: #0b0d10;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  display: none;
+}
+.submit-btn.loading .spinner { display: inline-block; }
+.submit-btn.loading .label { opacity: 0.8; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Message */
+.message {
+  margin-top: 16px;
+  padding: 11px 14px;
+  border-radius: var(--radius-md);
+  font-size: 13.5px;
+  display: none;
+  border: 1px solid transparent;
+}
+.message.show { display: block; }
+.message.error   { background: rgba(231, 76, 60, 0.10); color: #ff8a80; border-color: rgba(231, 76, 60, 0.3); }
+.message.success { background: rgba(46, 204, 113, 0.10); color: #7ee2a8; border-color: rgba(46, 204, 113, 0.3); }
+.message.info    { background: rgba(52, 152, 219, 0.10); color: #74b9ff; border-color: rgba(52, 152, 219, 0.3); }
+
+/* Secondary actions */
+.row-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.link-btn {
+  background: transparent;
+  border: none;
+  color: var(--accent);
+  font-size: 13px;
+  padding: 0;
+}
+.link-btn:hover { text-decoration: underline; }
+.link-btn:disabled { color: var(--text-dim); }
+
+/* Divider */
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 22px 0;
+  font-size: 11.5px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.divider::before, .divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.back-link {
+  display: block;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: 20px;
+}
+.back-link:hover { color: var(--text); text-decoration: none; }
+
+/* Terms note */
+.terms {
+  font-size: 11.5px;
+  color: var(--text-dim);
+  text-align: center;
+  margin-top: 18px;
+  line-height: 1.5;
+}
+.terms a { color: var(--text-muted); text-decoration: underline; }
+
+/* Footer */
+.footer {
+  padding: 16px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-dim);
+  border-top: 1px solid var(--border);
+  background: var(--bg-elev);
+}
+
+/* SDK failure notice */
+.sdk-error {
+  display: none;
+  max-width: 420px;
+  margin: 0 auto 16px;
+  padding: 12px 14px;
+  border: 1px solid rgba(231, 76, 60, 0.4);
+  border-radius: var(--radius-md);
+  background: rgba(231, 76, 60, 0.10);
+  color: #ff8a80;
+  font-size: 13px;
+  text-align: center;
+}
+.sdk-error.show { display: block; }
+
+@media (max-width: 480px) {
+  .auth-card { padding: 28px 22px; }
+  .brand-name { font-size: 19px; }
 }
 </style>
 </head>
 <body>
-<div class="overlay">
-<div class="auth-box">
-<h2>CephasGM AI</h2>
-<h3>Login / Signup</h3>
-<input type="email" id="email" placeholder="Email" required>
-<input type="password" id="password" placeholder="Password" required>
-<div class="button-group">
-<button onclick="handleSignup()">Sign Up</button>
-<button onclick="handleLogin()">Log In</button>
-</div>
-<div class="back-link">
-<a href="index.html">← Back to Home</a>
-</div>
-<div id="message" class="message"></div>
-</div>
-</div>
 
+<main class="auth-shell">
+  <div style="width:100%;max-width:420px;">
+    <div id="sdkError" class="sdk-error" role="alert">
+      Could not reach the authentication service. Check your connection and reload.
+    </div>
+
+    <div class="auth-card">
+      <div class="brand">
+        <div class="brand-mark">SI</div>
+        <div class="brand-name">CephasGM <span>SI</span></div>
+      </div>
+      <div class="tagline" id="tagline">Superintelligence for Africa</div>
+
+      <div class="mode-tabs" role="tablist" aria-label="Authentication mode">
+        <button class="mode-tab active" id="tabLogin" role="tab" aria-selected="true" type="button">Sign in</button>
+        <button class="mode-tab" id="tabSignup" role="tab" aria-selected="false" type="button">Create account</button>
+      </div>
+
+      <form id="authForm" novalidate>
+        <div class="field">
+          <label class="field-label" for="email">Email</label>
+          <div class="field-wrap">
+            <input
+              type="email"
+              id="email"
+              name="email"
+              placeholder="you@example.com"
+              autocomplete="email"
+              inputmode="email"
+              required
+              aria-required="true"
+            >
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="password">Password</label>
+          <div class="field-wrap">
+            <input
+              type="password"
+              id="password"
+              name="password"
+              placeholder="Enter your password"
+              autocomplete="current-password"
+              required
+              aria-required="true"
+              minlength="6"
+            >
+            <button
+              type="button"
+              class="toggle-pw"
+              id="togglePw"
+              aria-label="Show password"
+              aria-pressed="false"
+            >Show</button>
+          </div>
+          <div id="pwStrength" style="display:none;">
+            <div class="strength"><div class="strength-bar" id="strengthBar"></div></div>
+            <div class="strength-label" id="strengthLabel">Password strength</div>
+          </div>
+          <div class="hint" id="pwHint"></div>
+        </div>
+
+        <button type="submit" class="submit-btn" id="submitBtn">
+          <span class="spinner" aria-hidden="true"></span>
+          <span class="label" id="submitLabel">Sign in</span>
+        </button>
+      </form>
+
+      <div class="row-between">
+        <button type="button" class="link-btn" id="forgotBtn">Forgot password?</button>
+        <button type="button" class="link-btn" id="resendBtn" style="display:none;">Resend verification</button>
+      </div>
+
+      <div class="message" id="message" role="status" aria-live="polite"></div>
+
+      <div class="terms" id="termsNote" style="display:none;">
+        By creating an account you agree to our
+        <a href="#" id="termsLink">Terms of Service</a> and
+        <a href="#" id="privacyLink">Privacy Policy</a>.
+      </div>
+
+      <a class="back-link" href="index.html">← Back to home</a>
+    </div>
+  </div>
+</main>
+
+<footer class="footer">
+  Copyright © 2025 Cephas GM | Innovating for Tomorrow
+</footer>
+
+<!-- ============================================================
+     Firebase SDK (compat build — matches index.html)
+     ============================================================ -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 
+<!-- Config — single source of truth -->
+<script src="config.js"></script>
+
 <script>
-// Firebase configuration
-const firebaseConfig = {
-  apiKey: "AIzaSyAukJQx3pEqXoyFR9tyfeLckJaBIgYtGFA",
-  authDomain: "cephasgm-ai.firebaseapp.com",
-  projectId: "cephasgm-ai",
-  storageBucket: "cephasgm-ai.firebasestorage.app",
-  messagingSenderId: "304163647028",
-  appId: "1:304163647028:web:2920b2cfb9be4049806461"
-};
+/* ============================================================
+   Bootstrap
+   ============================================================ */
+(function () {
+  'use strict';
 
-// Initialize Firebase
-const app = firebase.initializeApp(firebaseConfig);
-const auth = firebase.auth();
+  // ---- 1. Firebase config: prefer config.js, fall back inline --------
+  const FALLBACK_FIREBASE = {
+    apiKey: "AIzaSyAukJQx3pEqXoyFR9tyfeLckJaBIgYtGFA",
+    authDomain: "cephasgm-ai.firebaseapp.com",
+    projectId: "cephasgm-ai",
+    storageBucket: "cephasgm-ai.firebasestorage.app",
+    messagingSenderId: "304163647028",
+    appId: "1:304163647028:web:2920b2cfb9be4049806461"
+  };
+  const firebaseConfig = (window.CEPHASGM_CONFIG && window.CEPHASGM_CONFIG.FIREBASE) || FALLBACK_FIREBASE;
 
-// Show message function
-function showMessage(text, type) {
-  const msgDiv = document.getElementById('message');
-  msgDiv.textContent = text;
-  msgDiv.className = 'message ' + type + ' show';
-}
-
-// Sign up function
-window.handleSignup = function() {
-  const email = document.getElementById('email').value.trim();
-  const password = document.getElementById('password').value;
-
-  if (!email || !password) {
-    showMessage('Please fill in all fields', 'error');
+  // ---- 2. SDK presence check ----------------------------------------
+  const sdkError = document.getElementById('sdkError');
+  if (!window.firebase || !firebase.auth) {
+    sdkError.classList.add('show');
+    console.error('[login] Firebase SDK failed to load');
     return;
   }
 
-  if (password.length < 6) {
-    showMessage('Password must be at least 6 characters', 'error');
-    return;
+  // Avoid double-init if config.js already initialized on some loads
+  const app = firebase.apps.length ? firebase.app() : firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+
+  // ---- 3. DOM refs ---------------------------------------------------
+  const form        = document.getElementById('authForm');
+  const emailEl     = document.getElementById('email');
+  const pwEl        = document.getElementById('password');
+  const togglePw    = document.getElementById('togglePw');
+  const submitBtn   = document.getElementById('submitBtn');
+  const submitLabel = document.getElementById('submitLabel');
+  const msgEl       = document.getElementById('message');
+  const tabLogin    = document.getElementById('tabLogin');
+  const tabSignup   = document.getElementById('tabSignup');
+  const forgotBtn   = document.getElementById('forgotBtn');
+  const resendBtn   = document.getElementById('resendBtn');
+  const termsNote   = document.getElementById('termsNote');
+  const pwHint      = document.getElementById('pwHint');
+  const pwStrength  = document.getElementById('pwStrength');
+  const strengthBar = document.getElementById('strengthBar');
+  const strengthLbl = document.getElementById('strengthLabel');
+
+  // ---- 4. State ------------------------------------------------------
+  let mode = 'login';       // 'login' | 'signup'
+  let busy = false;
+  let pendingEmailForResend = null;
+
+  // ---- 5. UI helpers -------------------------------------------------
+  function showMessage(text, type = 'error') {
+    msgEl.textContent = text;
+    msgEl.className = `message show ${type}`;
+  }
+  function clearMessage() {
+    msgEl.textContent = '';
+    msgEl.className = 'message';
+  }
+  function setBusy(on, label) {
+    busy = on;
+    submitBtn.disabled = on;
+    submitBtn.classList.toggle('loading', on);
+    if (label) submitLabel.textContent = label;
+  }
+  function setMode(next) {
+    mode = next;
+    const isSignup = next === 'signup';
+    tabLogin.classList.toggle('active', !isSignup);
+    tabSignup.classList.toggle('active', isSignup);
+    tabLogin.setAttribute('aria-selected', String(!isSignup));
+    tabSignup.setAttribute('aria-selected', String(isSignup));
+    submitLabel.textContent = isSignup ? 'Create account' : 'Sign in';
+    pwEl.setAttribute('autocomplete', isSignup ? 'new-password' : 'current-password');
+    termsNote.style.display = isSignup ? 'block' : 'none';
+    forgotBtn.style.display = isSignup ? 'none' : 'inline-block';
+    resendBtn.style.display = 'none';
+    pwStrength.style.display = isSignup ? 'block' : 'none';
+    pwHint.textContent = isSignup ? 'At least 6 characters.' : '';
+    clearMessage();
   }
 
-  auth.createUserWithEmailAndPassword(email, password)
-    .then(() => {
-      showMessage('Signup successful! Redirecting...', 'success');
-      setTimeout(() => {
-        window.location.href = 'index.html';
-      }, 1500);
-    })
-    .catch((error) => {
-      showMessage(error.message, 'error');
-    });
-};
-
-// Login function
-window.handleLogin = function() {
-  const email = document.getElementById('email').value.trim();
-  const password = document.getElementById('password').value;
-
-  if (!email || !password) {
-    showMessage('Please fill in all fields', 'error');
-    return;
+  // ---- 6. Error mapping ---------------------------------------------
+  function friendlyError(err) {
+    const code = err && err.code ? err.code : '';
+    const map = {
+      'auth/invalid-email':          'That email address doesn\'t look right.',
+      'auth/user-disabled':          'This account has been disabled. Contact support.',
+      'auth/user-not-found':         'No account found with that email. Try creating one.',
+      'auth/wrong-password':         'Incorrect password. Try again or reset it.',
+      'auth/invalid-credential':     'Email or password is incorrect.',
+      'auth/invalid-login-credentials': 'Email or password is incorrect.',
+      'auth/email-already-in-use':   'That email is already registered. Try signing in instead.',
+      'auth/weak-password':          'Password is too weak. Use at least 6 characters.',
+      'auth/too-many-requests':      'Too many attempts. Please wait a moment and try again.',
+      'auth/network-request-failed': 'Network error. Check your connection and try again.',
+      'auth/operation-not-allowed':  'This sign-in method is not enabled. Contact support.',
+      'auth/missing-email':          'Please enter your email address.'
+    };
+    return map[code] || (err && err.message) || 'Something went wrong. Please try again.';
   }
 
-  auth.signInWithEmailAndPassword(email, password)
-    .then(() => {
-      showMessage('Login successful! Redirecting...', 'success');
-      setTimeout(() => {
-        window.location.href = 'index.html';
-      }, 1500);
-    })
-    .catch((error) => {
-      showMessage(error.message, 'error');
-    });
-};
-
-// Check if already logged in
-auth.onAuthStateChanged((user) => {
-  if (user) {
-    window.location.href = 'index.html';
+  // ---- 7. Password strength -----------------------------------------
+  function scorePassword(pw) {
+    let score = 0;
+    if (pw.length >= 6)  score++;
+    if (pw.length >= 10) score++;
+    if (/[A-Z]/.test(pw) && /[a-z]/.test(pw)) score++;
+    if (/\d/.test(pw))   score++;
+    if (/[^A-Za-z0-9]/.test(pw)) score++;
+    return Math.min(score, 4); // 0..4
   }
-});
+  function renderStrength(pw) {
+    const s = scorePassword(pw);
+    const pct = [0, 25, 50, 75, 100][s];
+    const colors = ['#e74c3c', '#e74c3c', '#f39c12', '#2ecc71', '#27ae60'];
+    const labels = ['Too short', 'Weak', 'Fair', 'Strong', 'Excellent'];
+    strengthBar.style.width = pct + '%';
+    strengthBar.style.background = colors[s];
+    strengthLbl.textContent = pw ? labels[s] : 'Password strength';
+  }
+  pwEl.addEventListener('input', () => {
+    if (mode === 'signup') renderStrength(pwEl.value);
+  });
+
+  // ---- 8. Toggle password visibility --------------------------------
+  togglePw.addEventListener('click', () => {
+    const showing = pwEl.type === 'text';
+    pwEl.type = showing ? 'password' : 'text';
+    togglePw.textContent = showing ? 'Show' : 'Hide';
+    togglePw.setAttribute('aria-pressed', String(!showing));
+    togglePw.setAttribute('aria-label', showing ? 'Show password' : 'Hide password');
+    pwEl.focus();
+  });
+
+  // ---- 9. Mode tabs --------------------------------------------------
+  tabLogin.addEventListener('click', () => setMode('login'));
+  tabSignup.addEventListener('click', () => setMode('signup'));
+
+  // ---- 10. Validation ------------------------------------------------
+  function validateInputs() {
+    emailEl.setAttribute('aria-invalid', 'false');
+    pwEl.setAttribute('aria-invalid', 'false');
+
+    const email = emailEl.value.trim();
+    const pw = pwEl.value;
+
+    if (!email) {
+      emailEl.setAttribute('aria-invalid', 'true');
+      emailEl.focus();
+      showMessage('Please enter your email address.');
+      return null;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      emailEl.setAttribute('aria-invalid', 'true');
+      emailEl.focus();
+      showMessage('That email address doesn\'t look right.');
+      return null;
+    }
+    if (!pw) {
+      pwEl.setAttribute('aria-invalid', 'true');
+      pwEl.focus();
+      showMessage('Please enter your password.');
+      return null;
+    }
+    if (mode === 'signup' && pw.length < 6) {
+      pwEl.setAttribute('aria-invalid', 'true');
+      pwEl.focus();
+      showMessage('Password must be at least 6 characters.');
+      return null;
+    }
+    return { email, password: pw };
+  }
+
+  // ---- 11. Submit handler -------------------------------------------
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (busy) return;
+    clearMessage();
+
+    const values = validateInputs();
+    if (!values) return;
+
+    setBusy(true, mode === 'signup' ? 'Creating account…' : 'Signing in…');
+
+    try {
+      if (mode === 'signup') {
+        const cred = await auth.createUserWithEmailAndPassword(values.email, values.password);
+
+        // Send real verification email (no fake)
+        try {
+          if (cred.user && !cred.user.emailVerified) {
+            await cred.user.sendEmailVerification();
+            pendingEmailForResend = values.email;
+            resendBtn.style.display = 'inline-block';
+          }
+        } catch (e) {
+          console.warn('[signup] verification email failed', e.message);
+        }
+
+        showMessage('Account created. Check your inbox to verify your email.', 'success');
+        setTimeout(() => { window.location.href = 'index.html'; }, 1800);
+      } else {
+        await auth.signInWithEmailAndPassword(values.email, values.password);
+        showMessage('Signed in. Redirecting…', 'success');
+        setTimeout(() => { window.location.href = 'index.html'; }, 800);
+      }
+    } catch (err) {
+      showMessage(friendlyError(err), 'error');
+      setBusy(false, mode === 'signup' ? 'Create account' : 'Sign in');
+    }
+  });
+
+  // ---- 12. Forgot password ------------------------------------------
+  forgotBtn.addEventListener('click', async () => {
+    const email = emailEl.value.trim();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      showMessage('Enter your email first, then click "Forgot password?".', 'info');
+      emailEl.focus();
+      return;
+    }
+    forgotBtn.disabled = true;
+    try {
+      await auth.sendPasswordResetEmail(email);
+      showMessage('Reset link sent. Check your inbox.', 'success');
+    } catch (err) {
+      showMessage(friendlyError(err), 'error');
+    } finally {
+      forgotBtn.disabled = false;
+    }
+  });
+
+  // ---- 13. Resend verification --------------------------------------
+  resendBtn.addEventListener('click', async () => {
+    const user = auth.currentUser;
+    if (!user && !pendingEmailForResend) {
+      showMessage('Sign in first, then resend verification.', 'info');
+      return;
+    }
+    resendBtn.disabled = true;
+    try {
+      if (user) {
+        await user.sendEmailVerification();
+        showMessage('Verification email sent.', 'success');
+      } else {
+        // We can't resend without a signed-in user in Firebase; guide the user.
+        showMessage('Please sign in to resend verification.', 'info');
+      }
+    } catch (err) {
+      showMessage(friendlyError(err), 'error');
+    } finally {
+      resendBtn.disabled = false;
+    }
+  });
+
+  // ---- 14. Terms links (safe no-ops, no fake pages) -----------------
+  document.getElementById('termsLink').addEventListener('click', (e) => {
+    e.preventDefault();
+    showMessage('Terms of Service will be published at cephasgm.ai/terms.', 'info');
+  });
+  document.getElementById('privacyLink').addEventListener('click', (e) => {
+    e.preventDefault();
+    showMessage('Privacy Policy will be published at cephasgm.ai/privacy.', 'info');
+  });
+
+  // ---- 15. Already-signed-in redirect -------------------------------
+  //     Skip the redirect if we just signed in (avoid double navigation).
+  let justSignedIn = false;
+  auth.onAuthStateChanged((user) => {
+    if (user && !justSignedIn && !busy) {
+      window.location.href = 'index.html';
+    }
+  });
+
+  // Mark flag right before navigating away
+  form.addEventListener('submit', () => {
+    // fired before the async handler completes; set on success path below
+  });
+
+  // ---- 16. Initial mode ---------------------------------------------
+  setMode('login');
+
+  // ---- 17. Restore email if provided via query (?email=...) ---------
+  const params = new URLSearchParams(location.search);
+  const presetEmail = params.get('email');
+  if (presetEmail) emailEl.value = presetEmail;
+
+  // Focus first empty field
+  (emailEl.value ? pwEl : emailEl).focus();
+
+})();
 </script>
 </body>
 </html>
