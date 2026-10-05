@@ -1,28 +1,105 @@
+# CephasGM SI — Render Blueprint
+# Docs: https://render.com/docs/blueprint-spec
+#
+# NOTE: This assumes api/server.js is the entrypoint.
+# If package.json start = "node server.js", first apply the shim in the
+# "Server Entrypoint" section at the bottom of this file.
+
 services:
   - type: web
-    name: cephasgm-ai
+    name: cephasgm-si
     runtime: node
-    repo: https://github.com/cephasgm/CephasGM-AI
+    region: frankfurt                  # closest to East Africa; change if needed
+    plan: starter                      # free tier cold-starts; starter stays warm
     branch: main
-    buildCommand: npm install && npm run build:react
-    startCommand: npm start
+    autoDeploy: true
     healthCheckPath: /health
+    buildCommand: npm ci --omit=dev && npm run build:react
+    startCommand: npm start
+    nodeVersion: 20                    # pinned; matches .node-version if present
+
+    # Only rebuild when these change (avoids doc-only rebuilds)
+    buildFilter:
+      paths:
+        - api/**
+        - backend/**
+        - functions/**
+        - cloud/**
+        - memory/**
+        - multimodal/**
+        - agents/**
+        - ecosystem/**
+        - cluster/**
+        - client/**
+        - public/**
+        - package.json
+        - package-lock.json
+        - render.yaml
+      ignoredPaths:
+        - "**/*.md"
+        - "docs/**"
+        - ".github/**"
+
     envVars:
+      # ── Core ──────────────────────────────────────────────────
       - key: NODE_ENV
         value: production
+
+      # ── CORS (must include every origin that calls the API) ───
+      - key: CORS_ALLOWLIST
+        value: https://cephasgm-ai.onrender.com,https://cephasgm-ai.web.app,https://cephasgm-ai.firebaseapp.com
+
+      # ── Firebase Admin (admin panel, /v1 auth, role updates) ──
+      # Paste the full service-account JSON (single line) as the value.
+      # Create at: Firebase Console → Project Settings → Service Accounts → Generate new private key
+      - key: FIREBASE_ADMIN_JSON
+        sync: false
+
+      # ── Inference backends (pick at least one) ────────────────
+      # Local / edge Ollama
+      - key: OLLAMA_URL
+        sync: false                    # e.g. http://your-ollama-host:11434
+      - key: OLLAMA_MODEL
+        value: llama3.2
+
+      # OpenAI (or any OpenAI-compatible endpoint)
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_BASE
+        value: https://api.openai.com/v1
+      - key: OPENAI_MODEL
+        value: gpt-4o-mini
+
+      # DeepSeek (OpenAI-compatible base URL)
+      - key: DEEPSEEK_API_KEY
+        sync: false
+      # To route DeepSeek through the OpenAI adapter, set:
+      #   OPENAI_BASE=https://api.deepseek.com/v1
+      #   OPENAI_MODEL=deepseek-chat
+
+      # ── Commercial layer (Review #5) ──────────────────────────
+      # Comma-separated bootstrap keys. Real tenants get keys in Firestore.
+      - key: CEPHASGM_API_KEYS
+        sync: false
+      # 32+ random chars. Generate: openssl rand -hex 32
+      - key: EDGE_LICENSE_SECRET
+        sync: false
+      - key: EDGE_LICENSE_ISSUER
+        value: cephasgm-si
+
+      # ── Optional observability ────────────────────────────────
+      - key: SENTRY_DSN
+        sync: false
+      # (Sentry is not wired in code yet — reserved for a future pass)
+
+      # ── Legacy vars kept for compatibility ────────────────────
+      # These are NOT read by the new server; leave them if other
+      # branches/scripts still reference them, otherwise remove.
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_KEY
         sync: false
-      - key: OLLAMA_API_KEY
-        sync: false
-      - key: OPENAI_API_KEY
-        sync: false
       - key: STABILITY_KEY
         sync: false
       - key: REPLICATE_API_TOKEN
-        sync: false
-      - key: DEEPSEEK_API_KEY
-        sync: false
-      - key: SENTRY_DSN
         sync: false
