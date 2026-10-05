@@ -1,921 +1,1455 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CephasGM AI - Phase 6</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0b0d10">
+<meta name="description" content="CephasGM SI — Superintelligence for Africa. Multimodal AI platform.">
+<title>CephasGM SI</title>
 <link rel="manifest" href="manifest.json">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🤖</text></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2222%22 fill=%22%230b0d10%22/><text x=%2250%22 y=%2268%22 font-size=%2260%22 font-family=%22Georgia,serif%22 fill=%22%23f5b301%22 text-anchor=%22middle%22>SI</text></svg>">
 
-<!-- Markdown rendering library -->
-<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<!-- Sanitizer (real, replaces regex hack) -->
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
+<!-- Markdown renderer -->
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
 
 <style>
-/* [All existing styles remain exactly as in your file – unchanged for brevity] */
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
+/* ==========================================================================
+   CephasGM SI — Design System
+   Theme: Professional & Classic (Linear / Vercel / Claude aesthetic)
+   ========================================================================== */
+:root {
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-serif: Georgia, "Times New Roman", serif;
+  --font-mono: "SF Mono", "JetBrains Mono", Consolas, monospace;
+
+  --accent: #f5b301;          /* Cephas gold — used sparingly */
+  --accent-hover: #ffc72c;
+  --accent-soft: rgba(245, 179, 1, 0.12);
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 22px;
+  --radius-pill: 999px;
+
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.24);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.32);
+  --shadow-lg: 0 12px 40px rgba(0,0,0,0.45);
+
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur: 180ms;
+
+  --sidebar-w: 272px;
+  --header-h: 56px;
 }
+
+html[data-theme="dark"] {
+  --bg: #0b0d10;
+  --bg-elev: #12151a;
+  --bg-elev-2: #171b22;
+  --surface: #1a1f27;
+  --surface-hover: #222834;
+  --border: #232a35;
+  --border-strong: #2e3645;
+  --text: #e8eaed;
+  --text-muted: #9aa3b2;
+  --text-dim: #6b7382;
+  --overlay: rgba(0,0,0,0.6);
+}
+
+html[data-theme="light"] {
+  --bg: #ffffff;
+  --bg-elev: #f7f8fa;
+  --bg-elev-2: #eef0f4;
+  --surface: #ffffff;
+  --surface-hover: #f2f3f7;
+  --border: #e3e6eb;
+  --border-strong: #d0d5dd;
+  --text: #14181f;
+  --text-muted: #5b6472;
+  --text-dim: #8a92a0;
+  --overlay: rgba(0,0,0,0.3);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body { height: 100%; }
+
 body {
-  margin: 0;
-  font-family: Arial, Helvetica, sans-serif;
-  background-image: url("https://images.unsplash.com/photo-1508672019048-805c876b67e2");
-  background-size: cover;
-  background-position: center;
-  color: white;
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.5;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;
 }
-.overlay {
-  background: rgba(0,0,0,0.7);
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 20px;
-  flex: 1;
+
+button { font-family: inherit; cursor: pointer; }
+input, textarea, select { font-family: inherit; color: inherit; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* Focus ring — accessible everywhere */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
 }
-.container {
-  width: 100%;
-  max-width: 1200px;
-  flex: 1;
+
+/* ==========================================================================
+   Layout shell
+   ========================================================================== */
+.app {
+  display: grid;
+  grid-template-columns: var(--sidebar-w) 1fr;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
 }
-h1 {
-  font-size: 3rem;
-  margin-bottom: 10px;
-  text-align: center;
-  color: #ffb300;
-  text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+
+.app[data-sidebar="collapsed"] {
+  grid-template-columns: 0 1fr;
 }
-.subtitle {
-  text-align: center;
-  margin-bottom: 30px;
-  font-size: 1.2rem;
-  opacity: 0.9;
-}
-.user-info {
-  position: absolute;
-  top: 20px;
-  right: 20px;
-  background: rgba(0,0,0,0.7);
-  padding: 10px 20px;
-  border-radius: 30px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  border: 1px solid #ffb300;
-  z-index: 100;
-}
-.user-email {
-  color: #ffb300;
-  font-size: 14px;
-}
-.role-badge {
-  margin-left: 10px;
-  padding: 2px 8px;
-  border-radius: 12px;
-  font-size: 12px;
-  font-weight: bold;
-}
-.role-badge.user {
-  background: #555;
-  color: white;
-}
-.role-badge.premium {
-  background: #ffb300;
-  color: black;
-}
-.role-badge.admin {
-  background: #ffb300;
-  color: black;
-}
-.logout-btn {
-  padding: 5px 15px;
-  font-size: 12px;
-  margin: 0;
-  background: #dc3545;
-  color: white;
-  border: none;
-  border-radius: 20px;
-  cursor: pointer;
-}
-.logout-btn:hover {
-  background: #c82333;
-}
-.tab-nav {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 10px;
-  margin: 20px 0;
-  background: rgba(0,0,0,0.5);
-  padding: 15px;
-  border-radius: 50px;
-  backdrop-filter: blur(10px);
-}
-.tab-btn {
-  padding: 12px 25px;
-  font-size: 16px;
-  border: none;
-  border-radius: 30px;
-  cursor: pointer;
-  background: transparent;
-  color: white;
-  transition: all 0.3s;
-  font-weight: bold;
-}
-.tab-btn:hover {
-  background: rgba(255,179,0,0.2);
-}
-.tab-btn.active {
-  background: #ffb300;
-  color: black;
-}
-.tab-content {
-  display: none;
-  background: rgba(0,0,0,0.5);
-  backdrop-filter: blur(10px);
-  padding: 30px;
-  border-radius: 20px;
-  margin-top: 20px;
-  border: 1px solid rgba(255,179,0,0.3);
-  width: 100%;
-}
-.tab-content.active {
-  display: block;
-}
-.chat-layout {
-  display: flex;
-  gap: 20px;
-  width: 100%;
-}
+
+/* ==========================================================================
+   Sidebar
+   ========================================================================== */
 .sidebar {
-  width: 250px;
-  background: rgba(0,0,0,0.5);
-  border-radius: 20px;
-  padding: 15px;
-  backdrop-filter: blur(10px);
+  background: var(--bg-elev);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: transform var(--dur) var(--ease);
+}
+
+.app[data-sidebar="collapsed"] .sidebar {
+  transform: translateX(-100%);
+}
+
+/* Brand / logo — clickable, returns home */
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  height: var(--header-h);
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  border-left: none;
+  border-right: none;
+  border-top: none;
+  width: 100%;
+  text-align: left;
+  color: var(--text);
+  transition: background var(--dur) var(--ease);
+}
+.brand:hover { background: var(--surface-hover); }
+
+.brand-mark {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--accent) 0%, #c98f00 100%);
+  display: grid;
+  place-items: center;
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: 13px;
+  color: #0b0d10;
   flex-shrink: 0;
+  letter-spacing: -0.5px;
 }
-.sidebar h3 {
-  color: #ffb300;
-  margin-top: 0;
-  margin-bottom: 10px;
+.brand-name {
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: -0.2px;
 }
-.conversation-list {
-  list-style: none;
-  padding: 0;
-  margin: 10px 0;
-  max-height: 400px;
-  overflow-y: auto;
+.brand-name span { color: var(--accent); }
+.brand-tag {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-left: auto;
+  padding: 3px 7px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
 }
-.conversation-item {
-  padding: 8px 12px;
-  margin: 5px 0;
-  background: rgba(255,255,255,0.1);
-  border-radius: 30px;
-  cursor: pointer;
-  transition: 0.2s;
+
+/* New chat button */
+.sidebar-actions { padding: 12px; }
+
+.btn-new-chat {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  color: var(--text);
   font-size: 14px;
+  font-weight: 500;
+  transition: all var(--dur) var(--ease);
+}
+.btn-new-chat:hover {
+  background: var(--surface-hover);
+  border-color: var(--accent);
+}
+.btn-new-chat .icon { font-size: 16px; }
+
+/* Search */
+.sidebar-search {
+  padding: 0 12px 8px;
+}
+.sidebar-search input {
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text);
+  font-size: 13px;
+}
+.sidebar-search input::placeholder { color: var(--text-dim); }
+.sidebar-search input:focus { border-color: var(--accent); }
+
+/* Conversation list */
+.conv-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 8px 12px;
+}
+.conv-group-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+  padding: 12px 8px 6px;
+  font-weight: 600;
+}
+.conversation-list { list-style: none; }
+
+.conversation-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  margin: 1px 0;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-size: 13.5px;
+  color: var(--text-muted);
+  transition: all var(--dur) var(--ease);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.conversation-item:hover {
-  background: rgba(255,179,0,0.3);
-}
+.conversation-item:hover { background: var(--surface-hover); color: var(--text); }
 .conversation-item.active {
-  background: #ffb300;
-  color: black;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  padding: 7px 9px;
 }
-.new-chat-btn {
-  width: 100%;
-  padding: 10px;
-  background: #ffb300;
-  border: none;
-  border-radius: 30px;
-  margin-top: 10px;
-  cursor: pointer;
-  font-weight: bold;
-}
-.chat-box {
-  height: 400px;
-  overflow-y: auto;
-  padding: 20px;
-  background: rgba(0,0,0,0.3);
-  border-radius: 10px;
-  margin-bottom: 20px;
-}
-.message {
-  margin-bottom: 15px;
-  padding: 10px;
-  border-radius: 10px;
-  animation: fadeIn 0.3s;
-}
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-.user-message {
-  background: rgba(255,179,0,0.2);
-  margin-left: 20%;
-}
-.ai-message {
-  background: rgba(255,255,255,0.1);
-  margin-right: 20%;
-}
-.message-header {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 5px;
-  font-size: 0.9rem;
-  opacity: 0.8;
-}
-.timestamp {
-  font-size: 0.8rem;
-}
-.message-content {
-  line-height: 1.5;
-  white-space: pre-wrap;
-}
-.message-content p {
-  margin: 0 0 10px 0;
-}
-.message-content ul, .message-content ol {
-  margin: 5px 0 10px 20px;
-}
-.message-content li {
-  margin: 2px 0;
-}
-.message-content h1, .message-content h2, .message-content h3 {
-  margin: 10px 0 5px;
-}
-.message-content code {
-  background: rgba(0,0,0,0.3);
-  padding: 2px 5px;
-  border-radius: 5px;
-  font-family: monospace;
-}
-.message-content pre {
-  background: #1e1e1e;
-  padding: 10px;
-  border-radius: 5px;
-  overflow-x: auto;
-}
-.voice-btn {
-  background: #28a745 !important;
-  color: white !important;
-}
-.voice-btn.listening {
-  background: #dc3545 !important;
-  animation: pulse 1s infinite;
-}
-@keyframes pulse {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.05); }
-  100% { transform: scale(1); }
-}
-.image-input-area, .video-input-area {
-  display: flex;
-  gap: 10px;
-  margin: 20px 0;
-}
-.image-input-area input, .video-input-area input {
+.conversation-item .conv-title {
   flex: 1;
-  padding: 15px;
-  border-radius: 30px;
-  border: none;
-  font-size: 16px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.image-result, .video-result {
-  margin-top: 20px;
-  text-align: center;
-  min-height: 300px;
+.conversation-item .conv-del {
+  opacity: 0;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-size: 14px;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+}
+.conversation-item:hover .conv-del { opacity: 1; }
+.conversation-item .conv-del:hover { color: #ff6b6b; background: rgba(255,107,107,0.1); }
+
+/* Sidebar footer: user + theme */
+.sidebar-footer {
+  border-top: 1px solid var(--border);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.user-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px;
+  border-radius: var(--radius-md);
+}
+.user-avatar {
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  display: grid; place-items: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  flex-shrink: 0;
+}
+.user-meta { flex: 1; min-width: 0; }
+.user-email {
+  font-size: 13px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.user-role {
+  font-size: 11px;
+  color: var(--text-dim);
+  text-transform: capitalize;
+}
+.footer-actions {
+  display: flex;
+  gap: 6px;
+}
+.icon-btn {
+  flex: 1;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  padding: 7px;
+  font-size: 13px;
+  transition: all var(--dur) var(--ease);
+}
+.icon-btn:hover { background: var(--surface-hover); color: var(--text); }
+
+/* ==========================================================================
+   Main column
+   ========================================================================== */
+.main {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+/* Top bar */
+.topbar {
+  height: var(--header-h);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+  flex-shrink: 0;
+}
+.topbar-toggle {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  padding: 6px;
+  border-radius: var(--radius-sm);
+  display: none;
+}
+.topbar-toggle:hover { background: var(--surface-hover); color: var(--text); }
+
+.topbar-title {
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--text);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conn-badge {
+  font-size: 11.5px;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.conn-badge::before {
+  content: "";
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--text-dim);
+}
+.conn-badge[data-mode="online"]::before { background: #2ecc71; }
+.conn-badge[data-mode="local"]::before { background: #f39c12; }
+.conn-badge[data-mode="offline"]::before { background: #e74c3c; }
+
+/* Tabs (multimodal switcher) — horizontal pills under topbar */
+.tab-nav {
+  display: flex;
+  gap: 4px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elev);
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex-shrink: 0;
+}
+.tab-nav::-webkit-scrollbar { display: none; }
+
+.tab-btn {
+  padding: 7px 14px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+  transition: all var(--dur) var(--ease);
+}
+.tab-btn:hover { color: var(--text); background: var(--surface-hover); }
+.tab-btn.active {
+  color: var(--text);
+  background: var(--surface);
+  border-color: var(--border-strong);
+}
+
+/* Content area */
+.content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.tab-content { display: none; flex: 1; flex-direction: column; }
+.tab-content.active { display: flex; }
+
+/* ==========================================================================
+   Chat
+   ========================================================================== */
+.chat-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  max-width: 820px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 0 16px;
+  min-height: 0;
+}
+
+.chat-box {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 0;
+  scroll-behavior: smooth;
+}
+.chat-box::-webkit-scrollbar { width: 8px; }
+.chat-box::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 4px;
+}
+
+/* Empty state */
+.empty-state {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 20px;
-}
-.image-result img, .video-result video {
-  max-width: 100%;
-  max-height: 400px;
-  border-radius: 10px;
-  box-shadow: 0 0 20px rgba(255,179,0,0.3);
-}
-.image-actions, .video-actions {
-  display: flex;
-  gap: 10px;
   justify-content: center;
-  margin-top: 10px;
-}
-.image-actions button, .video-actions button {
-  padding: 10px 20px;
-  border: none;
-  border-radius: 30px;
-  cursor: pointer;
-  background: #ffb300;
-  color: black;
-  font-weight: bold;
-}
-.status {
-  margin-top: 10px;
-  padding: 10px;
-  border-radius: 5px;
-}
-.status.info {
-  background: rgba(23, 162, 184, 0.3);
-  color: #a0d0ff;
-}
-.status.success {
-  background: rgba(40, 167, 69, 0.3);
-  color: #b3ffb3;
-}
-.status.error {
-  background: rgba(220, 53, 69, 0.3);
-  color: #ffb3b3;
-}
-.file-info {
-  margin-top: 20px;
-  padding: 15px;
-  background: rgba(0,0,0,0.3);
-  border-radius: 10px;
-}
-.voice-demo {
+  padding: 60px 20px;
   text-align: center;
-  padding: 20px;
+  min-height: 60vh;
 }
-.voice-demo button {
-  padding: 20px 40px;
-  font-size: 1.2rem;
-  border: none;
-  border-radius: 50px;
-  background: #ffb300;
-  color: black;
-  cursor: pointer;
-  margin: 20px;
+.empty-mark {
+  width: 56px; height: 56px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--accent) 0%, #c98f00 100%);
+  display: grid; place-items: center;
+  font-family: var(--font-serif);
+  font-size: 22px;
+  font-weight: 700;
+  color: #0b0d10;
+  margin-bottom: 20px;
+  letter-spacing: -1px;
 }
-.voice-status {
-  margin: 20px 0;
-  font-size: 1.1rem;
-  min-height: 30px;
+.empty-title {
+  font-size: 26px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 8px;
+  letter-spacing: -0.5px;
 }
-.voice-output {
-  width: 100%;
-  padding: 15px;
-  border-radius: 10px;
-  border: none;
-  margin-top: 20px;
-  font-size: 1rem;
+.empty-sub {
+  color: var(--text-muted);
+  font-size: 15px;
+  margin-bottom: 36px;
 }
-.agents-grid {
+.suggestions {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 20px;
-  margin-top: 20px;
-}
-.agent-card {
-  background: rgba(255,255,255,0.1);
-  padding: 20px;
-  border-radius: 10px;
-  text-align: center;
-  cursor: pointer;
-  transition: all 0.3s;
-  border: 1px solid transparent;
-}
-.agent-card:hover {
-  transform: translateY(-5px);
-  border-color: #ffb300;
-  background: rgba(255,179,0,0.1);
-}
-.agent-icon {
-  font-size: 2.5rem;
-  margin-bottom: 10px;
-}
-.agent-name {
-  font-size: 1.2rem;
-  font-weight: bold;
-  margin-bottom: 5px;
-  color: #ffb300;
-}
-.agent-desc {
-  font-size: 0.9rem;
-  opacity: 0.8;
-}
-.agent-result {
-  margin-top: 20px;
-  padding: 20px;
-  background: rgba(0,0,0,0.3);
-  border-radius: 10px;
-  white-space: pre-wrap;
-}
-.memory-list {
-  max-height: 400px;
-  overflow-y: auto;
-  margin: 20px 0;
-  padding: 10px;
-  background: rgba(0,0,0,0.3);
-  border-radius: 10px;
-}
-.memory-item {
-  padding: 10px;
-  border-bottom: 1px solid rgba(255,255,255,0.1);
-  cursor: pointer;
-}
-.memory-item:hover {
-  background: rgba(255,179,0,0.1);
-}
-.memory-item:last-child {
-  border-bottom: none;
-}
-.memory-prompt {
-  font-weight: bold;
-  color: #ffb300;
-}
-.memory-response {
-  margin-top: 5px;
-  opacity: 0.8;
-  font-size: 0.9rem;
-}
-.memory-time {
-  font-size: 0.8rem;
-  opacity: 0.6;
-  margin-top: 5px;
-}
-.search-memory {
-  display: flex;
+  grid-template-columns: repeat(2, 1fr);
   gap: 10px;
-  margin: 20px 0;
-}
-.search-memory input {
-  flex: 1;
-  padding: 15px;
-  border-radius: 30px;
-  border: none;
-}
-.research-input-area {
-  display: flex;
-  gap: 10px;
-  margin: 20px 0;
-}
-.research-input-area input {
-  flex: 1;
-  padding: 15px;
-  border-radius: 30px;
-  border: none;
-  font-size: 16px;
-}
-.research-results {
-  margin-top: 20px;
-  padding: 20px;
-  background: rgba(0,0,0,0.3);
-  border-radius: 10px;
-  white-space: pre-wrap;
-  max-height: 400px;
-  overflow-y: auto;
-}
-.audio-input-area {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  margin: 20px 0;
-}
-.audio-input-area textarea {
   width: 100%;
-  padding: 15px;
-  border-radius: 10px;
-  border: none;
-  font-size: 16px;
-  min-height: 100px;
+  max-width: 560px;
 }
-.audio-controls {
+.suggestion {
+  text-align: left;
+  padding: 14px 16px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  color: var(--text-muted);
+  font-size: 13.5px;
+  transition: all var(--dur) var(--ease);
+}
+.suggestion:hover {
+  background: var(--surface);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+.suggestion strong { display: block; color: var(--text); font-weight: 600; margin-bottom: 2px; }
+
+/* Messages */
+.message {
   display: flex;
-  gap: 10px;
-  justify-content: center;
+  gap: 14px;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--border);
+  animation: msgIn var(--dur) var(--ease);
 }
-.audio-player {
-  margin-top: 20px;
-  text-align: center;
+.message:last-child { border-bottom: none; }
+
+@keyframes msgIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
 }
-.audio-player audio {
-  width: 100%;
-  margin-top: 10px;
+
+.msg-avatar {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: grid; place-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  margin-top: 2px;
 }
-.code-editor {
-  width: 100%;
-  padding: 15px;
-  border-radius: 10px;
-  border: none;
-  font-size: 14px;
-  font-family: monospace;
-  background: #1e1e1e;
-  color: #d4d4d4;
-  min-height: 200px;
-  margin: 20px 0;
+.message.user-message .msg-avatar {
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  color: var(--text-muted);
 }
-.language-selector {
-  padding: 10px;
-  border-radius: 30px;
-  border: none;
-  background: #ffb300;
-  color: black;
-  font-weight: bold;
-  margin-right: 10px;
+.message.ai-message .msg-avatar {
+  background: linear-gradient(135deg, var(--accent) 0%, #c98f00 100%);
+  color: #0b0d10;
 }
-.code-output {
-  margin-top: 20px;
-  padding: 20px;
-  background: rgba(0,0,0,0.3);
-  border-radius: 10px;
-  font-family: monospace;
-  white-space: pre-wrap;
-}
-.admin-role-form {
+
+.msg-body { flex: 1; min-width: 0; }
+.msg-head {
   display: flex;
+  align-items: baseline;
   gap: 10px;
-  margin: 20px 0;
-  flex-wrap: wrap;
+  margin-bottom: 6px;
 }
-.admin-role-form input,
-.admin-role-form select {
-  flex: 1;
-  min-width: 200px;
-  padding: 15px;
-  border-radius: 30px;
-  border: none;
-  font-size: 16px;
-}
-.admin-role-form button {
-  padding: 15px 30px;
-  border: none;
-  border-radius: 30px;
-  background: #ffb300;
-  color: black;
-  font-weight: bold;
-  cursor: pointer;
-}
-/* ============================================ */
-/* RESPONSE FORMATTING STYLES */
-/* ============================================ */
-.research-response {
-  padding: 15px;
-  background: rgba(0,0,0,0.2);
-  border-radius: 10px;
-}
-.research-summary {
-  margin: 15px 0;
-  padding: 10px;
-  background: rgba(255,179,0,0.1);
-  border-left: 3px solid #ffb300;
-  line-height: 1.6;
-}
-.research-findings ul,
-.research-sources ul {
-  margin: 10px 0;
-  padding-left: 20px;
-}
-.research-findings li,
-.research-sources li {
-  margin: 5px 0;
-  line-height: 1.5;
-}
-.research-confidence {
-  margin-top: 15px;
-  color: #888;
-  font-style: italic;
-}
-.agent-response {
-  padding: 15px;
-  background: rgba(0,0,0,0.2);
-  border-radius: 10px;
-  line-height: 1.6;
-  white-space: pre-wrap;
-}
-.code-output-content {
-  padding: 15px;
-  background: #1e1e1e;
-  border-radius: 5px;
-  font-family: monospace;
-  white-space: pre-wrap;
+.msg-author { font-weight: 600; font-size: 13.5px; color: var(--text); }
+.msg-time { font-size: 11.5px; color: var(--text-dim); }
+.msg-content {
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--text);
   word-wrap: break-word;
-  color: #d4d4d4;
+  overflow-wrap: break-word;
 }
-.typing-indicator {
-  animation: pulse 1s infinite;
-  display: inline-block;
+.msg-content p { margin: 0 0 12px; }
+.msg-content p:last-child { margin-bottom: 0; }
+.msg-content ul, .msg-content ol { margin: 6px 0 12px 22px; }
+.msg-content li { margin: 3px 0; }
+.msg-content h1, .msg-content h2, .msg-content h3 { margin: 14px 0 8px; font-weight: 600; }
+.msg-content code {
+  background: var(--bg-elev-2);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  border: 1px solid var(--border);
 }
-.streaming-message .message-content {
-  border-right: 2px solid #ffb300;
-  animation: blink 0.7s step-end infinite;
-  min-height: 1.2em;
+.msg-content pre {
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  padding: 14px;
+  border-radius: var(--radius-md);
+  overflow-x: auto;
+  margin: 10px 0;
+}
+.msg-content pre code { background: none; border: none; padding: 0; }
+.msg-content a { color: var(--accent); }
+.msg-content blockquote {
+  border-left: 3px solid var(--accent);
+  padding-left: 12px;
+  color: var(--text-muted);
+  margin: 10px 0;
+}
+.msg-content table {
+  border-collapse: collapse;
+  margin: 10px 0;
+  font-size: 14px;
+}
+.msg-content th, .msg-content td {
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  text-align: left;
+}
+.msg-content th { background: var(--bg-elev-2); }
+
+/* Message actions (copy / regenerate) */
+.msg-actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 8px;
+  opacity: 0;
+  transition: opacity var(--dur) var(--ease);
+}
+.message:hover .msg-actions { opacity: 1; }
+.msg-action {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 3px 8px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  transition: all var(--dur) var(--ease);
+}
+.msg-action:hover { color: var(--text); border-color: var(--border-strong); background: var(--surface-hover); }
+
+/* Streaming cursor */
+.msg-content.streaming::after {
+  content: "▋";
+  color: var(--accent);
+  margin-left: 2px;
+  animation: blink 0.9s step-end infinite;
 }
 @keyframes blink {
-  from, to { border-color: transparent; }
-  50% { border-color: #ffb300; }
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
 }
-/* Footer */
-.footer {
-  text-align: center;
-  padding: 20px;
-  margin-top: 40px;
-  color: rgba(255,255,255,0.6);
-  font-size: 14px;
-  border-top: 1px solid rgba(255,179,0,0.3);
+
+/* Typing dots */
+.typing-dots {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px 0;
+}
+.typing-dots span {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  animation: dotPulse 1.2s infinite ease-in-out;
+}
+.typing-dots span:nth-child(2) { animation-delay: 0.15s; }
+.typing-dots span:nth-child(3) { animation-delay: 0.3s; }
+@keyframes dotPulse {
+  0%, 60%, 100% { opacity: 0.3; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-3px); }
+}
+
+/* ==========================================================================
+   Composer
+   ========================================================================== */
+.composer {
+  padding: 12px 0 20px;
+  flex-shrink: 0;
+  position: sticky;
+  bottom: 0;
+  background: linear-gradient(to top, var(--bg) 70%, transparent);
+}
+
+.composer-inner {
+  background: var(--bg-elev);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-xl);
+  padding: 10px 12px;
+  transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+.composer-inner:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* Attachment chips */
+.attachment-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.attachment-chips:empty { display: none; }
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  color: var(--text-muted);
+  max-width: 220px;
+}
+.chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chip-remove {
+  background: transparent; border: none; color: var(--text-dim);
+  font-size: 14px; line-height: 1; padding: 0 2px;
+}
+.chip-remove:hover { color: #ff6b6b; }
+
+/* Composer row */
+.composer-row { display: flex; align-items: flex-end; gap: 8px; }
+
+.composer textarea {
+  flex: 1;
+  background: transparent;
+  border: none;
+  resize: none;
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.5;
+  padding: 8px 4px;
+  max-height: 200px;
+  min-height: 24px;
+  outline: none;
+}
+.composer textarea::placeholder { color: var(--text-dim); }
+
+.composer-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tool-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  padding: 8px;
+  border-radius: var(--radius-md);
+  font-size: 17px;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  transition: all var(--dur) var(--ease);
+}
+.tool-btn:hover { background: var(--surface-hover); color: var(--text); }
+.tool-btn.active { color: var(--accent); background: var(--accent-soft); }
+
+.voice-btn.listening {
+  color: #e74c3c;
+  background: rgba(231, 76, 60, 0.12);
+  animation: pulse 1.4s infinite;
+}
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+
+.send-btn {
+  background: var(--accent);
+  color: #0b0d10;
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+  font-size: 16px;
+  line-height: 1;
+  display: grid; place-items: center;
+  transition: all var(--dur) var(--ease);
+}
+.send-btn:hover:not(:disabled) { background: var(--accent-hover); }
+.send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Composer meta row */
+.composer-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+  padding: 0 4px;
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+.model-select {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  padding: 4px 10px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.model-select:hover { color: var(--text); border-color: var(--border-strong); }
+.model-select optgroup { background: var(--bg-elev); color: var(--text); }
+.model-select option { background: var(--bg-elev); color: var(--text); }
+
+/* Voice status bar — real element, real states */
+.voice-status {
+  display: none;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  margin-top: 8px;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.voice-status.visible { display: flex; }
+.voice-status[data-state="listening"] { border-color: #e74c3c; color: #ff8a80; }
+.voice-status[data-state="processing"] { border-color: var(--accent); color: var(--accent); }
+.voice-status[data-state="speaking"] { border-color: #2ecc71; color: #7ee2a8; }
+
+.voice-waveform {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 16px;
+}
+.voice-waveform span {
+  width: 3px;
+  background: currentColor;
+  border-radius: 2px;
+  animation: wave 1s infinite ease-in-out;
+}
+.voice-waveform span:nth-child(1) { animation-delay: 0s; }
+.voice-waveform span:nth-child(2) { animation-delay: 0.15s; }
+.voice-waveform span:nth-child(3) { animation-delay: 0.3s; }
+.voice-waveform span:nth-child(4) { animation-delay: 0.45s; }
+.voice-waveform span:nth-child(5) { animation-delay: 0.6s; }
+@keyframes wave {
+  0%, 100% { height: 4px; }
+  50% { height: 16px; }
+}
+
+/* ==========================================================================
+   Generic panels (Image, Video, Agents, Research, Audio, Software, Admin)
+   ========================================================================== */
+.panel {
+  max-width: 820px;
   width: 100%;
+  margin: 0 auto;
+  padding: 32px 16px;
 }
-.footer a {
-  color: #ffb300;
-  text-decoration: none;
+.panel h2 {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  letter-spacing: -0.3px;
 }
-.footer a:hover {
-  text-decoration: underline;
+.panel .sub {
+  color: var(--text-muted);
+  margin-bottom: 24px;
+  font-size: 14px;
 }
-@media (max-width: 768px) {
-  h1 { font-size: 2rem; }
-  .tab-nav { flex-direction: column; border-radius: 20px; }
-  .input-area { flex-direction: column; }
-  .input-area button { width: 100%; }
-  .user-info { position: fixed; top: 10px; right: 10px; }
-  .research-input-area { flex-direction: column; }
-  .audio-controls { flex-direction: column; }
-  .chat-layout { flex-direction: column; }
-  .sidebar { width: 100%; }
+
+.input-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
 }
+.input-row input,
+.input-row textarea,
+.input-row select {
+  flex: 1;
+  background: var(--bg-elev);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  color: var(--text);
+  font-size: 14px;
+}
+.input-row input:focus,
+.input-row textarea:focus,
+.input-row select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.btn {
+  background: var(--accent);
+  color: #0b0d10;
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 12px 22px;
+  font-weight: 600;
+  font-size: 14px;
+  transition: all var(--dur) var(--ease);
+}
+.btn:hover { background: var(--accent-hover); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn.secondary {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+}
+.btn.secondary:hover { background: var(--surface-hover); }
+.btn.danger { background: #e74c3c; color: white; }
+.btn.danger:hover { background: #c0392b; }
+
+.result-box {
+  margin-top: 20px;
+  padding: 18px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  min-height: 100px;
+  font-size: 14px;
+  line-height: 1.65;
+}
+.result-box:empty { display: none; }
+.result-box img, .result-box video {
+  max-width: 100%;
+  border-radius: var(--radius-md);
+  display: block;
+  margin: 0 auto;
+}
+
+/* Agents grid */
+.agents-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.agent-card {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  cursor: pointer;
+  transition: all var(--dur) var(--ease);
+  text-align: left;
+  color: var(--text);
+}
+.agent-card:hover {
+  border-color: var(--accent);
+  background: var(--surface);
+  transform: translateY(-2px);
+}
+.agent-card .agent-icon { font-size: 20px; margin-bottom: 8px; }
+.agent-card .agent-name { font-weight: 600; font-size: 14px; margin-bottom: 3px; }
+.agent-card .agent-desc { font-size: 12.5px; color: var(--text-muted); line-height: 1.45; }
+
+/* Code editor */
+.code-editor {
+  width: 100%;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.6;
+  min-height: 260px;
+  resize: vertical;
+}
+.code-editor:focus { outline: none; border-color: var(--accent); }
+.code-output {
+  margin-top: 16px;
+  padding: 16px;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  min-height: 60px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+.code-output:empty { display: none; }
+
+/* Status messages */
+.status {
+  margin-top: 14px;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  font-size: 13.5px;
+  display: none;
+}
+.status.visible { display: block; }
+.status.info { background: rgba(52, 152, 219, 0.12); color: #74b9ff; border: 1px solid rgba(52,152,219,0.3); }
+.status.success { background: rgba(46, 204, 113, 0.12); color: #7ee2a8; border: 1px solid rgba(46,204,113,0.3); }
+.status.error { background: rgba(231, 76, 60, 0.12); color: #ff8a80; border: 1px solid rgba(231,76,60,0.3); }
+
+/* Admin form */
+.admin-form {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.admin-form input, .admin-form select {
+  flex: 1;
+  min-width: 180px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  padding: 11px 14px;
+  color: var(--text);
+  font-size: 14px;
+}
+
+/* ==========================================================================
+   Footer
+   ========================================================================== */
+.footer {
+  padding: 16px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-dim);
+  border-top: 1px solid var(--border);
+  background: var(--bg-elev);
+  flex-shrink: 0;
+}
+
+/* ==========================================================================
+   Toast notifications
+   ========================================================================== */
+.toast-stack {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 9999;
+}
+.toast {
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  font-size: 13px;
+  color: var(--text);
+  box-shadow: var(--shadow-md);
+  animation: toastIn 200ms var(--ease);
+  max-width: 320px;
+}
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* ==========================================================================
+   Responsive
+   ========================================================================== */
+@media (max-width: 900px) {
+  .app { grid-template-columns: 0 1fr; }
+  .sidebar {
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    width: var(--sidebar-w);
+    z-index: 100;
+    transform: translateX(-100%);
+    box-shadow: var(--shadow-lg);
+  }
+  .app[data-sidebar="open"] .sidebar { transform: translateX(0); }
+  .app[data-sidebar="collapsed"] .sidebar { transform: translateX(-100%); }
+  .topbar-toggle { display: grid; }
+  .suggestions { grid-template-columns: 1fr; }
+  .input-row { flex-direction: column; }
+}
+
+@media (max-width: 520px) {
+  .empty-title { font-size: 22px; }
+  .msg-avatar { width: 24px; height: 24px; font-size: 10px; }
+  .panel { padding: 20px 12px; }
+}
+
+/* Sidebar backdrop on mobile */
+.backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: var(--overlay);
+  z-index: 99;
+}
+.app[data-sidebar="open"] .backdrop { display: block; }
+@media (min-width: 901px) { .backdrop { display: none !important; } }
 </style>
 </head>
 <body>
-<div class="overlay">
-  <div class="container">
-    <!-- User Info -->
-    <div class="user-info" id="userInfo" style="display: none;">
-      <span class="user-email" id="userEmail"></span>
-      <span id="roleBadge" class="role-badge"></span>
-      <button class="logout-btn" id="logoutBtn">Logout</button>
+
+<div class="app" id="app" data-sidebar="open">
+
+  <!-- =========================================================
+       SIDEBAR
+       ========================================================= -->
+  <aside class="sidebar" aria-label="Navigation">
+    <button class="brand" id="brandBtn" type="button" title="CephasGM SI — Home">
+      <span class="brand-mark">SI</span>
+      <span class="brand-name">CephasGM <span>SI</span></span>
+      <span class="brand-tag">v6</span>
+    </button>
+
+    <div class="sidebar-actions">
+      <button class="btn-new-chat" id="newChatBtn" type="button">
+        <span class="icon">＋</span>
+        <span>New chat</span>
+      </button>
     </div>
-    
-    <h1>CephasGM AI</h1>
-    <div class="subtitle" id="authMessage">
-      <a href="login-signup.html" style="color: #ffb300; text-decoration: none;">Login / Signup</a> to access all features
+
+    <div class="sidebar-search">
+      <input type="search" id="convSearch" placeholder="Search conversations…" aria-label="Search conversations">
     </div>
-    
-    <!-- Tab Navigation -->
-    <div class="tab-nav" id="tabNav" style="display: none;">
-      <button class="tab-btn active" onclick="switchTab('chat')">💬 Chat</button>
-      <button class="tab-btn" onclick="switchTab('image')">🎨 Image</button>
-      <button class="tab-btn" onclick="switchTab('video')">🎬 Video</button>
-      <button class="tab-btn" onclick="switchTab('agents')">🤖 Agents</button>
-      <button class="tab-btn" onclick="switchTab('research')">🔬 Research</button>
-      <button class="tab-btn" onclick="switchTab('audio')">🔊 Audio</button>
-      <button class="tab-btn" onclick="switchTab('software')">🏭 Software</button>
-      <!-- Admin tab will be added dynamically if user is admin -->
+
+    <div class="conv-scroll" id="convScroll">
+      <ul class="conversation-list" id="conversationList"></ul>
     </div>
-    
-    <!-- Chat Tab -->
-    <div id="chatTab" class="tab-content active">
-      <div class="chat-layout">
-        <div class="sidebar">
-          <h3>Conversations</h3>
-          <ul class="conversation-list" id="conversationList"></ul>
-          <button class="new-chat-btn" id="newChatBtn">+ New Chat</button>
+
+    <div class="sidebar-footer">
+      <div class="user-row" id="userRow" style="display:none;">
+        <div class="user-avatar" id="userAvatar">?</div>
+        <div class="user-meta">
+          <div class="user-email" id="userEmail"></div>
+          <div class="user-role" id="userRole"></div>
         </div>
-        <div style="flex: 1;">
-          <div class="chat-box" id="chat"></div>
-          <div class="input-area">
-            <div style="display: flex; flex-direction: column; gap: 10px; width: 100%;">
-              <div style="display: flex; gap: 10px; align-items: center;">
-                <input type="text" id="userInput" placeholder="Ask CephasGM AI anything..." autocomplete="off" style="flex: 1; padding: 15px; border-radius: 30px; border: none; font-size: 16px; background: rgba(255,255,255,0.9);">
-                <button class="voice-btn" id="voiceBtn" onclick="toggleVoice()">🎤</button>
+      </div>
+      <div class="footer-actions">
+        <button class="icon-btn" id="themeToggle" type="button" title="Toggle theme">Theme</button>
+        <button class="icon-btn" id="logoutBtn" type="button" style="display:none;" title="Sign out">Sign out</button>
+      </div>
+    </div>
+  </aside>
+
+  <div class="backdrop" id="backdrop"></div>
+
+  <!-- =========================================================
+       MAIN
+       ========================================================= -->
+  <div class="main">
+
+    <!-- Topbar -->
+    <header class="topbar">
+      <button class="topbar-toggle" id="sidebarToggle" type="button" aria-label="Toggle sidebar">☰</button>
+      <div class="topbar-title" id="topbarTitle">Chat</div>
+      <div class="conn-badge" id="conn-badge" data-mode="offline">Connecting…</div>
+    </header>
+
+    <!-- Tab navigation -->
+    <nav class="tab-nav" id="tabNav" role="tablist" aria-label="Features">
+      <button class="tab-btn active" role="tab" data-tab="chat" type="button">Chat</button>
+      <button class="tab-btn" role="tab" data-tab="image" type="button">Image</button>
+      <button class="tab-btn" role="tab" data-tab="video" type="button">Video</button>
+      <button class="tab-btn" role="tab" data-tab="agents" type="button">Agents</button>
+      <button class="tab-btn" role="tab" data-tab="research" type="button">Research</button>
+      <button class="tab-btn" role="tab" data-tab="audio" type="button">Audio</button>
+      <button class="tab-btn" role="tab" data-tab="software" type="button">Software</button>
+    </nav>
+
+    <div class="content" id="content">
+
+      <!-- ===================== CHAT ===================== -->
+      <section id="chatTab" class="tab-content active" role="tabpanel" aria-label="Chat">
+        <div class="chat-wrap">
+          <div class="chat-box" id="chat" aria-live="polite">
+            <!-- Empty state is injected by JS when there are no messages -->
+          </div>
+
+          <div class="composer">
+            <div class="composer-inner">
+              <div class="attachment-chips" id="attachmentChips"></div>
+              <div class="composer-row">
+                <textarea
+                  id="userInput"
+                  placeholder="Message CephasGM SI…"
+                  rows="1"
+                  autocomplete="off"
+                  aria-label="Message input"
+                ></textarea>
+                <div class="composer-tools">
+                  <label for="chatFileInput" class="tool-btn" title="Attach files" role="button" tabindex="0">
+                    📎
+                  </label>
+                  <input type="file" id="chatFileInput" multiple
+                         accept=".txt,.pdf,.doc,.docx,.jpg,.jpeg,.png,.webp,.xlsx,.xls,.csv,.md,.json"
+                         style="display:none;">
+                  <button class="tool-btn voice-btn" id="voiceBtn" type="button"
+                          title="Voice input" aria-label="Voice input">🎤</button>
+                  <button class="send-btn" id="sendBtn" type="button"
+                          title="Send" aria-label="Send message">➤</button>
+                </div>
               </div>
-              <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-                <label for="chatFileInput" style="padding: 10px 20px; background: #ffb300; border-radius: 30px; cursor: pointer; color: black; font-weight: bold;">
-                  📎 Attach Files
-                </label>
-                <input type="file" id="chatFileInput" multiple accept=".txt,.pdf,.doc,.docx,.jpg,.png,.xlsx,.xls" style="display: none;">
-                <span id="fileList" style="color: #ccc; font-size: 0.9rem;"></span>
-                <select id="modelSelect" style="padding: 10px 20px; border-radius: 30px; border: none; background: #ffb300; color: black; font-weight: bold;">
-                  <optgroup label="Free Models (Ollama)">
-                    <option value="ministral-3-3b">Ministral 3 3B (fast)</option>
+              <div class="voice-status" id="voice-status" data-state="idle" role="status" aria-live="polite">
+                <div class="voice-waveform" aria-hidden="true">
+                  <span></span><span></span><span></span><span></span><span></span>
+                </div>
+                <span id="voice-status-text">Ready</span>
+              </div>
+              <div class="composer-meta">
+                <select id="modelSelect" class="model-select" aria-label="Model">
+                  <optgroup label="Local — Ollama">
+                    <option value="ministral-3-3b">Ministral 3 3B · fast</option>
                     <option value="gemma-3-4b">Gemma 3 4B</option>
                     <option value="ministral-3-8b">Ministral 3 8B</option>
                     <option value="gemma-3-12b">Gemma 3 12B</option>
                     <option value="ministral-3-14b">Ministral 3 14B</option>
                   </optgroup>
-                  <optgroup label="Paid Models (Requires Credits)">
+                  <optgroup label="Cloud — requires credits">
                     <option value="gpt-3.5-turbo">OpenAI GPT-3.5</option>
                     <option value="gpt-4">OpenAI GPT-4</option>
                     <option value="deepseek-chat">DeepSeek</option>
                   </optgroup>
                 </select>
-                <button onclick="streamMessage()" id="sendBtn" style="padding: 10px 30px; border: none; border-radius: 30px; background: #ffb300; color: black; font-weight: bold;">Send</button>
-                <button onclick="clearChat()" style="padding: 10px 20px; background: #dc3545; border: none; border-radius: 30px; color: white;">🗑️</button>
+                <span id="composerHint">Enter to send · Shift+Enter for newline</span>
               </div>
             </div>
           </div>
         </div>
-      </div>
-    </div>
-    
-    <!-- Image Generation Tab -->
-    <div id="imageTab" class="tab-content">
-      <h2>🎨 Generate Images</h2>
-      <p>Describe the African-inspired image you want to create</p>
-      <div class="image-input-area">
-        <input type="text" id="imagePrompt" placeholder="A beautiful African sunset over savanna with elephants...">
-        <button onclick="generateImage()" id="generateImageBtn">Generate</button>
-      </div>
-      <div class="image-result" id="imageResult"></div>
-      <div class="status" id="imageStatus"></div>
-    </div>
-    
-    <!-- Video Generation Tab -->
-    <div id="videoTab" class="tab-content">
-      <h2>🎬 Generate Videos</h2>
-      <p>Describe the video you want to create</p>
-      <div class="video-input-area">
-        <input type="text" id="videoPrompt" placeholder="A cinematic drone shot over African mountains...">
-        <button onclick="generateVideo()" id="generateVideoBtn">Generate</button>
-      </div>
-      <div class="video-result" id="videoResult"></div>
-      <div class="status" id="videoStatus"></div>
-    </div>
-    
-    <!-- Agents Tab -->
-    <div id="agentsTab" class="tab-content">
-      <h2>🤖 AI Agents</h2>
-      <p>Specialized agents for different tasks</p>
-      <div class="agents-grid">
-        <div class="agent-card" onclick="runSearchAgent()">
-          <div class="agent-icon">🔍</div>
-          <div class="agent-name">Search Agent</div>
-          <div class="agent-desc">Search the web for information</div>
-        </div>
-        <div class="agent-card" onclick="runSummarizeAgent()">
-          <div class="agent-icon">📝</div>
-          <div class="agent-name">Summarize Agent</div>
-          <div class="agent-desc">Summarize long texts</div>
-        </div>
-        <div class="agent-card" onclick="runTranslateAgent()">
-          <div class="agent-icon">🌍</div>
-          <div class="agent-name">Translate Agent</div>
-          <div class="agent-desc">Translate between languages</div>
-        </div>
-        <div class="agent-card" onclick="runAnalyzeAgent()">
-          <div class="agent-icon">📊</div>
-          <div class="agent-name">Analyze Agent</div>
-          <div class="agent-desc">Analyze data and sentiment</div>
-        </div>
-        <div class="agent-card" onclick="runResearchAgent()">
-          <div class="agent-icon">🔬</div>
-          <div class="agent-name">Research Agent</div>
-          <div class="agent-desc">Deep research on topics</div>
-        </div>
-        <div class="agent-card" onclick="runCodingAgent()">
-          <div class="agent-icon">💻</div>
-          <div class="agent-name">Coding Agent</div>
-          <div class="agent-desc">Write and debug code</div>
-        </div>
-      </div>
-      <div class="input-area" style="margin-top: 20px;">
-        <input type="text" id="agentTask" placeholder="Enter task for agent...">
-        <button onclick="runCustomAgent()">Run Agent</button>
-      </div>
-      <div class="agent-result" id="agentResult"></div>
-    </div>
-    
-    <!-- Research Tab -->
-    <div id="researchTab" class="tab-content">
-      <h2>🔬 Research Lab</h2>
-      <p>Deep research with multiple sources</p>
-      <div class="research-input-area">
-        <input type="text" id="researchTopic" placeholder="Enter research topic...">
-        <select id="researchDepth" style="padding: 15px; border-radius: 30px; border: none;">
-          <option value="basic">Basic</option>
-          <option value="deep">Deep</option>
-          <option value="comprehensive">Comprehensive</option>
-        </select>
-        <button onclick="conductResearch()">Research</button>
-      </div>
-      <div class="research-results" id="researchResults"></div>
-    </div>
-    
-    <!-- Audio Tab -->
-    <div id="audioTab" class="tab-content">
-      <h2>🔊 Audio Studio</h2>
-      <p>Generate speech from text</p>
-      <div class="audio-input-area">
-        <textarea id="audioText" placeholder="Enter text to convert to speech..."></textarea>
-        <div class="audio-controls">
-          <select id="audioVoice" style="padding: 15px; border-radius: 30px; border: none;">
-            <option value="african-female">African Female</option>
-            <option value="african-male">African Male</option>
-            <option value="standard-female">Standard Female</option>
-            <option value="standard-male">Standard Male</option>
-          </select>
-          <button onclick="generateAudio()">Generate Speech</button>
-        </div>
-        <div class="audio-player" id="audioPlayer"></div>
-      </div>
-    </div>
-    
-    <!-- Software Factory Tab -->
-    <div id="softwareTab" class="tab-content">
-      <h2>🏭 Software Factory</h2>
-      <p>Write, run, and debug code</p>
-      <div>
-        <select id="codeLanguage" class="language-selector">
-          <option value="javascript">JavaScript</option>
-          <option value="python">Python</option>
-          <option value="html">HTML</option>
-          <option value="bash">Bash</option>
-        </select>
-        <button onclick="runCode()" style="padding: 10px 20px;">Run Code</button>
-        <button onclick="debugCode()" style="padding: 10px 20px; background: #17a2b8;">Debug</button>
-        <button onclick="clearCode()" style="padding: 10px 20px; background: #dc3545;">Clear</button>
-      </div>
-      <textarea id="codeInput" class="code-editor" placeholder="Write your code here..."></textarea>
-      <div class="code-output" id="codeOutput"></div>
-    </div>
-    
-    <!-- Admin Tab (dynamically created) will be appended here -->
-  </div>
-  
-  <!-- Footer -->
-  <div class="footer">
-    © 2026 CephasGM. All rights reserved. | <a href="#" onclick="alert('Version 6.0.0')">v6.0.0</a>
-  </div>
-</div>
+      </section>
 
-<!-- Load Firebase FIRST (external dependencies) -->
+      <!-- ===================== IMAGE ===================== -->
+      <section id="imageTab" class="tab-content" role="tabpanel" aria-label="Image generation">
+        <div class="panel">
+          <h2>Image generation</h2>
+          <p class="sub">Describe the image you want to create.</p>
+          <div class="input-row">
+            <input type="text" id="imagePrompt" placeholder="A serene African savanna at golden hour…">
+            <button class="btn" id="generateImageBtn" type="button" onclick="generateImage()">Generate</button>
+          </div>
+          <div class="result-box" id="imageResult"></div>
+          <div class="status" id="imageStatus"></div>
+        </div>
+      </section>
+
+      <!-- ===================== VIDEO ===================== -->
+      <section id="videoTab" class="tab-content" role="tabpanel" aria-label="Video generation">
+        <div class="panel">
+          <h2>Video generation</h2>
+          <p class="sub">Describe the video you want to create.</p>
+          <div class="input-row">
+            <input type="text" id="videoPrompt" placeholder="A cinematic drone shot over the Rift Valley…">
+            <button class="btn" id="generateVideoBtn" type="button" onclick="generateVideo()">Generate</button>
+          </div>
+          <div class="result-box" id="videoResult"></div>
+          <div class="status" id="videoStatus"></div>
+        </div>
+      </section>
+
+      <!-- ===================== AGENTS ===================== -->
+      <section id="agentsTab" class="tab-content" role="tabpanel" aria-label="Agents">
+        <div class="panel">
+          <h2>Agents</h2>
+          <p class="sub">Specialized agents for focused tasks.</p>
+
+          <div class="agents-grid">
+            <button class="agent-card" type="button" onclick="runSearchAgent()">
+              <div class="agent-icon">🔍</div>
+              <div class="agent-name">Search</div>
+              <div class="agent-desc">Search the web for information</div>
+            </button>
+            <button class="agent-card" type="button" onclick="runSummarizeAgent()">
+              <div class="agent-icon">📝</div>
+              <div class="agent-name">Summarize</div>
+              <div class="agent-desc">Condense long texts</div>
+            </button>
+            <button class="agent-card" type="button" onclick="runTranslateAgent()">
+              <div class="agent-icon">🌍</div>
+              <div class="agent-name">Translate</div>
+              <div class="agent-desc">Translate between languages</div>
+            </button>
+            <button class="agent-card" type="button" onclick="runAnalyzeAgent()">
+              <div class="agent-icon">📊</div>
+              <div class="agent-name">Analyze</div>
+              <div class="agent-desc">Data & sentiment analysis</div>
+            </button>
+            <button class="agent-card" type="button" onclick="runResearchAgent()">
+              <div class="agent-icon">🔬</div>
+              <div class="agent-name">Research</div>
+              <div class="agent-desc">Deep, multi-source research</div>
+            </button>
+            <button class="agent-card" type="button" onclick="runCodingAgent()">
+              <div class="agent-icon">💻</div>
+              <div class="agent-name">Coding</div>
+              <div class="agent-desc">Write and debug code</div>
+            </button>
+          </div>
+
+          <div class="input-row">
+            <input type="text" id="agentTask" placeholder="Enter a task for the agent…">
+            <button class="btn" type="button" onclick="runCustomAgent()">Run</button>
+          </div>
+          <div class="result-box" id="agentResult"></div>
+        </div>
+      </section>
+
+      <!-- ===================== RESEARCH ===================== -->
+      <section id="researchTab" class="tab-content" role="tabpanel" aria-label="Research">
+        <div class="panel">
+          <h2>Research lab</h2>
+          <p class="sub">Multi-source research with structured output.</p>
+          <div class="input-row">
+            <input type="text" id="researchTopic" placeholder="Enter a research topic…">
+            <select id="researchDepth" aria-label="Depth">
+              <option value="basic">Basic</option>
+              <option value="deep">Deep</option>
+              <option value="comprehensive">Comprehensive</option>
+            </select>
+            <button class="btn" type="button" onclick="conductResearch()">Research</button>
+          </div>
+          <div class="result-box" id="researchResults"></div>
+        </div>
+      </section>
+
+      <!-- ===================== AUDIO ===================== -->
+      <section id="audioTab" class="tab-content" role="tabpanel" aria-label="Audio">
+        <div class="panel">
+          <h2>Audio studio</h2>
+          <p class="sub">Convert text to speech with selectable voices.</p>
+          <div class="input-row">
+            <textarea id="audioText" placeholder="Enter text to speak…" rows="4"></textarea>
+          </div>
+          <div class="input-row">
+            <select id="audioVoice" aria-label="Voice">
+              <option value="african-female">African Female</option>
+              <option value="african-male">African Male</option>
+              <option value="standard-female">Standard Female</option>
+              <option value="standard-male">Standard Male</option>
+            </select>
+            <button class="btn" type="button" onclick="generateAudio()">Speak</button>
+          </div>
+          <div class="result-box" id="audioPlayer"></div>
+        </div>
+      </section>
+
+      <!-- ===================== SOFTWARE ===================== -->
+      <section id="softwareTab" class="tab-content" role="tabpanel" aria-label="Software factory">
+        <div class="panel">
+          <h2>Software factory</h2>
+          <p class="sub">Write, run, and debug code.</p>
+          <div class="input-row">
+            <select id="codeLanguage" aria-label="Language">
+              <option value="javascript">JavaScript</option>
+              <option value="python">Python</option>
+              <option value="html">HTML</option>
+              <option value="bash">Bash</option>
+            </select>
+            <button class="btn" type="button" onclick="runCode()">Run</button>
+            <button class="btn secondary" type="button" onclick="debugCode()">Debug</button>
+            <button class="btn danger" type="button" onclick="clearCode()">Clear</button>
+          </div>
+          <textarea id="codeInput" class="code-editor" placeholder="// Write your code here…"></textarea>
+          <div class="code-output" id="codeOutput"></div>
+        </div>
+      </section>
+
+      <!-- Admin tab is appended here dynamically by addAdminTab() -->
+
+    </div><!-- /content -->
+
+    <footer class="footer">
+      Copyright © 2025 Cephas GM | Innovating for Tomorrow
+    </footer>
+
+  </div><!-- /main -->
+</div><!-- /app -->
+
+<div class="toast-stack" id="toastStack" aria-live="polite"></div>
+
+<!-- =========================================================
+     External SDKs
+     ========================================================= -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 
-<!-- ============================================ -->
-<!-- Load configuration FIRST (internal scripts) -->
-<!-- ============================================ -->
+<!-- =========================================================
+     Project modules (existing files — unchanged contracts)
+     ========================================================= -->
 <script src="config.js"></script>
-
-<!-- Load core modules in order -->
 <script src="app.js"></script>
 <script src="voice.js"></script>
 <script src="memory.js"></script>
 <script src="ai.js"></script>
 <script src="agents.js"></script>
 <script src="image.js"></script>
-<script src="upload.js"></script>
 
-<!-- ============================================ -->
-<!-- Main Application Script (everything below)   -->
-<!-- ============================================ -->
+<!-- =========================================================
+     Bootstrap / UI wiring
+     NOTE: All function names and IDs used by app.js / ai.js /
+     agents.js / voice.js / memory.js are preserved below.
+     ========================================================= -->
 <script>
-// ============================================
-// Global Variables
-// ============================================
+/* =========================================================
+   Globals expected by other modules
+   ========================================================= */
 let currentUser = null;
-let API_BASE = ''; // Will be set based on availability
+let API_BASE = '';
 let conversations = [];
 let currentConversationId = null;
 
-// ============================================
-// API Configuration
-// ============================================
 const RENDER_URL = 'https://cephasgm-ai.onrender.com';
-const LOCAL_URL = 'http://localhost:6000';
+const LOCAL_URL  = 'http://localhost:6000';
 
-async function checkAPI() {
-  try {
-    const response = await fetch(`${RENDER_URL}/health`, { 
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' },
-      mode: 'cors'
-    });
-    if (response.ok) {
-      API_BASE = RENDER_URL;
-      console.log('✅ Connected to Render API');
-      return;
-    }
-  } catch (error) {
-    console.log('Render API not available, trying local...');
+/* =========================================================
+   Theme
+   ========================================================= */
+(function initTheme() {
+  const saved = localStorage.getItem('si_theme');
+  if (saved === 'light' || saved === 'dark') {
+    document.documentElement.setAttribute('data-theme', saved);
   }
+})();
 
-  try {
-    const response = await fetch(`${LOCAL_URL}/health`);
-    if (response.ok) {
-      API_BASE = LOCAL_URL;
-      console.log('✅ Connected to Local API');
-    } else {
-      console.log('⚠️ Running in offline mode - some features may be limited');
-    }
-  } catch {
-    console.log('⚠️ Running in offline mode - some features may be limited');
-  }
+document.getElementById('themeToggle').addEventListener('click', () => {
+  const cur = document.documentElement.getAttribute('data-theme');
+  const next = cur === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  localStorage.setItem('si_theme', next);
+});
+
+/* =========================================================
+   Toast helper
+   ========================================================= */
+function toast(msg, ms = 2600) {
+  const stack = document.getElementById('toastStack');
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.textContent = msg;
+  stack.appendChild(el);
+  setTimeout(() => el.remove(), ms);
 }
+window.toast = toast;
 
-// ============================================
-// Firebase Configuration (using config.js values)
-// ============================================
-const firebaseConfig = window.CEPHASGM_CONFIG?.FIREBASE || {
+/* =========================================================
+   API discovery
+   ========================================================= */
+async function checkAPI() {
+  const badge = document.getElementById('conn-badge');
+  try {
+    const r = await fetch(`${RENDER_URL}/health`, { method: 'GET', mode: 'cors' });
+    if (r.ok) { API_BASE = RENDER_URL; badge.dataset.mode = 'online'; badge.textContent = 'Online'; return; }
+  } catch {}
+  try {
+    const r = await fetch(`${LOCAL_URL}/health`);
+    if (r.ok) { API_BASE = LOCAL_URL; badge.dataset.mode = 'local'; badge.textContent = 'Local'; return; }
+  } catch {}
+  badge.dataset.mode = 'offline';
+  badge.textContent = 'Offline';
+}
+window.checkAPI = checkAPI;
+
+/* =========================================================
+   Firebase
+   ========================================================= */
+const firebaseConfig = (window.CEPHASGM_CONFIG && window.CEPHASGM_CONFIG.FIREBASE) || {
   apiKey: "AIzaSyAukJQx3pEqXoyFR9tyfeLckJaBIgYtGFA",
   authDomain: "cephasgm-ai.firebaseapp.com",
   projectId: "cephasgm-ai",
@@ -923,30 +1457,37 @@ const firebaseConfig = window.CEPHASGM_CONFIG?.FIREBASE || {
   messagingSenderId: "304163647028",
   appId: "1:304163647028:web:2920b2cfb9be4049806461"
 };
-
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 
-// ============================================
-// Conversation Management
-// ============================================
+/* =========================================================
+   Markdown + sanitize
+   ========================================================= */
+function renderMarkdown(text) {
+  const raw = marked.parse(text || '', { breaks: true, gfm: true });
+  return window.DOMPurify ? DOMPurify.sanitize(raw) : raw;
+}
+
+/* =========================================================
+   Conversation persistence
+   ========================================================= */
 function loadConversations() {
   const saved = localStorage.getItem('cephasgm_conversations');
   if (saved) {
-    conversations = JSON.parse(saved);
-  } else {
-    // Create default conversation with a welcome message
-    const defaultConv = {
+    try { conversations = JSON.parse(saved) || []; } catch { conversations = []; }
+  }
+  if (!conversations.length) {
+    conversations = [{
       id: Date.now(),
-      title: 'New Chat',
-      messages: [{ sender: 'ai', content: "Hello! I'm CephasGM AI. How can I help you?", timestamp: new Date().toISOString() }]
-    };
-    conversations = [defaultConv];
+      title: 'New chat',
+      messages: [],
+      createdAt: new Date().toISOString()
+    }];
     saveConversations();
   }
-  const storedCurrent = localStorage.getItem('currentConvId');
-  if (storedCurrent && conversations.some(c => c.id == storedCurrent)) {
-    currentConversationId = parseInt(storedCurrent);
+  const stored = localStorage.getItem('currentConvId');
+  if (stored && conversations.some(c => String(c.id) === String(stored))) {
+    currentConversationId = Number(stored);
   } else {
     currentConversationId = conversations[0].id;
   }
@@ -956,116 +1497,244 @@ function loadConversations() {
 
 function saveConversations() {
   localStorage.setItem('cephasgm_conversations', JSON.stringify(conversations));
-  localStorage.setItem('currentConvId', currentConversationId);
+  if (currentConversationId != null) {
+    localStorage.setItem('currentConvId', String(currentConversationId));
+  }
+}
+
+function groupLabel(iso) {
+  const d = new Date(iso || Date.now());
+  const now = new Date();
+  const day = 86400000;
+  if (d.toDateString() === now.toDateString()) return 'Today';
+  if (Date.now() - d.getTime() < 2 * day) return 'Yesterday';
+  if (Date.now() - d.getTime() < 7 * day) return 'Previous 7 days';
+  return 'Older';
 }
 
 function renderConversationList() {
   const list = document.getElementById('conversationList');
-  if (!list) return;
+  const q = (document.getElementById('convSearch').value || '').toLowerCase();
   list.innerHTML = '';
-  conversations.forEach(conv => {
+
+  const filtered = conversations.filter(c =>
+    !q || c.title.toLowerCase().includes(q)
+  );
+
+  let lastGroup = null;
+  filtered.forEach(conv => {
+    const g = groupLabel(conv.createdAt || conv.messages[0]?.timestamp);
+    if (g !== lastGroup) {
+      const li = document.createElement('li');
+      li.className = 'conv-group-label';
+      li.textContent = g;
+      list.appendChild(li);
+      lastGroup = g;
+    }
     const li = document.createElement('li');
-    li.className = 'conversation-item' + (conv.id === currentConversationId ? ' active' : '');
-    li.textContent = conv.title;
-    li.onclick = () => switchConversation(conv.id);
+    li.className = 'conversation-item' + (String(conv.id) === String(currentConversationId) ? ' active' : '');
+    li.dataset.id = conv.id;
+    li.innerHTML = `
+      <span class="conv-title">${escapeHtml(conv.title || 'New chat')}</span>
+      <button class="conv-del" type="button" aria-label="Delete">✕</button>
+    `;
+    li.addEventListener('click', (e) => {
+      if (e.target.closest('.conv-del')) return;
+      switchConversation(conv.id);
+    });
+    li.querySelector('.conv-del').addEventListener('click', (e) => {
+      e.stopPropagation();
+      deleteConversation(conv.id);
+    });
     list.appendChild(li);
   });
 }
 
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c =>
+    ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])
+  );
+}
+
 function switchConversation(id) {
+  currentConversationId = Number(id);
+  saveConversations();
+  renderConversationList();
+  loadCurrentConversation();
+  if (window.innerWidth <= 900) {
+    document.getElementById('app').dataset.sidebar = 'collapsed';
+  }
+}
+
+function deleteConversation(id) {
+  if (!confirm('Delete this conversation?')) return;
+  conversations = conversations.filter(c => c.id !== id);
+  if (!conversations.length) {
+    conversations = [{ id: Date.now(), title: 'New chat', messages: [], createdAt: new Date().toISOString() }];
+  }
+  if (String(currentConversationId) === String(id)) {
+    currentConversationId = conversations[0].id;
+  }
+  saveConversations();
+  renderConversationList();
+  loadCurrentConversation();
+}
+
+function createNewChat() {
+  const id = Date.now();
+  conversations.unshift({ id, title: 'New chat', messages: [], createdAt: new Date().toISOString() });
   currentConversationId = id;
   saveConversations();
   renderConversationList();
   loadCurrentConversation();
+  document.getElementById('userInput').focus();
+  switchTab('chat');
 }
 
 function loadCurrentConversation() {
+  const chat = document.getElementById('chat');
+  chat.innerHTML = '';
   const conv = conversations.find(c => c.id === currentConversationId);
   if (!conv) return;
-  const chatBox = document.getElementById('chat');
-  chatBox.innerHTML = '';
-  conv.messages.forEach(msg => {
-    _addMessageToChat(msg.sender, msg.content);
+  if (!conv.messages.length) {
+    renderEmptyState(chat);
+    return;
+  }
+  conv.messages.forEach(m => _addMessageToChat(m.sender, m.content, m.timestamp, false));
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function renderEmptyState(chat) {
+  chat.innerHTML = `
+    <div class="empty-state">
+      <div class="empty-mark">SI</div>
+      <div class="empty-title">What should we build today?</div>
+      <div class="empty-sub">Ask anything — code, research, images, or voice.</div>
+      <div class="suggestions">
+        <button class="suggestion" data-prompt="Explain quantum computing in simple terms">
+          <strong>Explain a concept</strong>
+          Quantum computing, simply explained
+        </button>
+        <button class="suggestion" data-prompt="Write a Python function to fetch and cache API data">
+          <strong>Write code</strong>
+          Python function with caching
+        </button>
+        <button class="suggestion" data-prompt="Summarize the state of AI in Africa in 2025">
+          <strong>Research a topic</strong>
+          AI in Africa, 2025
+        </button>
+        <button class="suggestion" data-prompt="Draft a product launch email for a Tanzanian fintech">
+          <strong>Draft content</strong>
+          Fintech launch email
+        </button>
+      </div>
+    </div>
+  `;
+  chat.querySelectorAll('.suggestion').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const input = document.getElementById('userInput');
+      input.value = btn.dataset.prompt;
+      autoGrow(input);
+      input.focus();
+    });
   });
 }
 
-function createNewChat() {
-  const newId = Date.now();
-  const newConv = {
-    id: newId,
-    title: 'New Chat',
-    messages: [{ sender: 'ai', content: "Hello! I'm CephasGM AI. How can I help you?", timestamp: new Date().toISOString() }]
-  };
-  conversations.unshift(newConv);
-  currentConversationId = newId;
-  saveConversations();
-  renderConversationList();
-  loadCurrentConversation();
-}
+/* =========================================================
+   Message rendering
+   ========================================================= */
+function _addMessageToChat(sender, content, timestamp, animate = true) {
+  const chat = document.getElementById('chat');
+  if (chat.querySelector('.empty-state')) chat.innerHTML = '';
 
-function _addMessageToChat(sender, content) {
-  const chatBox = document.getElementById('chat');
-  const messageDiv = document.createElement('div');
-  messageDiv.className = `message ${sender}-message`;
-  const timestamp = new Date().toLocaleTimeString();
+  const div = document.createElement('div');
+  div.className = `message ${sender === 'user' ? 'user-message' : 'ai-message'}`;
+  if (!animate) div.style.animation = 'none';
 
-  // Render markdown to HTML
-  const rawHtml = marked.parse(content);
-  // Simple sanitization (remove scripts)
-  const safeHtml = rawHtml.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+  const ts = timestamp ? new Date(timestamp).toLocaleTimeString() : new Date().toLocaleTimeString();
+  const initial = sender === 'user' ? 'U' : 'SI';
 
-  messageDiv.innerHTML = `
-    <div class="message-header">
-      <span>${sender === 'user' ? 'You' : 'CephasGM AI'}</span>
-      <span class="timestamp">${timestamp}</span>
+  div.innerHTML = `
+    <div class="msg-avatar">${initial}</div>
+    <div class="msg-body">
+      <div class="msg-head">
+        <span class="msg-author">${sender === 'user' ? 'You' : 'CephasGM SI'}</span>
+        <span class="msg-time">${ts}</span>
+      </div>
+      <div class="msg-content">${sender === 'ai' ? renderMarkdown(content) : escapeHtml(content).replace(/\n/g, '<br>')}</div>
+      <div class="msg-actions">
+        <button class="msg-action" data-act="copy" type="button">Copy</button>
+        ${sender === 'ai' ? '<button class="msg-action" data-act="regen" type="button">Regenerate</button>' : ''}
+      </div>
     </div>
-    <div class="message-content">${safeHtml}</div>
   `;
-  chatBox.appendChild(messageDiv);
-  chatBox.scrollTop = chatBox.scrollHeight;
+
+  div.querySelector('[data-act="copy"]').addEventListener('click', () => {
+    navigator.clipboard.writeText(content).then(() => toast('Copied'));
+  });
+  const regen = div.querySelector('[data-act="regen"]');
+  if (regen) {
+    regen.addEventListener('click', () => {
+      const conv = conversations.find(c => c.id === currentConversationId);
+      if (!conv) return;
+      const idx = conv.messages.lastIndexOf(conv.messages.find(m => m.content === content && m.sender === 'ai'));
+      const prevUser = [...conv.messages].reverse().find(m => m.sender === 'user');
+      if (prevUser) {
+        document.getElementById('userInput').value = prevUser.content;
+        autoGrow(document.getElementById('userInput'));
+        streamMessage();
+      } else {
+        toast('Nothing to regenerate');
+      }
+    });
+  }
+
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
 }
 
 function addMessageAndSave(sender, content) {
-  _addMessageToChat(sender, content);
+  _addMessageToChat(sender, content, new Date().toISOString(), true);
   const conv = conversations.find(c => c.id === currentConversationId);
-  if (conv) {
-    conv.messages.push({ sender, content, timestamp: new Date().toISOString() });
-    // If first user message, update title
-    if (sender === 'user' && conv.messages.filter(m => m.sender === 'user').length === 1) {
-      conv.title = content.substring(0, 30) + (content.length > 30 ? '...' : '');
-      renderConversationList();
-    }
-    saveConversations();
+  if (!conv) return;
+  conv.messages.push({ sender, content, timestamp: new Date().toISOString() });
+  if (sender === 'user' && conv.title === 'New chat') {
+    conv.title = content.slice(0, 42) + (content.length > 42 ? '…' : '');
+    document.getElementById('topbarTitle').textContent = conv.title;
   }
+  saveConversations();
+  renderConversationList();
 }
 
-// ============================================
-// HELPER FUNCTIONS
-// ============================================
+/* =========================================================
+   Typing indicator
+   ========================================================= */
 function showTypingIndicator() {
   const id = 'typing-' + Date.now();
-  const chatBox = document.getElementById('chat');
-  const div = document.createElement("div");
+  const chat = document.getElementById('chat');
+  if (chat.querySelector('.empty-state')) chat.innerHTML = '';
+  const div = document.createElement('div');
   div.id = id;
-  div.className = "message ai-message typing-indicator";
+  div.className = 'message ai-message';
   div.innerHTML = `
-    <div class="message-header">
-      <b>CephasGM AI:</b>
-    </div>
-    <div class="message-content">
-      <span class="dot">.</span><span class="dot">.</span><span class="dot">.</span>
+    <div class="msg-avatar">SI</div>
+    <div class="msg-body">
+      <div class="msg-head"><span class="msg-author">CephasGM SI</span></div>
+      <div class="msg-content"><div class="typing-dots"><span></span><span></span><span></span></div></div>
     </div>
   `;
-  chatBox.appendChild(div);
-  chatBox.scrollTop = chatBox.scrollHeight;
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
   return id;
 }
-
 function removeTypingIndicator(id) {
-  const indicator = document.getElementById(id);
-  if (indicator) indicator.remove();
+  const el = document.getElementById(id);
+  if (el) el.remove();
 }
 
+/* =========================================================
+   Response normalizers (unchanged contract)
+   ========================================================= */
 function formatAIResponse(data) {
   if (!data) return 'No response received';
   if (typeof data === 'string') return data;
@@ -1097,28 +1766,16 @@ function formatAgentResponse(data) {
   return JSON.stringify(data, null, 2);
 }
 
-// ============================================
-// File Attachment Handling
-// ============================================
-document.getElementById('chatFileInput').addEventListener('change', function(e) {
-  const files = e.target.files;
-  const fileList = document.getElementById('fileList');
-  if (files.length > 0) {
-    fileList.textContent = Array.from(files).map(f => f.name).join(', ');
-  } else {
-    fileList.textContent = '';
-  }
-});
-
-// ============================================
-// Chat Functions
-// ============================================
+/* =========================================================
+   Chat send / stream
+   ========================================================= */
 async function sendMessage() {
   const input = document.getElementById('userInput');
   const message = input.value.trim();
   if (!message) return;
   addMessageAndSave('user', message);
   input.value = '';
+  autoGrow(input);
   const typingId = showTypingIndicator();
   try {
     let response;
@@ -1127,20 +1784,18 @@ async function sendMessage() {
       const res = await fetch(`${API_BASE}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: message, model: model })
+        body: JSON.stringify({ prompt: message, model })
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      response = formatAIResponse(data);
+      response = formatAIResponse(await res.json());
     } else {
-      response = "I'm here to help! (Running in offline mode)";
+      response = 'No API endpoint is reachable. Start the backend or connect to the network.';
     }
     removeTypingIndicator(typingId);
     addMessageAndSave('ai', response);
-  } catch (error) {
+  } catch (err) {
     removeTypingIndicator(typingId);
-    addMessageAndSave('ai', `Error: ${error.message}. Please try again.`);
-    console.error('Chat error:', error);
+    addMessageAndSave('ai', `Error: ${err.message}`);
   }
 }
 
@@ -1151,102 +1806,100 @@ async function streamMessage() {
   const files = fileInput.files;
   const model = document.getElementById('modelSelect').value;
 
-  if (!message && files.length === 0) {
-    alert('Please enter a message or attach a file.');
-    return;
-  }
+  if (!message && (!files || files.length === 0)) return;
+  if (!API_BASE) { toast('Backend unavailable'); return; }
 
-  // Add user message (optionally with file names)
-  let userMessageText = message;
-  if (files.length > 0) {
-    const fileNames = Array.from(files).map(f => f.name).join(', ');
-    userMessageText += `\n[Attached files: ${fileNames}]`;
+  let userText = message;
+  if (files && files.length) {
+    userText += (userText ? '\n' : '') + `[Attached: ${Array.from(files).map(f => f.name).join(', ')}]`;
   }
-  addMessageAndSave('user', userMessageText);
-
+  addMessageAndSave('user', userText);
   input.value = '';
-  // IMPORTANT: Do NOT clear fileInput.value here! We need the files for the fetch.
-  // Clear the file list display only
-  document.getElementById('fileList').textContent = '';
+  autoGrow(input);
+  clearAttachmentChips();
 
   const typingId = showTypingIndicator();
 
   try {
-    const formData = new FormData();
-    formData.append('prompt', message);
-    formData.append('model', model);
-    for (let i = 0; i < files.length; i++) {
-      formData.append('files', files[i]);
-    }
+    const form = new FormData();
+    form.append('prompt', message);
+    form.append('model', model);
+    if (files) for (const f of files) form.append('files', f);
 
-    const response = await fetch(`${API_BASE}/chat/upload`, {
-      method: 'POST',
-      body: formData
-    });
-
-    // Clear file input only AFTER the fetch
+    const res = await fetch(`${API_BASE}/chat/upload`, { method: 'POST', body: form });
     fileInput.value = '';
 
-    if (!response.ok) {
-      console.warn('Upload endpoint failed, falling back to regular chat');
+    if (!res.ok || !res.body) {
       removeTypingIndicator(typingId);
-      await fallbackSendMessage(message, model);
-      return;
+      return fallbackSendMessage(message, model);
     }
 
     removeTypingIndicator(typingId);
 
-    // Create a streaming message container
-    const messageId = 'msg-' + Date.now();
-    const aiMessageDiv = document.createElement('div');
-    aiMessageDiv.className = 'message ai-message streaming-message';
-    aiMessageDiv.id = messageId;
-    const timestamp = new Date().toLocaleTimeString();
-    aiMessageDiv.innerHTML = `
-      <div class="message-header">
-        <span>CephasGM AI</span>
-        <span class="timestamp">${timestamp}</span>
+    const aiDiv = document.createElement('div');
+    aiDiv.className = 'message ai-message';
+    aiDiv.innerHTML = `
+      <div class="msg-avatar">SI</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-author">CephasGM SI</span>
+          <span class="msg-time">${new Date().toLocaleTimeString()}</span>
+        </div>
+        <div class="msg-content streaming"></div>
+        <div class="msg-actions">
+          <button class="msg-action" data-act="copy" type="button">Copy</button>
+        </div>
       </div>
-      <div class="message-content"></div>
     `;
-    document.getElementById('chat').appendChild(aiMessageDiv);
-    const contentDiv = aiMessageDiv.querySelector('.message-content');
+    document.getElementById('chat').appendChild(aiDiv);
+    const contentDiv = aiDiv.querySelector('.msg-content');
 
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let fullResponse = '';
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let full = '';
+    let buffer = '';
 
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      const chunk = decoder.decode(value);
-      const lines = chunk.split('\n');
+      buffer += dec.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
       for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          try {
-            const data = JSON.parse(line.slice(6));
-            if (data.choices && data.choices[0].delta.content) {
-              fullResponse += data.choices[0].delta.content;
-              // Show raw text while streaming (will be replaced by markdown later)
-              contentDiv.innerHTML = fullResponse.replace(/\n/g, '<br>');
-              document.getElementById('chat').scrollTop = document.getElementById('chat').scrollHeight;
-            }
-          } catch (e) {}
-        }
+        if (!line.startsWith('data: ')) continue;
+        const payload = line.slice(6).trim();
+        if (payload === '[DONE]') continue;
+        try {
+          const data = JSON.parse(payload);
+          const delta = data.choices?.[0]?.delta?.content
+                     ?? data.choices?.[0]?.message?.content
+                     ?? data.delta
+                     ?? data.content;
+          if (delta) {
+            full += delta;
+            contentDiv.textContent = full;
+            const chat = document.getElementById('chat');
+            chat.scrollTop = chat.scrollHeight;
+          }
+        } catch {}
       }
     }
 
-    // After streaming finishes, replace with formatted markdown
-    const formattedHtml = marked.parse(fullResponse);
-    contentDiv.innerHTML = formattedHtml;
-    // Save the final response to conversation history
-    addMessageAndSave('ai', fullResponse);
-  } catch (error) {
-    // Clear file input even on error
+    contentDiv.classList.remove('streaming');
+    contentDiv.innerHTML = renderMarkdown(full);
+    aiDiv.querySelector('[data-act="copy"]').addEventListener('click', () => {
+      navigator.clipboard.writeText(full).then(() => toast('Copied'));
+    });
+
+    const conv = conversations.find(c => c.id === currentConversationId);
+    if (conv) {
+      conv.messages.push({ sender: 'ai', content: full, timestamp: new Date().toISOString() });
+      saveConversations();
+    }
+  } catch (err) {
     fileInput.value = '';
     removeTypingIndicator(typingId);
-    console.warn('Streaming error, falling back to non‑streaming:', error);
-    await fallbackSendMessage(message, model);
+    fallbackSendMessage(message, model);
   }
 }
 
@@ -1255,653 +1908,566 @@ async function fallbackSendMessage(message, model) {
     const res = await fetch(`${API_BASE}/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt: message, model: model })
+      body: JSON.stringify({ prompt: message, model })
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    const response = formatAIResponse(data);
-    addMessageAndSave('ai', response);
-  } catch (error) {
-    addMessageAndSave('ai', `Error: ${error.message}. Please try again.`);
+    addMessageAndSave('ai', formatAIResponse(await res.json()));
+  } catch (err) {
+    addMessageAndSave('ai', `Error: ${err.message}`);
   }
 }
 
 function clearChat() {
-  if (confirm('Clear this conversation?')) {
-    const conv = conversations.find(c => c.id === currentConversationId);
-    if (conv) {
-      conv.messages = [];
-      conv.title = 'New Chat';
-      // Add a welcome message again
-      conv.messages.push({ sender: 'ai', content: "Hello! I'm CephasGM AI. How can I help you?", timestamp: new Date().toISOString() });
-      saveConversations();
-      renderConversationList();
-      loadCurrentConversation();
-    }
-  }
+  if (!confirm('Clear this conversation?')) return;
+  const conv = conversations.find(c => c.id === currentConversationId);
+  if (!conv) return;
+  conv.messages = [];
+  conv.title = 'New chat';
+  saveConversations();
+  renderConversationList();
+  loadCurrentConversation();
 }
 
-function saveToMemory(prompt, response) {
-  const memory = { prompt, response, timestamp: new Date().toISOString() };
-  const memories = JSON.parse(localStorage.getItem('chatMemories') || '[]');
-  memories.unshift(memory);
-  localStorage.setItem('chatMemories', JSON.stringify(memories.slice(0, 50)));
-  if (window.MemoryModule?.saveMemory) {
-    window.MemoryModule.saveMemory(prompt, response).catch(() => {});
-  }
+/* =========================================================
+   Composer behavior
+   ========================================================= */
+const userInput = document.getElementById('userInput');
+const sendBtn = document.getElementById('sendBtn');
+
+function autoGrow(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 200) + 'px';
 }
 
-// ============================================
-// Role Management (unchanged)
-// ============================================
-async function fetchUserRole() {
-  if (!currentUser) return null;
-  try {
-    const token = await currentUser.getIdToken();
-    const response = await fetch(`${API_BASE}/user/role`, {
-      method: 'GET',
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    if (!response.ok) return 'user';
-    const data = await response.json();
-    return data.role || 'user';
-  } catch (error) {
-    console.error('Error fetching role:', error);
-    return null;
-  }
-}
-
-function addAdminTab() {
-  const tabNav = document.getElementById('tabNav');
-  if (document.getElementById('adminTabBtn')) return;
-  const adminBtn = document.createElement('button');
-  adminBtn.className = 'tab-btn';
-  adminBtn.id = 'adminTabBtn';
-  adminBtn.setAttribute('onclick', "switchTab('admin')");
-  adminBtn.textContent = '👑 Admin';
-  tabNav.appendChild(adminBtn);
-  
-  const adminTab = document.createElement('div');
-  adminTab.id = 'adminTab';
-  adminTab.className = 'tab-content';
-  adminTab.innerHTML = `
-    <h2>Admin Panel</h2>
-    <p>Manage user roles</p>
-    <div class="admin-role-form">
-      <input type="email" id="adminUserEmail" placeholder="User email">
-      <select id="adminNewRole">
-        <option value="user">User</option>
-        <option value="premium">Premium</option>
-        <option value="admin">Admin</option>
-      </select>
-      <button onclick="updateUserRole()">Update Role</button>
-    </div>
-    <div id="adminMessage" class="status"></div>
-  `;
-  document.querySelector('.container').appendChild(adminTab);
-}
-
-window.updateUserRole = async function() {
-  const email = document.getElementById('adminUserEmail').value.trim();
-  const role = document.getElementById('adminNewRole').value;
-  if (!email) { showAdminMessage('Please enter an email', 'error'); return; }
-  showAdminMessage('Updating...', 'info');
-  try {
-    const token = await currentUser.getIdToken();
-    const response = await fetch(`${API_BASE}/admin/updateRole`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({ email, role })
-    });
-    const data = await response.json();
-    if (response.ok) showAdminMessage(data.message || 'Role updated', 'success');
-    else showAdminMessage(data.error || 'Error', 'error');
-  } catch (error) {
-    showAdminMessage('Network error', 'error');
-  }
-};
-
-function showAdminMessage(message, type) {
-  const msgDiv = document.getElementById('adminMessage');
-  if (msgDiv) { msgDiv.textContent = message; msgDiv.className = `status ${type}`; }
-}
-
-// ============================================
-// Auth Functions
-// ============================================
-auth.onAuthStateChanged(async (user) => {
-  currentUser = user;
-  const userInfo = document.getElementById('userInfo');
-  const userEmail = document.getElementById('userEmail');
-  const roleBadge = document.getElementById('roleBadge');
-  const authMessage = document.getElementById('authMessage');
-  const tabNav = document.getElementById('tabNav');
-  
-  if (user) {
-    userInfo.style.display = 'flex';
-    userEmail.textContent = user.email;
-    authMessage.style.display = 'none';
-    tabNav.style.display = 'flex';
-    
-    const role = await fetchUserRole();
-    if (role) {
-      roleBadge.textContent = role;
-      roleBadge.className = `role-badge ${role}`;
-    }
-    
-    if (typeof loadMemories === 'function') loadMemories();
-    loadChatHistory();
-    
-    if (role === 'admin') addAdminTab();
-  } else {
-    userInfo.style.display = 'none';
-    authMessage.style.display = 'block';
-    tabNav.style.display = 'none';
-    const adminBtn = document.getElementById('adminTabBtn');
-    if (adminBtn) adminBtn.remove();
-    const adminTab = document.getElementById('adminTab');
-    if (adminTab) adminTab.remove();
+userInput.addEventListener('input', () => {
+  autoGrow(userInput);
+  sendBtn.disabled = !userInput.value.trim() && !document.getElementById('chatFileInput').files.length;
+});
+userInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    streamMessage();
   }
 });
+sendBtn.addEventListener('click', streamMessage);
 
-document.getElementById('logoutBtn').addEventListener('click', () => {
-  auth.signOut().then(() => window.location.href = 'index.html');
+/* Attachments */
+const chatFileInput = document.getElementById('chatFileInput');
+chatFileInput.addEventListener('change', () => {
+  renderAttachmentChips();
+  sendBtn.disabled = !userInput.value.trim() && !chatFileInput.files.length;
 });
+function renderAttachmentChips() {
+  const wrap = document.getElementById('attachmentChips');
+  wrap.innerHTML = '';
+  Array.from(chatFileInput.files).forEach((f, i) => {
+    const chip = document.createElement('div');
+    chip.className = 'chip';
+    chip.innerHTML = `<span class="chip-name">${escapeHtml(f.name)}</span>
+      <button class="chip-remove" type="button" data-i="${i}" aria-label="Remove">✕</button>`;
+    wrap.appendChild(chip);
+  });
+  wrap.querySelectorAll('.chip-remove').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const dt = new DataTransfer();
+      Array.from(chatFileInput.files).forEach((f, idx) => {
+        if (idx !== Number(btn.dataset.i)) dt.items.add(f);
+      });
+      chatFileInput.files = dt.files;
+      renderAttachmentChips();
+    });
+  });
+}
+function clearAttachmentChips() {
+  document.getElementById('attachmentChips').innerHTML = '';
+}
 
-function loadChatHistory() {
-  // This function is now mostly superseded by conversation management,
-  // but keep for compatibility.
-  const memories = JSON.parse(localStorage.getItem('chatMemories') || '[]');
-  const chatBox = document.getElementById('chat');
-  chatBox.innerHTML = '';
-  memories.forEach(memory => {
-    if (memory.prompt) addMessageAndSave('user', memory.prompt);
-    if (memory.response) addMessageAndSave('ai', memory.response);
+/* =========================================================
+   Voice (single source of truth — voice.js can still override)
+   ========================================================= */
+let recognition = null;
+let isListening = false;
+
+function setVoiceState(state, text) {
+  const bar = document.getElementById('voice-status');
+  bar.dataset.state = state;
+  bar.classList.toggle('visible', state !== 'idle');
+  document.getElementById('voice-status-text').textContent = text || '';
+}
+
+function initVoice() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    document.getElementById('voiceBtn').title = 'Voice not supported in this browser';
+    return;
+  }
+  recognition = new SR();
+  recognition.continuous = false;
+  recognition.interimResults = true;
+  recognition.lang = 'en-US';
+
+  recognition.onstart = () => {
+    isListening = true;
+    document.getElementById('voiceBtn').classList.add('listening');
+    setVoiceState('listening', 'Listening…');
+  };
+  recognition.onresult = (event) => {
+    let interim = '';
+    let final = '';
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const t = event.results[i][0].transcript;
+      if (event.results[i].isFinal) final += t;
+      else interim += t;
+    }
+    userInput.value = final || interim;
+    autoGrow(userInput);
+    if (final) {
+      setVoiceState('processing', 'Processing…');
+      setTimeout(() => { streamMessage(); setVoiceState('idle'); }, 200);
+    }
+  };
+  recognition.onerror = (e) => {
+    setVoiceState('idle', '');
+    toast('Voice error: ' + e.error);
+  };
+  recognition.onend = () => {
+    isListening = false;
+    document.getElementById('voiceBtn').classList.remove('listening');
+    if (document.getElementById('voice-status').dataset.state === 'listening') {
+      setVoiceState('idle');
+    }
+  };
+}
+
+function startVoice() {
+  if (!recognition) initVoice();
+  if (!recognition) return toast('Voice not supported');
+  try { recognition.start(); } catch {}
+}
+function stopVoice() { if (recognition && isListening) recognition.stop(); }
+function toggleVoice() { isListening ? stopVoice() : startVoice(); }
+
+/* Speech synthesis — real voices, no fakes */
+function getVoicesAsync() {
+  return new Promise(resolve => {
+    const v = window.speechSynthesis.getVoices();
+    if (v.length) return resolve(v);
+    window.speechSynthesis.onvoiceschanged = () => resolve(window.speechSynthesis.getVoices());
   });
 }
 
-// ============================================
-// Tab Switching
-// ============================================
-function switchTab(tabName) {
-  document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
-  const selectedTab = document.getElementById(tabName + 'Tab');
-  if (selectedTab) selectedTab.classList.add('active');
-  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-  if (event && event.target) event.target.classList.add('active');
+async function speak(text) {
+  if (!window.speechSynthesis) return toast('Speech not supported');
+  const u = new SpeechSynthesisUtterance(text);
+  const voices = await getVoicesAsync();
+  const female = voices.find(v => /female|samantha|victoria|zira|karen/i.test(v.name) && /en/i.test(v.lang));
+  if (female) u.voice = female;
+  window.speechSynthesis.cancel();
+  setVoiceState('speaking', 'Speaking…');
+  u.onend = () => setVoiceState('idle');
+  window.speechSynthesis.speak(u);
 }
 
-// ============================================
-// Image Generation (unchanged)
-// ============================================
+async function generateAudio() {
+  const text = document.getElementById('audioText').value.trim();
+  const option = document.getElementById('audioVoice').value;
+  const out = document.getElementById('audioPlayer');
+  if (!text) return toast('Enter text first');
+  if (!window.speechSynthesis) return toast('Speech not supported');
+
+  const voices = await getVoicesAsync();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'en-US';
+  const isFemale = /female/.test(option);
+  const isMale = /male/.test(option);
+
+  let pick = null;
+  if (isFemale) pick = voices.find(v => /female|samantha|victoria|zira/i.test(v.name) && /en/i.test(v.lang));
+  if (isMale)   pick = voices.find(v => /male|alex|daniel|david|google uk english male/i.test(v.name) && /en/i.test(v.lang));
+  if (!pick) pick = voices.find(v => /en/i.test(v.lang));
+  if (pick) u.voice = pick;
+
+  window.speechSynthesis.cancel();
+  window.speechSynthesis.speak(u);
+  out.innerHTML = `<p>Speaking: “${escapeHtml(text.slice(0, 60))}${text.length > 60 ? '…' : ''}”</p>
+    <button class="btn secondary" type="button" onclick="window.speechSynthesis.cancel()">Stop</button>`;
+}
+
+/* =========================================================
+   Tabs
+   ========================================================= */
+function switchTab(name) {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  const panel = document.getElementById(name + 'Tab');
+  const btn = document.querySelector(`.tab-btn[data-tab="${name}"]`);
+  if (panel) panel.classList.add('active');
+  if (btn) btn.classList.add('active');
+  const titles = { chat: 'Chat', image: 'Image', video: 'Video', agents: 'Agents', research: 'Research', audio: 'Audio', software: 'Software', admin: 'Admin' };
+  document.getElementById('topbarTitle').textContent = titles[name] || name;
+}
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+});
+
+/* =========================================================
+   Image / Video / Agents / Research / Code
+   These delegate to functions defined in image.js / agents.js
+   or fall back to inline implementations below.
+   ========================================================= */
+function showStatus(elId, msg, type) {
+  const el = document.getElementById(elId);
+  el.textContent = msg;
+  el.className = 'status visible ' + type;
+  if (type === 'success') setTimeout(() => { el.className = 'status'; el.textContent = ''; }, 3500);
+}
+
 async function generateImage() {
   const prompt = document.getElementById('imagePrompt').value.trim();
-  if (!prompt) { showImageStatus('Please enter a prompt', 'error'); return; }
-  showImageStatus('Generating image...', 'info');
+  if (!prompt) return showStatus('imageStatus', 'Enter a prompt', 'error');
+  showStatus('imageStatus', 'Generating…', 'info');
   document.getElementById('generateImageBtn').disabled = true;
+  const out = document.getElementById('imageResult');
+  out.innerHTML = '';
   try {
-    let result, imageUrl = null;
-    const endpoints = [ `${API_BASE}/generate/image`, `${API_BASE}/api/generate/image`, 'https://us-central1-cephasgm-ai.cloudfunctions.net/image' ];
-    for (const endpoint of endpoints) {
+    const endpoints = [
+      `${API_BASE}/generate/image`,
+      `${API_BASE}/api/generate/image`,
+      'https://us-central1-cephasgm-ai.cloudfunctions.net/image'
+    ].filter(Boolean);
+    let url = null;
+    for (const ep of endpoints) {
       try {
-        console.log(`Trying endpoint: ${endpoint}`);
-        const response = await fetch(endpoint, {
+        const r = await fetch(ep, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prompt }),
-          mode: 'cors'
+          body: JSON.stringify({ prompt })
         });
-        if (response.ok) {
-          result = await response.json();
-          imageUrl = result.url || result.imageUrl;
-          if (imageUrl) break;
+        if (r.ok) {
+          const j = await r.json();
+          url = j.url || j.imageUrl;
+          if (url) break;
         }
-      } catch (e) { console.log(`Endpoint ${endpoint} failed:`, e.message); }
+      } catch {}
     }
-    if (!imageUrl) imageUrl = 'https://images.unsplash.com/photo-1508672019048-805c876b67e2?w=512&h=512&fit=crop&auto=format';
-    const imageResult = document.getElementById('imageResult');
-    imageResult.innerHTML = `
-      <img src="${imageUrl}" alt="${prompt}" onerror="this.onerror=null; this.src='https://images.unsplash.com/photo-1508672019048-805c876b67e2?w=512&h=512&fit=crop&auto=format';">
-      <div class="image-actions">
-        <button onclick="window.open('${imageUrl}')">View Full Size</button>
-        <button onclick="generateImage()">Regenerate</button>
-      </div>
-    `;
-    showImageStatus('Image generated successfully!', 'success');
-  } catch (error) {
-    console.error('Image generation error:', error);
-    const imageResult = document.getElementById('imageResult');
-    imageResult.innerHTML = `
-      <img src="https://images.unsplash.com/photo-1508672019048-805c876b67e2?w=512&h=512&fit=crop&auto=format" alt="Fallback image">
-      <div class="image-actions"><button onclick="generateImage()">Try Again</button></div>
-    `;
-    showImageStatus('Using fallback image. Please try again later.', 'info');
+    if (!url) throw new Error('No image endpoint returned a URL');
+    out.innerHTML = `<img src="${url}" alt="${escapeHtml(prompt)}">
+      <div style="display:flex;gap:8px;justify-content:center;margin-top:12px;">
+        <button class="btn secondary" type="button" onclick="window.open('${url}')">Open</button>
+        <button class="btn secondary" type="button" onclick="generateImage()">Regenerate</button>
+      </div>`;
+    showStatus('imageStatus', 'Done', 'success');
+  } catch (e) {
+    showStatus('imageStatus', e.message, 'error');
   } finally {
     document.getElementById('generateImageBtn').disabled = false;
   }
 }
-function showImageStatus(message, type) {
-  const status = document.getElementById('imageStatus');
-  status.textContent = message;
-  status.className = `status ${type}`;
-  if (type === 'success') setTimeout(() => { status.textContent = ''; status.className = 'status'; }, 3000);
-}
 
-// ============================================
-// Video Generation (unchanged)
-// ============================================
 async function generateVideo() {
   const prompt = document.getElementById('videoPrompt').value.trim();
-  if (!prompt) { showVideoStatus('Please enter a prompt', 'error'); return; }
-  showVideoStatus('Generating video...', 'info');
+  if (!prompt) return showStatus('videoStatus', 'Enter a prompt', 'error');
+  showStatus('videoStatus', 'Generating…', 'info');
   document.getElementById('generateVideoBtn').disabled = true;
+  const out = document.getElementById('videoResult');
+  out.innerHTML = '';
   try {
-    let result, videoUrl = null;
-    const endpoints = [ `${API_BASE}/video`, `${API_BASE}/generate/video`, 'https://us-central1-cephasgm-ai.cloudfunctions.net/video' ];
-    for (const endpoint of endpoints) {
+    const endpoints = [
+      `${API_BASE}/video`,
+      `${API_BASE}/generate/video`,
+      'https://us-central1-cephasgm-ai.cloudfunctions.net/video'
+    ].filter(Boolean);
+    let url = null;
+    for (const ep of endpoints) {
       try {
-        console.log(`Trying endpoint: ${endpoint}`);
-        const response = await fetch(endpoint, {
+        const r = await fetch(ep, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prompt }),
-          mode: 'cors'
+          body: JSON.stringify({ prompt })
         });
-        if (response.ok) {
-          result = await response.json();
-          videoUrl = result.url || result.video_url;
-          if (videoUrl) break;
+        if (r.ok) {
+          const j = await r.json();
+          url = j.url || j.video_url;
+          if (url) break;
         }
-      } catch (e) { console.log(`Endpoint ${endpoint} failed:`, e.message); }
+      } catch {}
     }
-    if (!videoUrl) videoUrl = 'https://storage.cephasgm.ai/videos/simulated.mp4';
-    const videoResult = document.getElementById('videoResult');
-    videoResult.innerHTML = `
-      <video controls src="${videoUrl}" onerror="this.onerror=null; this.outerHTML='<p>Video preview not available</p>';">
-        Your browser does not support the video tag.
-      </video>
-      <div class="video-actions">
-        <a href="${videoUrl}" target="_blank" download><button>Download</button></a>
-        <button onclick="generateVideo()">Regenerate</button>
-      </div>
-    `;
-    showVideoStatus('Video generated successfully!', 'success');
-  } catch (error) {
-    console.error('Video generation error:', error);
-    const videoResult = document.getElementById('videoResult');
-    videoResult.innerHTML = `<p>😕 Video generation failed</p><button onclick="generateVideo()">Try Again</button>`;
-    showVideoStatus('Error generating video. Please try again.', 'error');
+    if (!url) throw new Error('No video endpoint returned a URL');
+    out.innerHTML = `<video controls src="${url}"></video>
+      <div style="display:flex;gap:8px;justify-content:center;margin-top:12px;">
+        <a class="btn secondary" href="${url}" target="_blank" rel="noopener">Download</a>
+        <button class="btn secondary" type="button" onclick="generateVideo()">Regenerate</button>
+      </div>`;
+    showStatus('videoStatus', 'Done', 'success');
+  } catch (e) {
+    showStatus('videoStatus', e.message, 'error');
   } finally {
     document.getElementById('generateVideoBtn').disabled = false;
   }
 }
-function showVideoStatus(message, type) {
-  const status = document.getElementById('videoStatus');
-  status.textContent = message;
-  status.className = `status ${type}`;
-  if (type === 'success') setTimeout(() => { status.textContent = ''; status.className = 'status'; }, 3000);
-}
 
-// ============================================
-// Voice Functions (UPGRADED with async voice loading and better female/male selection)
-// ============================================
-let recognition = null;
-let isListening = false;
-
-function initVoice() {
-  if ('webkitSpeechRecognition' in window) {
-    recognition = new webkitSpeechRecognition();
-    recognition.continuous = false;
-    recognition.interimResults = false;
-    recognition.lang = 'en-US';
-    recognition.onstart = () => {
-      isListening = true;
-      document.getElementById('voiceStatus').textContent = 'Listening... Speak now';
-      document.getElementById('voiceDemoBtn').classList.add('listening');
-    };
-    recognition.onend = () => {
-      isListening = false;
-      document.getElementById('voiceStatus').textContent = '';
-      document.getElementById('voiceDemoBtn').classList.remove('listening');
-    };
-    recognition.onresult = (event) => {
-      const transcript = event.results[0][0].transcript;
-      document.getElementById('voiceOutput').value = transcript;
-      document.getElementById('userInput').value = transcript;
-      document.getElementById('voiceStatus').textContent = `Recognized: "${transcript}" – sending...`;
-      if (typeof streamMessage === 'function') streamMessage();
-      else if (typeof sendMessage === 'function') sendMessage();
-    };
-    recognition.onerror = (event) => {
-      document.getElementById('voiceStatus').textContent = 'Error: ' + event.error;
-    };
-  }
-}
-function startVoice() { if (!recognition) initVoice(); if (recognition) recognition.start(); else alert('Voice recognition not supported'); }
-function stopVoice() { if (recognition && isListening) recognition.stop(); }
-function toggleVoice() { isListening ? stopVoice() : startVoice(); }
-
-// Helper: wait for voices to be loaded
-function getVoicesAsync() {
-  return new Promise((resolve) => {
-    let voices = window.speechSynthesis.getVoices();
-    if (voices.length) {
-      resolve(voices);
-    } else {
-      window.speechSynthesis.onvoiceschanged = () => {
-        resolve(window.speechSynthesis.getVoices());
-      };
-    }
-  });
-}
-
-// Upgraded speak function with async voice loading and female preference
-async function speak(text) {
-  if (!window.speechSynthesis) {
-    alert('Speech synthesis not supported');
-    return;
-  }
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = 'en-US';
-  utterance.rate = 1.0;
-  utterance.pitch = 1.0;
-  
-  const voices = await getVoicesAsync();
-  // Try to find a female voice (prefer Google UK English Female, Samantha, Victoria, or any containing "female")
-  const femaleKeywords = ['samantha', 'victoria', 'karen', 'female', 'google uk english female', 'zira'];
-  let selectedVoice = voices.find(v => femaleKeywords.some(keyword => v.name.toLowerCase().includes(keyword)));
-  if (!selectedVoice) {
-    // Fallback: any English female voice
-    selectedVoice = voices.find(v => v.lang.includes('en') && v.name.toLowerCase().includes('female'));
-  }
-  if (!selectedVoice) {
-    // Last fallback: any English voice
-    selectedVoice = voices.find(v => v.lang.includes('en-US')) || voices[0];
-  }
-  if (selectedVoice) utterance.voice = selectedVoice;
-  
-  window.speechSynthesis.speak(utterance);
-}
-
-// Upgraded generateAudio function with proper mapping for voice options
-async function generateAudio() {
-  const text = document.getElementById('audioText').value.trim();
-  const voiceOption = document.getElementById('audioVoice').value;
-  if (!text) {
-    alert('Please enter text to convert to speech');
-    return;
-  }
-  const audioPlayer = document.getElementById('audioPlayer');
-  audioPlayer.innerHTML = '<p>🎙️ Preparing voice...</p>';
-  try {
-    if (!window.speechSynthesis) throw new Error('Speech synthesis not supported');
-    
-    const voices = await getVoicesAsync();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'en-US';
-    utterance.rate = 1.0;
-    utterance.pitch = 1.0;
-    
-    let selectedVoice = null;
-    if (voiceOption === 'african-female') {
-      // Prefer voices with female and English; also try Samantha, Victoria, etc.
-      selectedVoice = voices.find(v => (v.name.toLowerCase().includes('samantha') || v.name.toLowerCase().includes('victoria') || v.name.toLowerCase().includes('female')) && v.lang.includes('en')) ||
-                     voices.find(v => v.name.toLowerCase().includes('female')) ||
-                     voices.find(v => v.lang.includes('en-US'));
-    } else if (voiceOption === 'african-male') {
-      selectedVoice = voices.find(v => (v.name.toLowerCase().includes('alex') || v.name.toLowerCase().includes('daniel') || v.name.toLowerCase().includes('male')) && v.lang.includes('en')) ||
-                     voices.find(v => v.name.toLowerCase().includes('male')) ||
-                     voices.find(v => v.lang.includes('en-US'));
-    } else if (voiceOption === 'standard-female') {
-      selectedVoice = voices.find(v => v.name.toLowerCase().includes('samantha') || v.name.toLowerCase().includes('victoria') || v.name.toLowerCase().includes('google uk english female')) ||
-                     voices.find(v => v.lang.includes('en-US') && v.name.toLowerCase().includes('female')) ||
-                     voices[0];
-    } else if (voiceOption === 'standard-male') {
-      selectedVoice = voices.find(v => v.name.toLowerCase().includes('alex') || v.name.toLowerCase().includes('google uk english male')) ||
-                     voices.find(v => v.lang.includes('en-US') && v.name.toLowerCase().includes('male')) ||
-                     voices[0];
-    }
-    if (!selectedVoice && voices.length) selectedVoice = voices[0];
-    if (selectedVoice) utterance.voice = selectedVoice;
-    
-    window.speechSynthesis.cancel(); // Stop any ongoing speech
-    window.speechSynthesis.speak(utterance);
-    audioPlayer.innerHTML = `
-      <p>🔊 Speaking: "${text.substring(0, 50)}..."</p>
-      <button onclick="window.speechSynthesis.cancel()" style="padding: 10px; background: #dc3545;">Stop Speaking</button>
-    `;
-  } catch (error) {
-    audioPlayer.innerHTML = `<p class="status error">Error: ${error.message}</p>`;
-  }
-}
-// ============================================
-// Agent Functions (unchanged)
-// ============================================
 async function runAgent(task, type = 'auto') {
-  const resultDiv = document.getElementById('agentResult');
-  resultDiv.innerHTML = '<p>🤖 Processing... <span class="typing-indicator">⏳</span></p>';
+  const out = document.getElementById('agentResult');
+  out.textContent = 'Working…';
   try {
-    let data;
-    if (API_BASE) {
-      const response = await fetch(`${API_BASE}/task`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ task, options: { agentType: type } })
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      data = await response.json();
-    } else {
-      data = { result: `Simulated response for: ${task}` };
-    }
-    let content = '';
-    if (data.result) {
-      if (typeof data.result === 'string') content = data.result;
-      else if (data.result.content) content = data.result.content;
-      else if (data.result.summary) content = data.result.summary;
-      else if (data.result.output) content = data.result.output;
-      else if (data.result.message) content = data.result.message;
-      else content = JSON.stringify(data.result, null, 2);
-    } else if (data.content) content = data.content;
-    else if (data.message) content = data.message;
-    else content = JSON.stringify(data, null, 2);
-    resultDiv.innerHTML = `<div class="agent-response">${content.replace(/\n/g, '<br>')}</div>`;
-  } catch (error) {
-    resultDiv.innerHTML = `<p class="status error">Error: ${error.message}</p>`;
+    if (!API_BASE) throw new Error('Backend unavailable');
+    const r = await fetch(`${API_BASE}/task`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ task, options: { agentType: type } })
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json();
+    const content = formatAgentResponse(data);
+    out.innerHTML = `<div>${renderMarkdown(content)}</div>`;
+  } catch (e) {
+    out.innerHTML = `<div class="status visible error">${escapeHtml(e.message)}</div>`;
   }
 }
-async function runSearchAgent() { const task = document.getElementById('agentTask').value || 'search for latest AI news in Africa'; await runAgent(task, 'search'); }
-async function runSummarizeAgent() { const task = document.getElementById('agentTask').value || 'summarize the benefits of AI in Africa'; await runAgent(task, 'summarize'); }
-async function runTranslateAgent() { const task = document.getElementById('agentTask').value || 'translate hello to Swahili'; await runAgent(task, 'translate'); }
-async function runAnalyzeAgent() { const task = document.getElementById('agentTask').value || 'analyze the sentiment: I love CephasGM AI'; await runAgent(task, 'analyze'); }
-async function runResearchAgent() { const task = document.getElementById('agentTask').value || 'research artificial intelligence in Africa'; await runAgent(task, 'research'); }
-async function runCodingAgent() { const task = document.getElementById('agentTask').value || 'write a function to calculate fibonacci'; await runAgent(task, 'coding'); }
-async function runCustomAgent() { const task = document.getElementById('agentTask').value; if (!task) { alert('Please enter a task'); return; } await runAgent(task); }
-
-// ============================================
-// Memory Functions (unchanged)
-// ============================================
-async function loadMemories() {
-  if (!currentUser) return;
-  try {
-    const localMemories = JSON.parse(localStorage.getItem('chatMemories') || '[]');
-    const memoryList = document.getElementById('memoryList');
-    if (localMemories.length === 0) {
-      memoryList.innerHTML = '<div style="text-align: center; padding: 20px;">No memories yet. Start chatting!</div>';
-      return;
-    }
-    memoryList.innerHTML = localMemories.slice(0, 20).map(m => `
-      <div class="memory-item" onclick="document.getElementById('userInput').value = '${(m.prompt || '').replace(/'/g, "\\'")}'">
-        <div class="memory-prompt">Q: ${m.prompt || 'Memory'}</div>
-        <div class="memory-response">A: ${(m.response || '').substring(0, 100)}...</div>
-        <div class="memory-time">${new Date(m.timestamp).toLocaleString()}</div>
-      </div>
-    `).join('');
-  } catch (error) { console.error('Error loading memories:', error); }
-}
-async function searchMemory() {
-  const query = document.getElementById('memorySearch').value;
-  if (!query) { loadMemories(); return; }
-  try {
-    const localMemories = JSON.parse(localStorage.getItem('chatMemories') || '[]');
-    const results = localMemories.filter(m => 
-      (m.prompt && m.prompt.toLowerCase().includes(query.toLowerCase())) ||
-      (m.response && m.response.toLowerCase().includes(query.toLowerCase()))
-    );
-    const memoryList = document.getElementById('memoryList');
-    if (results.length === 0) {
-      memoryList.innerHTML = '<div style="text-align: center; padding: 20px;">No matching memories found.</div>';
-      return;
-    }
-    memoryList.innerHTML = results.slice(0, 20).map(m => `
-      <div class="memory-item">
-        <div class="memory-prompt">Q: ${m.prompt || 'Memory'}</div>
-        <div class="memory-response">A: ${(m.response || '').substring(0, 100)}...</div>
-        <div class="memory-time">${new Date(m.timestamp).toLocaleString()}</div>
-      </div>
-    `).join('');
-  } catch (error) { console.error('Error searching memories:', error); }
-}
-function clearLocalMemory() {
-  if (confirm('Clear all local memory?')) {
-    localStorage.removeItem('chatMemories');
-    localStorage.removeItem('chatHistory');
-    loadMemories();
-    document.getElementById('chat').innerHTML = '';
-  }
+async function runSearchAgent()    { await runAgent(document.getElementById('agentTask').value || 'Latest AI news in Africa', 'search'); }
+async function runSummarizeAgent() { await runAgent(document.getElementById('agentTask').value || 'Summarize benefits of AI in Africa', 'summarize'); }
+async function runTranslateAgent() { await runAgent(document.getElementById('agentTask').value || 'Translate hello to Swahili', 'translate'); }
+async function runAnalyzeAgent()   { await runAgent(document.getElementById('agentTask').value || 'Sentiment: I love CephasGM SI', 'analyze'); }
+async function runResearchAgent()  { await runAgent(document.getElementById('agentTask').value || 'AI in Africa', 'research'); }
+async function runCodingAgent()    { await runAgent(document.getElementById('agentTask').value || 'Fibonacci function in Python', 'coding'); }
+async function runCustomAgent() {
+  const task = document.getElementById('agentTask').value.trim();
+  if (!task) return toast('Enter a task');
+  await runAgent(task);
 }
 
-// ============================================
-// Research Functions (unchanged)
-// ============================================
 async function conductResearch() {
   const topic = document.getElementById('researchTopic').value.trim();
   const depth = document.getElementById('researchDepth').value;
-  if (!topic) { alert('Please enter a research topic'); return; }
-  const resultsDiv = document.getElementById('researchResults');
-  resultsDiv.innerHTML = '<p>🔬 Researching... <span class="typing-indicator">⏳</span></p>';
+  if (!topic) return toast('Enter a topic');
+  const out = document.getElementById('researchResults');
+  out.textContent = 'Researching…';
   try {
-    let data;
-    if (API_BASE) {
-      const response = await fetch(`${API_BASE}/task`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ task: `research ${topic}`, options: { depth, agentType: 'research' } })
+    if (!API_BASE) throw new Error('Backend unavailable');
+    const r = await fetch(`${API_BASE}/task`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ task: `research ${topic}`, options: { depth, agentType: 'research' } })
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json();
+    const result = data.result || data;
+    let html = '';
+    if (result.summary) html += `<div><strong>Summary</strong><p>${renderMarkdown(result.summary)}</p></div>`;
+    if (Array.isArray(result.findings)) {
+      html += `<div style="margin-top:12px;"><strong>Findings</strong><ul>`;
+      result.findings.forEach(f => { html += `<li>${escapeHtml(f.content || f.snippet || f.title || '')}</li>`; });
+      html += `</ul></div>`;
+    }
+    if (Array.isArray(result.sources)) {
+      html += `<div style="margin-top:12px;"><strong>Sources</strong><ul>`;
+      result.sources.forEach(s => {
+        const title = s.title || s.type || 'Source';
+        const q = encodeURIComponent(`${title} ${topic}`);
+        html += `<li><a href="https://www.google.com/search?q=${q}" target="_blank" rel="noopener">${escapeHtml(title)}</a></li>`;
       });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      data = await response.json();
-    } else {
-      data = { result: { summary: `Research on "${topic}" would be performed here.` } };
+      html += `</ul></div>`;
     }
-    if (data.result) {
-      const r = data.result;
-      let html = '<div class="research-response">';
-      html += `<h3>📚 Research: ${r.topic || topic}</h3>`;
-      if (r.summary) html += `<div class="research-summary"><strong>Summary:</strong><br>${r.summary.replace(/\n/g, '<br>')}</div>`;
-      if (r.findings && r.findings.length > 0) {
-        html += '<div class="research-findings"><strong>Key Findings:</strong><ul>';
-        r.findings.forEach(f => { html += `<li>${f.content || f.snippet || f.title}</li>`; });
-        html += '</ul></div>';
-      }
-      if (r.sources && r.sources.length > 0) {
-        html += '<div class="research-sources"><strong>Sources:</strong><ul>';
-        r.sources.forEach(s => {
-          const title = s.title || s.type || 'Source';
-          const searchQuery = encodeURIComponent(`${title} ${topic}`);
-          html += `<li><a href="https://www.google.com/search?q=${searchQuery}" target="_blank" style="color: #ffb300;">🔍 ${title}</a> - <small>Click to search</small></li>`;
-        });
-        html += '</ul></div>';
-      }
-      if (r.confidence) html += `<div class="research-confidence"><small>Confidence: ${(r.confidence * 100).toFixed(0)}%</small></div>`;
-      html += '</div>';
-      resultsDiv.innerHTML = html;
-    } else {
-      resultsDiv.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
-    }
-  } catch (error) {
-    resultsDiv.innerHTML = `<p class="status error">Error: ${error.message}</p>`;
+    out.innerHTML = html || `<pre>${escapeHtml(JSON.stringify(result, null, 2))}</pre>`;
+  } catch (e) {
+    out.innerHTML = `<div class="status visible error">${escapeHtml(e.message)}</div>`;
   }
 }
 
-// ============================================
-// Software Factory Functions (unchanged)
-// ============================================
 async function runCode() {
   const code = document.getElementById('codeInput').value.trim();
-  const language = document.getElementById('codeLanguage').value;
-  if (!code) { alert('Please enter code to run'); return; }
-  const output = document.getElementById('codeOutput');
-  output.innerHTML = '<p>⚙️ Executing... <span class="typing-indicator">⏳</span></p>';
+  const lang = document.getElementById('codeLanguage').value;
+  if (!code) return toast('Enter code');
+  const out = document.getElementById('codeOutput');
+  out.textContent = 'Running…';
   try {
-    let result;
     if (API_BASE) {
-      const response = await fetch(`${API_BASE}/code`, {
+      const r = await fetch(`${API_BASE}/code`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, language })
+        body: JSON.stringify({ code, language: lang })
       });
-      if (response.ok) result = await response.json();
-    }
-    if (!result && language === 'javascript') {
-      try {
-        const sandbox = { console: { log: (...args) => {
-          const logOutput = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ');
-          output.innerHTML += `<div>> ${logOutput}</div>`;
-        } } };
-        const fn = new Function('sandbox', `with(sandbox) { ${code} }`);
-        const startTime = performance.now();
-        fn(sandbox);
-        const executionTime = (performance.now() - startTime).toFixed(2);
-        output.innerHTML = `<pre class="code-output-content">✅ Code executed successfully in ${executionTime}ms</pre>`;
-        return;
-      } catch (e) {
-        output.innerHTML = `<pre class="code-output-content" style="color: #ff6b6b;">❌ Error: ${e.message}</pre>`;
+      if (r.ok) {
+        const data = await r.json();
+        out.textContent = data.output || data.result || JSON.stringify(data, null, 2);
         return;
       }
     }
-    let formatted = result?.output || result?.result || JSON.stringify(result || {}, null, 2);
-    if (typeof formatted !== 'string') formatted = JSON.stringify(formatted, null, 2);
-    if (result?.error) formatted = `❌ Error:\n${result.error}\n\n${formatted}`;
-    output.innerHTML = `<pre class="code-output-content">${formatted.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>`;
-  } catch (error) {
-    output.innerHTML = `<p class="status error">Error: ${error.message}</p>`;
+    if (lang === 'javascript') {
+      const logs = [];
+      const sandbox = { console: { log: (...a) => logs.push(a.map(x => typeof x === 'object' ? JSON.stringify(x) : String(x)).join(' ')) } };
+      const t0 = performance.now();
+      new Function('sandbox', `with(sandbox){${code}}`)(sandbox);
+      out.textContent = logs.join('\n') + `\n\n✅ Completed in ${(performance.now() - t0).toFixed(2)}ms`;
+    } else {
+      throw new Error('Backend required for this language');
+    }
+  } catch (e) {
+    out.textContent = '❌ ' + e.message;
   }
 }
-async function debugCode() {
-  const code = document.getElementById('codeInput').value.trim();
-  if (!code) { alert('Please enter code to debug'); return; }
-  const output = document.getElementById('codeOutput');
-  output.innerHTML = '<p>🔍 Debugging... <span class="typing-indicator">⏳</span></p>';
-  try {
-    const issues = [];
-    if (code.includes('var ')) issues.push('⚠️ Use "let" or "const" instead of "var"');
-    if (!code.includes('try') && code.includes('fetch(')) issues.push('⚠️ fetch() should be wrapped in try/catch');
-    if (code.includes('console.log(')) issues.push('ℹ️ Remove console.log() in production code');
-    if (code.length > 500) issues.push('ℹ️ Consider breaking down large functions');
-    if (issues.length === 0) issues.push('✅ No obvious issues found');
-    output.innerHTML = `<pre class="code-output-content">${issues.join('\n')}</pre>`;
-  } catch (error) {
-    output.innerHTML = `<p class="status error">Error: ${error.message}</p>`;
-  }
+function debugCode() {
+  const code = document.getElementById('codeInput').value;
+  const issues = [];
+  if (/\bvar\b/.test(code)) issues.push('Use let/const instead of var');
+  if (/fetch\(/.test(code) && !/try\s*\{/.test(code)) issues.push('Wrap fetch in try/catch');
+  if (issues.length === 0) issues.push('No obvious issues found');
+  document.getElementById('codeOutput').textContent = issues.join('\n');
 }
 function clearCode() {
   document.getElementById('codeInput').value = '';
-  document.getElementById('codeOutput').innerHTML = '';
+  document.getElementById('codeOutput').textContent = '';
 }
 
-// ============================================
-// Initialize Everything
-// ============================================
-window.onload = async function() {
+/* =========================================================
+   Admin (only shown to admin role)
+   ========================================================= */
+async function fetchUserRole() {
+  if (!currentUser || !API_BASE) return 'user';
+  try {
+    const token = await currentUser.getIdToken();
+    const r = await fetch(`${API_BASE}/user/role`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!r.ok) return 'user';
+    const j = await r.json();
+    return j.role || 'user';
+  } catch { return 'user'; }
+}
+
+function addAdminTab() {
+  if (document.querySelector('.tab-btn[data-tab="admin"]')) return;
+  const nav = document.getElementById('tabNav');
+  const btn = document.createElement('button');
+  btn.className = 'tab-btn';
+  btn.dataset.tab = 'admin';
+  btn.type = 'button';
+  btn.textContent = 'Admin';
+  btn.addEventListener('click', () => switchTab('admin'));
+  nav.appendChild(btn);
+
+  const panel = document.createElement('section');
+  panel.id = 'adminTab';
+  panel.className = 'tab-content';
+  panel.innerHTML = `
+    <div class="panel">
+      <h2>Admin</h2>
+      <p class="sub">Manage user roles.</p>
+      <div class="admin-form">
+        <input type="email" id="adminUserEmail" placeholder="user@example.com">
+        <select id="adminNewRole">
+          <option value="user">User</option>
+          <option value="premium">Premium</option>
+          <option value="admin">Admin</option>
+        </select>
+        <button class="btn" type="button" onclick="updateUserRole()">Update role</button>
+      </div>
+      <div class="status" id="adminMessage"></div>
+    </div>
+  `;
+  document.getElementById('content').appendChild(panel);
+}
+
+async function updateUserRole() {
+  const email = document.getElementById('adminUserEmail').value.trim();
+  const role = document.getElementById('adminNewRole').value;
+  const msg = document.getElementById('adminMessage');
+  if (!email) { msg.textContent = 'Enter an email'; msg.className = 'status visible error'; return; }
+  msg.textContent = 'Updating…'; msg.className = 'status visible info';
+  try {
+    const token = await currentUser.getIdToken();
+    const r = await fetch(`${API_BASE}/admin/updateRole`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ email, role })
+    });
+    const data = await r.json();
+    if (r.ok) { msg.textContent = data.message || 'Updated'; msg.className = 'status visible success'; }
+    else { msg.textContent = data.error || 'Failed'; msg.className = 'status visible error'; }
+  } catch (e) {
+    msg.textContent = e.message; msg.className = 'status visible error';
+  }
+}
+
+/* =========================================================
+   Auth wiring
+   ========================================================= */
+auth.onAuthStateChanged(async (user) => {
+  currentUser = user;
+  const userRow = document.getElementById('userRow');
+  const logoutBtn = document.getElementById('logoutBtn');
+  const userEmail = document.getElementById('userEmail');
+  const userRole = document.getElementById('userRole');
+  const userAvatar = document.getElementById('userAvatar');
+
+  if (user) {
+    userRow.style.display = 'flex';
+    logoutBtn.style.display = 'inline-block';
+    userEmail.textContent = user.email;
+    userAvatar.textContent = (user.email || 'U').charAt(0).toUpperCase();
+    const role = await fetchUserRole();
+    userRole.textContent = role;
+    if (role === 'admin') addAdminTab();
+  } else {
+    userRow.style.display = 'none';
+    logoutBtn.style.display = 'none';
+    const adminBtn = document.querySelector('.tab-btn[data-tab="admin"]');
+    if (adminBtn) adminBtn.remove();
+    const adminPanel = document.getElementById('adminTab');
+    if (adminPanel) adminPanel.remove();
+  }
+});
+
+document.getElementById('logoutBtn').addEventListener('click', () => {
+  auth.signOut().then(() => { window.location.href = 'index.html'; });
+});
+
+/* =========================================================
+   Sidebar, brand, search, keyboard
+   ========================================================= */
+document.getElementById('brandBtn').addEventListener('click', () => {
+  window.location.href = 'index.html';
+});
+
+document.getElementById('sidebarToggle').addEventListener('click', () => {
+  const app = document.getElementById('app');
+  const cur = app.dataset.sidebar;
+  app.dataset.sidebar = cur === 'collapsed' ? 'open' : 'collapsed';
+});
+
+document.getElementById('backdrop').addEventListener('click', () => {
+  document.getElementById('app').dataset.sidebar = 'collapsed';
+});
+
+document.getElementById('newChatBtn').addEventListener('click', createNewChat);
+
+document.getElementById('convSearch').addEventListener('input', renderConversationList);
+
+document.addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+    e.preventDefault();
+    document.getElementById('convSearch').focus();
+  }
+  if ((e.metaKey || e.ctrlKey) && e.key === '/') {
+    e.preventDefault();
+    createNewChat();
+  }
+  if (e.key === 'Escape') {
+    document.getElementById('app').dataset.sidebar = 'collapsed';
+  }
+});
+
+/* =========================================================
+   Boot
+   ========================================================= */
+window.addEventListener('load', async () => {
   await checkAPI();
   initVoice();
-  loadConversations();  // Load conversations instead of plain chat history
-  document.getElementById('newChatBtn').addEventListener('click', createNewChat);
-};
+  loadConversations();
+  sendBtn.disabled = true;
+});
 
-// Make functions globally available
+/* =========================================================
+   Expose for other modules (app.js, ai.js, agents.js, voice.js, memory.js)
+   ========================================================= */
 window.switchTab = switchTab;
 window.sendMessage = sendMessage;
 window.streamMessage = streamMessage;
@@ -1912,6 +2478,7 @@ window.startVoice = startVoice;
 window.stopVoice = stopVoice;
 window.toggleVoice = toggleVoice;
 window.speak = speak;
+window.generateAudio = generateAudio;
 window.runSearchAgent = runSearchAgent;
 window.runSummarizeAgent = runSummarizeAgent;
 window.runTranslateAgent = runTranslateAgent;
@@ -1919,24 +2486,32 @@ window.runAnalyzeAgent = runAnalyzeAgent;
 window.runResearchAgent = runResearchAgent;
 window.runCodingAgent = runCodingAgent;
 window.runCustomAgent = runCustomAgent;
-window.loadMemories = loadMemories;
-window.searchMemory = searchMemory;
-window.clearLocalMemory = clearLocalMemory;
 window.conductResearch = conductResearch;
-window.generateAudio = generateAudio;
 window.runCode = runCode;
 window.debugCode = debugCode;
 window.clearCode = clearCode;
 window.updateUserRole = updateUserRole;
+window.loadConversations = loadConversations;
+window.createNewChat = createNewChat;
+window.deleteConversation = deleteConversation;
+window.switchConversation = switchConversation;
+window.addMessageAndSave = addMessageAndSave;
+window._addMessageToChat = _addMessageToChat;
+window.showTypingIndicator = showTypingIndicator;
+window.removeTypingIndicator = removeTypingIndicator;
+window.formatAIResponse = formatAIResponse;
+window.formatAgentResponse = formatAgentResponse;
+window.fetchUserRole = fetchUserRole;
+window.addAdminTab = addAdminTab;
 </script>
 
-<!-- Service worker -->
+<!-- =========================================================
+   Service worker
+   ========================================================= -->
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').catch(error => {
-      console.log('ServiceWorker registration failed:', error);
-    });
+    navigator.serviceWorker.register('sw.js').catch(err => console.log('SW registration failed:', err));
   });
 }
 </script>
